@@ -64,6 +64,8 @@ model User {
   opportunitySplits        OpportunityOwnerSplit[]
   salesTargets             SalesTarget[]          @relation("SalesTargetOwner")
   salesTargetsCreated      SalesTarget[]          @relation("SalesTargetCreatedBy")
+  createdProductServices   ProductService[]       @relation("ProductServiceCreatedBy")
+  updatedProductServices   ProductService[]       @relation("ProductServiceUpdatedBy")
 }
 
 model LeadCustomer {
@@ -270,4 +272,27 @@ model SalesTarget {
 
   @@unique([ownerId, financialYear, quarter])
   @@index([financialYear, quarter])
+}
+
+model ProductService {
+  id                           String   @id @default(cuid())
+  name                         String
+  code                         String?  @unique
+  category                     String
+  description                  String?
+  defaultGstRateBps            Int      @default(1800)
+  defaultProductionTemplateKey String?
+  active                       Boolean  @default(true)
+  sortOrder                    Int      @default(0)
+  createdById                  String
+  updatedById                  String
+  createdAt                    DateTime @default(now())
+  updatedAt                    DateTime @updatedAt
+
+  createdBy User @relation("ProductServiceCreatedBy", fields: [createdById], references: [id])
+  updatedBy User @relation("ProductServiceUpdatedBy", fields: [updatedById], references: [id])
+
+  @@index([active, sortOrder])
+  @@index([category])
+  @@index([name])
 }

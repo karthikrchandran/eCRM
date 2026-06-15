@@ -17,6 +17,59 @@ const defaultStages = [
   { id: "seed_stage_dormant", name: "Dormant", sortOrder: 70, kind: PipelineStageKind.DORMANT }
 ];
 
+const defaultProductServices = [
+  {
+    id: "seed_product_elearning",
+    name: "eLearning",
+    code: "ELEARNING",
+    category: "eLearning",
+    description: "Script, storyboard, voiceover, editing, review, edits, and completion.",
+    defaultGstRateBps: 1800,
+    defaultProductionTemplateKey: "elearning",
+    sortOrder: 10
+  },
+  {
+    id: "seed_product_video_shoot",
+    name: "Video shoot",
+    code: "VIDEO-SHOOT",
+    category: "Video shoot",
+    description: "Script, shoot, voiceover, editing, review, edits, and completion.",
+    defaultGstRateBps: 1800,
+    defaultProductionTemplateKey: "video_shoot",
+    sortOrder: 20
+  },
+  {
+    id: "seed_product_vr_ar",
+    name: "VR/AR",
+    code: "VR-AR",
+    category: "VR/AR",
+    description: "Script, development, voiceover, editing, review, edits, and completion.",
+    defaultGstRateBps: 1800,
+    defaultProductionTemplateKey: "vr_ar",
+    sortOrder: 30
+  },
+  {
+    id: "seed_product_animation",
+    name: "Animation",
+    code: "ANIMATION",
+    category: "Animation",
+    description: "Script, modeling, voiceover, editing, review, edits, and completion.",
+    defaultGstRateBps: 1800,
+    defaultProductionTemplateKey: "animation",
+    sortOrder: 40
+  },
+  {
+    id: "seed_product_other_service",
+    name: "Other service",
+    code: "OTHER-SERVICE",
+    category: "Other service",
+    description: "General service category for proposal lines that do not map to a production template yet.",
+    defaultGstRateBps: 1800,
+    defaultProductionTemplateKey: null,
+    sortOrder: 50
+  }
+];
+
 async function upsertUser(input: {
   name: string;
   email: string;
@@ -253,6 +306,29 @@ async function main() {
       targetValueInr: "1000000.00"
     }
   });
+
+  for (const product of defaultProductServices) {
+    await prisma.productService.upsert({
+      where: { id: product.id },
+      update: {
+        active: true,
+        category: product.category,
+        code: product.code,
+        defaultGstRateBps: product.defaultGstRateBps,
+        defaultProductionTemplateKey: product.defaultProductionTemplateKey,
+        description: product.description,
+        name: product.name,
+        sortOrder: product.sortOrder,
+        updatedById: admin.id
+      },
+      create: {
+        ...product,
+        active: true,
+        createdById: admin.id,
+        updatedById: admin.id
+      }
+    });
+  }
 }
 
 main()
