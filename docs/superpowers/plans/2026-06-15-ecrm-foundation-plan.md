@@ -88,7 +88,8 @@ Expected:
 
 ```text
 ## main
-npm error Missing script: "gate"
+npm error code ENOENT
+npm error Could not read package.json
 ```
 
 - [ ] **Step 2: Create `package.json`**
