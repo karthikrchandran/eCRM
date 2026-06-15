@@ -1,11 +1,21 @@
 import bcrypt from "bcryptjs";
-import { PrismaClient, UserRole } from "@prisma/client";
+import { PipelineStageKind, PrismaClient, UserRole } from "@prisma/client";
 
 if (process.env.NODE_ENV === "production") {
   throw new Error("Refusing to run the local seed script in production.");
 }
 
 const prisma = new PrismaClient();
+
+const defaultStages = [
+  { id: "seed_stage_lead", name: "Lead", sortOrder: 10, kind: PipelineStageKind.OPEN },
+  { id: "seed_stage_qualified", name: "Qualified", sortOrder: 20, kind: PipelineStageKind.OPEN },
+  { id: "seed_stage_proposal_sent", name: "Proposal Sent", sortOrder: 30, kind: PipelineStageKind.OPEN },
+  { id: "seed_stage_negotiation", name: "Negotiation", sortOrder: 40, kind: PipelineStageKind.OPEN },
+  { id: "seed_stage_won", name: "Won", sortOrder: 50, kind: PipelineStageKind.WON },
+  { id: "seed_stage_lost", name: "Lost", sortOrder: 60, kind: PipelineStageKind.LOST },
+  { id: "seed_stage_dormant", name: "Dormant", sortOrder: 70, kind: PipelineStageKind.DORMANT }
+];
 
 async function upsertUser(input: {
   name: string;
@@ -156,6 +166,91 @@ async function main() {
       toOwnerId: sales.id,
       changedById: admin.id,
       reason: "Initial seed assignment for CRM core smoke checks."
+    }
+  });
+
+  for (const stage of defaultStages) {
+    await prisma.pipelineStage.upsert({
+      where: { id: stage.id },
+      update: {
+        active: true,
+        kind: stage.kind,
+        name: stage.name,
+        sortOrder: stage.sortOrder
+      },
+      create: {
+        ...stage,
+        active: true
+      }
+    });
+  }
+
+  const opportunity = await prisma.opportunity.upsert({
+    where: { id: "seed_opportunity_acme_lms_rollout" },
+    update: {
+      branchId: "seed_branch_acme_bengaluru",
+      estimatedValueInr: "1250000.00",
+      lastReachAt: new Date("2026-06-14T10:00:00.000Z"),
+      leadCustomerId: sampleLead.id,
+      nextFollowUpAt: new Date("2026-06-20T10:00:00.000Z"),
+      notes: "Seed opportunity for pipeline smoke checks.",
+      ownerId: sales.id,
+      probability: 60,
+      productInterest: "Custom LMS rollout",
+      stageId: "seed_stage_qualified",
+      title: "Acme LMS rollout",
+      updatedById: admin.id
+    },
+    create: {
+      id: "seed_opportunity_acme_lms_rollout",
+      branchId: "seed_branch_acme_bengaluru",
+      createdById: admin.id,
+      estimatedValueInr: "1250000.00",
+      lastReachAt: new Date("2026-06-14T10:00:00.000Z"),
+      leadCustomerId: sampleLead.id,
+      nextFollowUpAt: new Date("2026-06-20T10:00:00.000Z"),
+      notes: "Seed opportunity for pipeline smoke checks.",
+      ownerId: sales.id,
+      probability: 60,
+      productInterest: "Custom LMS rollout",
+      stageId: "seed_stage_qualified",
+      title: "Acme LMS rollout",
+      updatedById: admin.id
+    }
+  });
+
+  await prisma.opportunityOwnerSplit.upsert({
+    where: {
+      opportunityId_userId: {
+        opportunityId: opportunity.id,
+        userId: sales.id
+      }
+    },
+    update: { percent: 100 },
+    create: {
+      opportunityId: opportunity.id,
+      percent: 100,
+      userId: sales.id
+    }
+  });
+
+  await prisma.salesTarget.upsert({
+    where: {
+      ownerId_financialYear_quarter: {
+        financialYear: 2026,
+        ownerId: sales.id,
+        quarter: 1
+      }
+    },
+    update: {
+      targetValueInr: "1000000.00"
+    },
+    create: {
+      createdById: admin.id,
+      financialYear: 2026,
+      ownerId: sales.id,
+      quarter: 1,
+      targetValueInr: "1000000.00"
     }
   });
 }
