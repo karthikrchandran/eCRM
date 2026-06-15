@@ -106,6 +106,19 @@ describe("crm validators", () => {
     });
   });
 
+  it("drops empty list filter values from GET forms", () => {
+    const parsed = leadFilterSchema.parse({
+      q: "",
+      ownerId: "user_admin",
+      state: "",
+      followUp: ""
+    });
+
+    expect(parsed).toEqual({
+      ownerId: "user_admin"
+    });
+  });
+
   it("requires reassignment reason when owner changes", () => {
     const result = reassignmentInputSchema.safeParse({
       leadCustomerId: "lead_1",

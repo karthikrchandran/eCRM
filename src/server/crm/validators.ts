@@ -107,8 +107,8 @@ export const activityInputSchema = z
 export const leadFilterSchema = z.object({
   q: optionalTrimmedString,
   ownerId: optionalTrimmedString,
-  state: z.enum(["LEAD", "CUSTOMER", "DORMANT"]).optional(),
-  followUp: z.enum(["overdue", "today", "upcoming"]).optional()
+  state: z.preprocess(emptyToUndefined, z.enum(["LEAD", "CUSTOMER", "DORMANT"]).optional()),
+  followUp: z.preprocess(emptyToUndefined, z.enum(["overdue", "today", "upcoming"]).optional())
 });
 
 export const reassignmentInputSchema = z.object({
