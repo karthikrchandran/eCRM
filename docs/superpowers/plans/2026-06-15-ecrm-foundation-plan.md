@@ -30,6 +30,7 @@ The remaining CRM modules will get separate plans:
 Create these files in this slice:
 
 - `package.json`: npm scripts and pinned package versions.
+- `.gitignore`: local env, generated build/test output, worktrees, and regenerated Next env types.
 - `tsconfig.json`: TypeScript configuration where `@/*` maps to `./src/*` without `baseUrl`, uses Next 16's `react-jsx` setting, and includes both `.next/types/**/*.ts` and `.next/dev/types/**/*.ts`.
 - `next.config.ts`: Next.js config.
 - `eslint.config.mjs`: flat ESLint config using Next presets.
@@ -196,6 +197,8 @@ Create `tsconfig.json`:
   ]
 }
 ```
+
+`next-env.d.ts` is still included for TypeScript because Next regenerates it locally. Do not track this generated file: Next 16 writes build/typegen route references through `./.next/types/routes.d.ts` and dev/e2e route references through `./.next/dev/types/routes.d.ts`, so it is intentionally ignored to avoid dev/build route-type churn in Git status.
 
 Create `next.config.ts`:
 
