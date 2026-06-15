@@ -12,11 +12,11 @@
 
 ## Status
 
-Implementation status: **BLOCKED until Opportunities lands**.
+Implementation status: **READY TO START** on `feature/products-proposals`.
 
-This is a docs-only planning artifact. It must not be treated as approval to edit `prisma/**`, `src/**`, `tests/**`, package files, config files, seed data, or migrations in the current task.
+The previous blocker is resolved. Opportunities has landed on `main` with a stable `Opportunity` model, `/opportunities/[opportunityId]` detail route, pipeline stage semantics, owner/split behavior, query functions, mutation functions, seed data, and browser smoke coverage.
 
-The blocker is structural: the current CRM Core source has `LeadCustomer`, `Branch`, `Contact`, `Activity`, `LeadOwnershipHistory`, and `User`, but it does not yet have an `Opportunity` model, opportunity routes, opportunity service functions, or opportunity pipeline state. The approved product design says proposals belong to opportunities, so this slice cannot be implemented correctly until the Opportunities handoff is available.
+This slice is now the only active schema-owning implementation lane. Parallel work may prepare docs-only plans for downstream Orders, Finance, and Reports, but no other lane should edit `prisma/**`, `src/**`, `tests/**`, package files, config files, seed data, or migrations until Products/Proposals lands.
 
 ## Current CRM Core Integration Points
 
@@ -199,23 +199,30 @@ Upload rules:
 - Do not require a PDF while the proposal is `DRAFT`.
 - Require a PDF before changing status to `SENT`, unless the business explicitly allows sending a summary-only proposal.
 
-## Opportunities Handoff Requirements
+## Opportunities Handoff
 
-Implementation can start only after the Opportunities slice provides these current, source-backed contracts:
+Implementation can start with these source-backed contracts:
 
-- A landed Opportunity model name and primary key.
-- Opportunity relation to `LeadCustomer`.
-- Optional Opportunity relation to `Branch` if branch-specific pursuits are supported.
-- Opportunity owner field and owner relation to `User`.
-- Opportunity status or pipeline-stage fields, including how `Proposal Sent`, `Won`, `Lost`, and `Dormant` are represented.
-- Opportunity detail route path for linking proposals, expected to be similar to `/opportunities/[opportunityId]`.
-- Query function for loading opportunity detail with its `LeadCustomer`, optional `Branch`, owner, and visibility rules.
-- Permission helper or service rule confirming Sales users keep company-wide visibility regardless of owner.
-- Server action or mutation pattern for changing opportunity stage when a proposal is sent or accepted.
-- Seed data or factory helpers for at least one active opportunity tied to a `LeadCustomer` and optional `Branch`.
-- Existing test pattern for opportunity list/detail routes and server actions.
+- Opportunity model: `Opportunity` with primary key `id`.
+- Opportunity relation to CRM Core: `Opportunity.leadCustomerId` to `LeadCustomer`.
+- Optional branch relation: `Opportunity.branchId` to `Branch`.
+- Owner relation: `Opportunity.ownerId` to `User` through relation `OpportunityOwner`.
+- Split relation: `OpportunityOwnerSplit` with composite key `[opportunityId, userId]` and whole-number `percent`.
+- Pipeline state: `Opportunity.stageId` to `PipelineStage`; `PipelineStage.kind` is `OPEN`, `WON`, `LOST`, or `DORMANT`.
+- Detail route: `/opportunities/[opportunityId]`.
+- Detail query: `getOpportunityDetail(user, opportunityId)` in `src/server/opportunities/queries.ts`.
+- Form option query: `listOpportunityFormOptions()` provides leads, branches, stages, and owners.
+- Permissions: `assertCanViewOpportunities()` and `assertCanWriteOpportunities()` preserve company-wide Admin/Sales visibility.
+- Stage movement pattern: `moveOpportunityStage()` and `moveOpportunityStageAction()`.
+- Seed data: `prisma/seed.ts` seeds active stages and at least one opportunity linked to CRM Core records.
+- Test patterns: `src/server/opportunities/*.test.ts`, `src/components/opportunities/opportunity-list.test.tsx`, and `tests/e2e/opportunities.spec.ts`.
 
-The handoff must also state whether proposal creation is allowed for opportunities in `Lost`, `Won`, or `Dormant` states. Until clarified, the products/proposals slice should allow creation only for active pipeline stages before `Won` or `Lost`.
+Proposal creation rule for this slice:
+
+- Allow proposals for opportunities whose current `PipelineStage.kind` is `OPEN`.
+- Block new proposals for `LOST` and `DORMANT` opportunities.
+- Allow proposals for `WON` only as read/edit of existing historical proposals; creating new post-win revised commercials should wait for the Orders handoff unless the business explicitly approves it.
+- Sending a proposal should move the opportunity to the seeded `Proposal Sent` stage when that active stage exists; accepting a proposal should not automatically move to `WON` until Orders owns the won-to-order transition.
 
 ## Future File Structure After Unblock
 
@@ -284,11 +291,11 @@ These are future implementation targets, not files to edit in this docs-only tas
 - Read: landed Opportunity schema, routes, server modules, and tests.
 - Modify: this plan if the landed names differ from the assumptions above.
 
-- [ ] Confirm Opportunity model, route, query, mutation, and owner names.
-- [ ] Confirm whether proposals can be created for won, lost, or dormant opportunities.
-- [ ] Confirm where proposal links should appear on opportunity detail.
-- [ ] Confirm whether sending or accepting a proposal changes opportunity stage.
-- [ ] Commit any plan updates before implementation if the handoff changes names.
+- [x] Confirm Opportunity model, route, query, mutation, and owner names.
+- [x] Confirm whether proposals can be created for won, lost, or dormant opportunities.
+- [x] Confirm where proposal links should appear on opportunity detail.
+- [x] Confirm whether sending or accepting a proposal changes opportunity stage.
+- [ ] Commit this plan update before implementation.
 
 ### Task 2: Add Product Catalog Data Model
 
@@ -418,19 +425,19 @@ These are future implementation targets, not files to edit in this docs-only tas
 - The implementation includes focused unit tests for GST calculations, proposal totals, validations, permissions, and status transitions.
 - Browser smoke coverage verifies an Admin catalog change and a Sales/Admin proposal workflow under a landed Opportunity.
 
-## Open Questions
+## Decisions For This Implementation
 
-- What exact Opportunity model, route, and service names will land?
-- Should proposals be allowed on won opportunities for post-win revised commercials?
-- Should accepted proposals automatically move the Opportunity to `Won`, or should Orders own that transition?
-- Should `ProposalPdfAttachment` keep every replaced upload or only the latest attachment metadata?
-- What PDF upload size limit should match the deployment target and object-storage provider?
-- Should the optional `canvaDesignUrl` be required for all uploaded Canva PDFs?
-- Should Sales be allowed to create one-off proposal line descriptions without selecting a catalog item?
-- Should product/service categories be a fixed enum, Admin-configurable values, or seeded strings?
-- Should GST override reasons be required when a line differs from the product default?
-- Should proposal numbering be global, per Opportunity, per financial year, or human-managed?
+- Use the landed `Opportunity`, `PipelineStage`, `PipelineStage.kind`, and `/opportunities/[opportunityId]` names.
+- Create new proposals only while the opportunity is in an `OPEN` pipeline stage.
+- Do not automatically move accepted proposals to `WON`; Orders should own that transition.
+- Keep every `ProposalPdfAttachment` metadata row. Mark replaced uploads with `replacedAt` rather than overwriting history.
+- Use a 25 MB PDF metadata limit for MVP validation.
+- Keep `canvaDesignUrl` optional.
+- Require every proposal line to select a `ProductService`; one-off descriptions are line descriptions, not catalog bypasses.
+- Store product/service categories as seeded strings in `ProductService.category` for this slice.
+- Require `gstOverrideReason` when a proposal line GST rate differs from the selected product/service default.
+- Use sequence numbers scoped per Opportunity.
 
 ## Handoff Summary
 
-This plan is ready for the Opportunities implementer to consume, but product/proposal coding is intentionally blocked. Once Opportunities lands, update this artifact with the actual Opportunity names, then implement the catalog and proposal slice without changing CRM Core model names or ownership semantics.
+This plan is unblocked and ready to execute. Implement the catalog and proposal slice without changing CRM Core or Opportunities model names, route names, or ownership semantics.
