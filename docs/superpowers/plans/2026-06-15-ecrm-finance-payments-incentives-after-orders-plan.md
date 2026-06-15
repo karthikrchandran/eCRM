@@ -4,7 +4,7 @@
 
 **Goal:** Build the finance workflow after Orders/Production lands: invoice records, payments, cumulative order payment completion, cost components, gross margin, 5 percent incentive calculation, split support, and Admin approval.
 
-**Architecture:** This plan is explicitly **BLOCKED** until the Orders/Production slice lands with stable order, order-line, production-stage, proposal, product/service, owner, and split contracts. Finance records attach to orders and optionally order line items; calculations are server-owned, stored in INR paise and basis points, and exposed through Admin-managed workflows with company-wide payment status visibility.
+**Architecture:** Orders/Production has landed with stable order, order-line, production-stage, proposal, product/service, owner, and split contracts. Finance records attach to `Order` and optionally `OrderLineItem`; calculations are server-owned, stored in INR paise and basis points, and exposed through Admin-managed workflows with company-wide payment status visibility.
 
 **Tech Stack:** Next.js App Router, React, TypeScript, Prisma, Postgres, Zod, Vitest, Testing Library, Playwright, Tailwind CSS.
 
@@ -12,35 +12,39 @@
 
 ## Status
 
-Implementation status: **BLOCKED UNTIL ORDERS/PRODUCTION LANDS**.
+Implementation status: **READY TO START** on `feature/finance-payments-incentives`.
 
-No implementation may touch `prisma/**`, `src/**`, `tests/**`, package files, config files, seed files, or migrations until Orders/Production lands and this plan is refreshed against the actual landed contracts. While blocked, allowed work is limited to docs under `docs/superpowers/plans/`, `docs/superpowers/specs/`, `docs/superpowers/status/`, or `docs/superpowers/qa/`.
+Orders/Production has landed and this plan has been refreshed against the actual source contracts. Finance is now the only active schema-owning implementation lane. Parallel work may prepare docs-only reports/dashboard notes, but no other lane should edit `prisma/**`, `src/**`, `tests/**`, package files, config files, seed data, or migrations until Finance lands.
 
 Upstream contracts already landed:
 
 - CRM Core: `LeadCustomer`, `Branch`, `Contact`, `Activity`, `User`, owner assignment, reassignment history, and company-wide Admin/Sales visibility.
 - Opportunities: `Opportunity`, pipeline stages, opportunity owner, opportunity splits, target setup, opportunity detail route, and split validation.
 
-Upstream work in progress or still required before this plan can run:
+Additional upstream contracts now landed:
 
-- Products/Proposals: product/service catalog, GST defaults, proposal line commercial snapshots, accepted proposal context, Canva PDF metadata.
-- Orders/Production: won-to-order transition, PO/order records, order line items, copied proposal/product snapshots, booked order totals excluding GST, GST totals, total order value, primary owner, incentive split source, production templates, production stage instances, and stable route/query/action names.
+- Products/Proposals: `ProductService`, GST defaults, `Proposal`, `ProposalLineItem`, commercial snapshots, accepted proposal context, and `ProposalPdfAttachment`.
+- Orders/Production: `Order`, `OrderLineItem`, `OrderOwnerSplitSnapshot`, `ProductionTemplate`, `ProductionTemplateStage`, `ProductionWorkItem`, `ProductionStageInstance`, and `ProductionNote`.
 
 ## Blocking Contract
 
-This plan must remain blocked until the Orders/Production implementation provides these source-backed contracts:
+The Orders/Production blocking contract is now resolved:
 
-- Order primary key and model name.
-- Order relation to `Opportunity`, `LeadCustomer`, optional `Branch`, accepted `Proposal`, primary owner, and optional split rows.
-- Order status lifecycle, including whether cancelled/void orders participate in finance calculations.
-- Order booked value excluding GST, GST value, and total value in integer paise.
-- Order line item model name, line subtotal excluding GST, GST, total, product/service snapshot, and production status relation.
-- Order line item production stage instances or final production status if production is implemented in a separate module.
-- Stable order detail route for revalidation and finance entry points.
-- Permission helpers or role conventions for Admin-only finance writes and company-wide Sales/Admin reads.
-- Seeded order data that can support browser smoke without fake finance-only records.
-
-If any contract above differs from the names assumed in this plan, update this document first in a docs-only commit before implementation begins.
+- Order primary key and model name: `Order.id`.
+- Order line model: `OrderLineItem.id`.
+- Order relations: `proposalId`, `opportunityId`, `leadCustomerId`, optional `branchId`, primary `ownerId`, and `splitSnapshots`.
+- Order split source for incentive attribution: `OrderOwnerSplitSnapshot` rows. If no split snapshots exist, use `Order.ownerId` as the 100 percent recipient.
+- Order status lifecycle: `DRAFT`, `BOOKED`, `IN_PRODUCTION`, `READY_FOR_DELIVERY`, `DELIVERED`, `CANCELLED`. Finance calculations must block new invoice/payment/cost/incentive writes for `CANCELLED` orders. Historical finance records must be voided/rejected rather than deleted.
+- Booked value excluding GST: `Order.subtotalPaisa`.
+- GST value: `Order.gstPaisa`.
+- GST-inclusive total: `Order.totalPaisa`.
+- Order line amounts: `OrderLineItem.lineSubtotalPaisa`, `lineGstPaisa`, and `lineTotalPaisa`.
+- Product/service snapshots: `OrderLineItem.productNameSnapshot`, `productCategorySnapshot`, and `productionTemplateKeySnapshot`.
+- Production visibility: `OrderLineItem.productionWorkItems[]` on order detail and `ProductionWorkItem.status`/`ProductionStageInstance.status` in the production module. Finance does not block on production completion in this slice.
+- Stable order detail route for finance entry points and revalidation: `/orders/[orderId]`.
+- Stable order list route: `/orders`.
+- Permission convention: read visibility follows `canViewCompanyRecords()` for Admin and Sales; finance writes are Admin-only.
+- Seed status: there is a seeded accepted proposal (`seed_proposal_acme_lms_accepted`) but no seeded `Order` row. Finance e2e should create/book an order through the supported UI flow before exercising finance, or Task 2 may add deterministic order seed data if needed.
 
 ## Scope
 
@@ -130,7 +134,7 @@ These are future implementation targets, not files to edit while this plan is bl
 - Create migration under `prisma/migrations/**`
   Add finance tables, indexes, status enums, and foreign keys after schema review.
 - Modify: `prisma/seed.ts`
-  Add deterministic invoice/payment/cost/incentive seed data only after landed order seed records exist.
+  Add deterministic invoice/payment/cost/incentive seed data only if this slice also adds deterministic order setup. Otherwise keep browser smoke responsible for booking an order through the supported UI.
 - Create: `src/server/finance/types.ts`
   Define invoice, payment, cost, incentive, status, and read-model types.
 - Create: `src/server/finance/calculations.ts`
@@ -175,7 +179,7 @@ Use exact names only after checking the landed Orders/Production code. Suggested
 Recommended `Invoice` fields:
 
 - `id`: stable generated identifier.
-- `orderId`: required relation to the landed order model.
+- `orderId`: required relation to `Order`.
 - `invoiceNumber`: required display identifier, unique or company-unique based on final order model.
 - `invoiceDate`: required date.
 - `dueDate`: optional date.
@@ -191,7 +195,7 @@ Recommended `Invoice` fields:
 Recommended `Payment` fields:
 
 - `id`: stable generated identifier.
-- `orderId`: required relation to the landed order model.
+- `orderId`: required relation to `Order`.
 - `paymentDate`: required date.
 - `amountPaisa`: positive amount.
 - `mode`: `BANK_TRANSFER`, `UPI`, `CHEQUE`, `CASH`, `CARD`, `OTHER`.
@@ -211,8 +215,8 @@ Recommended `PaymentAllocation` fields:
 Recommended `CostComponent` fields:
 
 - `id`: stable generated identifier.
-- `orderId`: required relation to the landed order model.
-- `orderLineItemId`: optional relation to the landed order line item model.
+- `orderId`: required relation to `Order`.
+- `orderLineItemId`: optional relation to `OrderLineItem`.
 - `category`: required string or enum from configured categories.
 - `description`: required display text.
 - `amountPaisa`: non-negative amount.
@@ -226,7 +230,7 @@ Recommended `CostComponent` fields:
 Recommended `Incentive` fields:
 
 - `id`: stable generated identifier.
-- `orderId`: required unique relation to the landed order model.
+- `orderId`: required unique relation to `Order`.
 - `grossMarginPaisa`: snapshot.
 - `approvedCostTotalPaisa`: snapshot.
 - `rateBps`: default `500`.
@@ -277,13 +281,13 @@ Rounding rules:
 - Read: landed order schema, order routes, order server modules, production modules, and order tests.
 - Modify: this plan only if landed names differ.
 
-- [ ] Confirm order and order line model names.
-- [ ] Confirm order total field names for excluding GST, GST, and total value.
-- [ ] Confirm owner and split source for incentive attribution.
-- [ ] Confirm order detail route for finance entry points and revalidation.
-- [ ] Confirm production status visibility requirements on the order detail page.
-- [ ] Confirm whether cancelled/void orders are excluded from finance and incentive calculations.
-- [ ] Commit the docs-only refresh before touching implementation files.
+- [x] Confirm order and order line model names: `Order` and `OrderLineItem`.
+- [x] Confirm order total field names for excluding GST, GST, and total value: `subtotalPaisa`, `gstPaisa`, and `totalPaisa`.
+- [x] Confirm owner and split source for incentive attribution: `Order.ownerId` and `OrderOwnerSplitSnapshot`.
+- [x] Confirm order detail route for finance entry points and revalidation: `/orders/[orderId]`.
+- [x] Confirm production status visibility requirements on the order detail page: finance can show production status but does not depend on production completion.
+- [x] Confirm whether cancelled/void orders are excluded from finance and incentive calculations: block new finance writes for `CANCELLED`; preserve history through void/reject states.
+- [x] Commit the docs-only refresh before touching implementation files.
 
 ### Task 2: Add Finance Schema
 
@@ -291,12 +295,12 @@ Rounding rules:
 
 - Modify: `prisma/schema.prisma`
 - Create: `prisma/migrations/**`
-- Modify: `prisma/seed.ts`
+- Modify: `prisma/seed.ts` only if deterministic finance smoke data is needed.
 
 - [ ] Add invoice, payment, payment allocation, cost component, incentive, and incentive split enums/models.
 - [ ] Add order and order-line relations using actual landed Orders/Production names.
 - [ ] Add indexes for order finance summary, invoice status, due date, payment date, cost status, incentive status, and recipient lookup.
-- [ ] Seed finance records only against landed seed orders.
+- [ ] Seed finance records only against a deterministic `Order` if Task 2 adds one; otherwise keep finance e2e responsible for booking an order through supported UI.
 - [ ] Run `npx prisma validate`.
 - [ ] Run `npm run prisma:generate`.
 
@@ -394,8 +398,8 @@ Rounding rules:
 
 ## Acceptance Criteria
 
-- Implementation does not start until Orders/Production lands and this plan is refreshed against actual contracts.
-- No blocked-lane worker edits `prisma/**`, `src/**`, `tests/**`, package/config files, seed files, or migrations before unblock.
+- Implementation starts only after Orders/Production lands and this plan is refreshed against actual contracts.
+- No other Prisma-owning lane edits `prisma/**`, `src/**`, `tests/**`, package/config files, seed files, or migrations while Finance is active.
 - Invoice records attach to orders and support multiple invoices per order.
 - Payment records support one-time and installment payments.
 - Order payment completion is cumulative across all invoices and payments.
@@ -417,7 +421,7 @@ Rounding rules:
 
 ## Guardrails
 
-- Keep this lane docs-only until Orders/Production lands.
+- Keep this lane as the only schema-owning implementation branch until Finance lands.
 - Do not create placeholder finance tables before order contracts exist.
 - Do not infer order totals from proposal records after Orders exist; use the landed order as the finance source of truth.
 - Do not calculate incentives from GST-inclusive totals.
@@ -431,4 +435,4 @@ Rounding rules:
 
 ## Handoff Summary
 
-This plan is ready as a downstream implementation handoff, but it is **not executable yet**. Start only after Orders/Production lands, then refresh the exact model, route, query, mutation, permission, and seed names before touching implementation files.
+Orders/Production has landed, and this plan has been refreshed against the exact model, route, query, mutation, permission, and seed names. Finance implementation may proceed from `feature/finance-payments-incentives`.
