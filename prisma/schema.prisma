@@ -65,6 +65,39 @@ enum ProductionStageStatus {
   SKIPPED
 }
 
+enum InvoiceStatus {
+  DRAFT
+  ISSUED
+  PARTIALLY_PAID
+  PAID
+  VOID
+}
+
+enum PaymentMode {
+  BANK_TRANSFER
+  UPI
+  CHEQUE
+  CASH
+  CARD
+  OTHER
+}
+
+enum CostComponentStatus {
+  DRAFT
+  APPROVED
+  REJECTED
+  VOID
+}
+
+enum IncentiveStatus {
+  NOT_READY
+  READY_FOR_REVIEW
+  APPROVED
+  REJECTED
+  PAID
+  VOID
+}
+
 model User {
   id           String   @id @default(cuid())
   name         String
@@ -105,6 +138,20 @@ model User {
   assignedProductionStages    ProductionStageInstance[] @relation("ProductionStageAssignedTo")
   completedProductionStages   ProductionStageInstance[] @relation("ProductionStageCompletedBy")
   createdProductionNotes      ProductionNote[]     @relation("ProductionNoteCreatedBy")
+  createdInvoices             Invoice[]            @relation("InvoiceCreatedBy")
+  updatedInvoices             Invoice[]            @relation("InvoiceUpdatedBy")
+  voidedInvoices              Invoice[]            @relation("InvoiceVoidedBy")
+  createdPayments             Payment[]            @relation("PaymentCreatedBy")
+  createdCostComponents       CostComponent[]      @relation("CostComponentCreatedBy")
+  updatedCostComponents       CostComponent[]      @relation("CostComponentUpdatedBy")
+  approvedCostComponents      CostComponent[]      @relation("CostComponentApprovedBy")
+  rejectedCostComponents      CostComponent[]      @relation("CostComponentRejectedBy")
+  voidedCostComponents        CostComponent[]      @relation("CostComponentVoidedBy")
+  approvedIncentives          Incentive[]          @relation("IncentiveApprovedBy")
+  overriddenIncentives        Incentive[]          @relation("IncentiveOverrideBy")
+  rejectedIncentives          Incentive[]          @relation("IncentiveRejectedBy")
+  paidIncentives              Incentive[]          @relation("IncentivePaidBy")
+  incentiveSplits             IncentiveSplit[]
 }
 
 model LeadCustomer {
@@ -462,6 +509,10 @@ model Order {
   updatedBy     User           @relation("OrderUpdatedBy", fields: [updatedById], references: [id])
   lineItems     OrderLineItem[]
   splitSnapshots OrderOwnerSplitSnapshot[]
+  invoices      Invoice[]
+  payments      Payment[]
+  costComponents CostComponent[]
+  incentive     Incentive?
 
   @@index([status])
   @@index([ownerId])
@@ -495,6 +546,7 @@ model OrderLineItem {
   proposalLineItem ProposalLineItem @relation(fields: [proposalLineItemId], references: [id])
   productService   ProductService?  @relation(fields: [productServiceId], references: [id], onDelete: SetNull)
   productionWorkItems ProductionWorkItem[]
+  costComponents CostComponent[]
 
   @@index([orderId])
   @@index([productServiceId])
@@ -628,4 +680,153 @@ model ProductionNote {
   @@index([stageInstanceId])
   @@index([createdById])
   @@index([createdAt])
+}
+
+model Invoice {
+  id            String        @id @default(cuid())
+  orderId       String
+  invoiceNumber String        @unique
+  invoiceDate   DateTime
+  dueDate       DateTime?
+  status        InvoiceStatus @default(DRAFT)
+  subtotalPaisa Int
+  gstPaisa      Int
+  totalPaisa    Int
+  notes         String?
+  createdById   String
+  updatedById   String
+  voidedById    String?
+  voidReason    String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  order       Order               @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  createdBy   User                @relation("InvoiceCreatedBy", fields: [createdById], references: [id])
+  updatedBy   User                @relation("InvoiceUpdatedBy", fields: [updatedById], references: [id])
+  voidedBy    User?               @relation("InvoiceVoidedBy", fields: [voidedById], references: [id])
+  allocations PaymentAllocation[]
+
+  @@index([orderId])
+  @@index([status])
+  @@index([dueDate])
+  @@index([invoiceDate])
+}
+
+model Payment {
+  id           String      @id @default(cuid())
+  orderId      String
+  paymentDate  DateTime
+  amountPaisa  Int
+  mode         PaymentMode
+  reference    String?
+  notes        String?
+  createdById  String
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  order       Order               @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  createdBy   User                @relation("PaymentCreatedBy", fields: [createdById], references: [id])
+  allocations PaymentAllocation[]
+
+  @@index([orderId])
+  @@index([paymentDate])
+  @@index([mode])
+}
+
+model PaymentAllocation {
+  id          String   @id @default(cuid())
+  paymentId   String
+  invoiceId   String
+  amountPaisa Int
+  createdAt   DateTime @default(now())
+
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@unique([paymentId, invoiceId])
+  @@index([invoiceId])
+}
+
+model CostComponent {
+  id              String              @id @default(cuid())
+  orderId         String
+  orderLineItemId String?
+  category        String
+  description     String
+  amountPaisa     Int
+  status          CostComponentStatus @default(DRAFT)
+  createdById     String
+  updatedById     String
+  approvedById    String?
+  approvedAt      DateTime?
+  rejectedById    String?
+  rejectedAt      DateTime?
+  rejectionReason String?
+  voidedById      String?
+  voidedAt        DateTime?
+  voidReason      String?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  order         Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderLineItem OrderLineItem? @relation(fields: [orderLineItemId], references: [id], onDelete: SetNull)
+  createdBy     User           @relation("CostComponentCreatedBy", fields: [createdById], references: [id])
+  updatedBy     User           @relation("CostComponentUpdatedBy", fields: [updatedById], references: [id])
+  approvedBy    User?          @relation("CostComponentApprovedBy", fields: [approvedById], references: [id])
+  rejectedBy    User?          @relation("CostComponentRejectedBy", fields: [rejectedById], references: [id])
+  voidedBy      User?          @relation("CostComponentVoidedBy", fields: [voidedById], references: [id])
+
+  @@index([orderId])
+  @@index([orderLineItemId])
+  @@index([status])
+  @@index([category])
+}
+
+model Incentive {
+  id                     String          @id @default(cuid())
+  orderId                String          @unique
+  grossMarginPaisa       Int
+  approvedCostTotalPaisa Int
+  rateBps                Int             @default(500)
+  calculatedAmountPaisa  Int
+  overrideAmountPaisa    Int?
+  payableAmountPaisa     Int
+  status                 IncentiveStatus @default(NOT_READY)
+  readinessReason        String?
+  approvedById           String?
+  approvedAt             DateTime?
+  overrideById           String?
+  overrideAt             DateTime?
+  overrideReason         String?
+  rejectedById           String?
+  rejectedAt             DateTime?
+  rejectionReason        String?
+  paidById               String?
+  paidAt                 DateTime?
+  paymentReference       String?
+  createdAt              DateTime        @default(now())
+  updatedAt              DateTime        @updatedAt
+
+  order       Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  approvedBy  User?            @relation("IncentiveApprovedBy", fields: [approvedById], references: [id])
+  overrideBy  User?            @relation("IncentiveOverrideBy", fields: [overrideById], references: [id])
+  rejectedBy  User?            @relation("IncentiveRejectedBy", fields: [rejectedById], references: [id])
+  paidBy      User?            @relation("IncentivePaidBy", fields: [paidById], references: [id])
+  splits      IncentiveSplit[]
+
+  @@index([status])
+  @@index([approvedById])
+}
+
+model IncentiveSplit {
+  incentiveId String
+  userId      String
+  percent     Int
+  amountPaisa Int
+
+  incentive Incentive @relation(fields: [incentiveId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id])
+
+  @@id([incentiveId, userId])
+  @@index([userId])
 }

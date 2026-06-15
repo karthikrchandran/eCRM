@@ -297,12 +297,12 @@ Rounding rules:
 - Create: `prisma/migrations/**`
 - Modify: `prisma/seed.ts` only if deterministic finance smoke data is needed.
 
-- [ ] Add invoice, payment, payment allocation, cost component, incentive, and incentive split enums/models.
-- [ ] Add order and order-line relations using actual landed Orders/Production names.
-- [ ] Add indexes for order finance summary, invoice status, due date, payment date, cost status, incentive status, and recipient lookup.
-- [ ] Seed finance records only against a deterministic `Order` if Task 2 adds one; otherwise keep finance e2e responsible for booking an order through supported UI.
-- [ ] Run `npx prisma validate`.
-- [ ] Run `npm run prisma:generate`.
+- [x] Add invoice, payment, payment allocation, cost component, incentive, and incentive split enums/models.
+- [x] Add order and order-line relations using actual landed Orders/Production names.
+- [x] Add indexes for order finance summary, invoice status, due date, payment date, cost status, incentive status, and recipient lookup.
+- [x] Seed finance records only against a deterministic `Order` if Task 2 adds one; otherwise keep finance e2e responsible for booking an order through supported UI.
+- [x] Run `npx prisma validate`.
+- [x] Run `npm run prisma:generate`.
 
 ### Task 3: Add Pure Finance Calculations
 
