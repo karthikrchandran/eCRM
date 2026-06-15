@@ -1,6 +1,10 @@
 import { z } from "zod";
 
 const emptyToUndefined = (value: unknown) => {
+  if (value === null) {
+    return undefined;
+  }
+
   if (typeof value !== "string") {
     return value;
   }
