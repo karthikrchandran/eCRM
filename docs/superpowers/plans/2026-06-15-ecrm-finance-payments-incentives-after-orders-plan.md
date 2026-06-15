@@ -311,13 +311,13 @@ Rounding rules:
 - Create: `src/server/finance/calculations.ts`
 - Create: `src/server/finance/calculations.test.ts`
 
-- [ ] Cover default GST examples where order inputs require recalculation.
-- [ ] Cover cumulative order payment completion across one invoice, installments, and split invoices.
-- [ ] Cover pending receivables and uninvoiced work in progress.
-- [ ] Cover approved-cost-only gross margin.
-- [ ] Cover 5 percent default incentive and negative-margin zero default.
-- [ ] Cover split payouts for 100 percent owner default and 60/40 split.
-- [ ] Cover split rounding so payout split amounts always sum to the payable incentive.
+- [x] Cover default GST examples where order inputs require recalculation.
+- [x] Cover cumulative order payment completion across one invoice, installments, and split invoices.
+- [x] Cover pending receivables and uninvoiced work in progress.
+- [x] Cover approved-cost-only gross margin.
+- [x] Cover 5 percent default incentive and negative-margin zero default.
+- [x] Cover split payouts for 100 percent owner default and 60/40 split.
+- [x] Cover split rounding so payout split amounts always sum to the payable incentive.
 
 ### Task 4: Add Validators And Permissions
 
