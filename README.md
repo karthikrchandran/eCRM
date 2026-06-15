@@ -13,8 +13,10 @@ eCRM is a single-company CRM for a small sales organization. The foundation slic
 2. Create a local environment file.
 
    ```powershell
-   Copy-Item -LiteralPath .env.example -Destination .env.local -Force
+   Copy-Item -LiteralPath .env.example -Destination .env -Force
    ```
+
+   Use the root `.env` file as the canonical local environment file. Prisma CLI commands load it automatically, and the seed script uses the same `DATABASE_URL` and seed credentials. You may also export the same variables in your shell before running Prisma or seed commands. Use `.env.local` only for optional Next.js-only local overrides.
 
 3. Start the preferred local database with Docker Compose.
 
