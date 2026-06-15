@@ -252,11 +252,11 @@ Minimum test coverage:
 - Create: `prisma/migrations/**`
 - Modify: `prisma/seed.ts` only after accepted proposal seed data exists.
 
-- [ ] Add order enums and order models.
-- [ ] Add relations to landed Proposal, Opportunity, LeadCustomer, Branch, User, and proposal line item models.
-- [ ] Add unique constraint preventing duplicate order booking per proposal unless approved otherwise.
-- [ ] Add indexes for status, owner, customer, opportunity, booked date, and delivery due date.
-- [ ] Validate with `npx prisma validate` and Prisma generation.
+- [x] Add order enums and order models.
+- [x] Add relations to landed Proposal, Opportunity, LeadCustomer, Branch, User, and proposal line item models.
+- [x] Add unique constraint preventing duplicate order booking per proposal unless approved otherwise.
+- [x] Add indexes for status, owner, customer, opportunity, booked date, and delivery due date.
+- [x] Validate with `npx prisma validate` and Prisma generation.
 
 ### Task 3: Add Order Server Module
 
@@ -285,11 +285,11 @@ Minimum test coverage:
 - Create: `prisma/migrations/**`
 - Modify: `prisma/seed.ts` only for default templates after schema is stable.
 
-- [ ] Add production template, template stage, work item, stage instance, and note models.
-- [ ] Link production work items to order line items.
-- [ ] Add indexes for status, assigned user, due date, order, and product/service category snapshot.
-- [ ] Seed default templates for eLearning, video shoot, VR/AR, and animation when template editing is in scope.
-- [ ] Validate with Prisma commands.
+- [x] Add production template, template stage, work item, stage instance, and note models.
+- [x] Link production work items to order line items.
+- [x] Add indexes for status, assigned user, due date, order, and product/service category snapshot.
+- [x] Seed default templates for eLearning, video shoot, VR/AR, and animation when template editing is in scope.
+- [x] Validate with Prisma commands.
 
 ### Task 5: Add Production Server Module
 

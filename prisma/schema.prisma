@@ -48,6 +48,23 @@ enum ProposalStatus {
   WITHDRAWN
 }
 
+enum OrderStatus {
+  DRAFT
+  BOOKED
+  IN_PRODUCTION
+  READY_FOR_DELIVERY
+  DELIVERED
+  CANCELLED
+}
+
+enum ProductionStageStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  BLOCKED
+  DONE
+  SKIPPED
+}
+
 model User {
   id           String   @id @default(cuid())
   name         String
@@ -78,6 +95,16 @@ model User {
   createdProposals         Proposal[]             @relation("ProposalCreatedBy")
   updatedProposals         Proposal[]             @relation("ProposalUpdatedBy")
   uploadedProposalPdfs     ProposalPdfAttachment[] @relation("ProposalPdfUploadedBy")
+  ownedOrders              Order[]                @relation("OrderOwner")
+  createdOrders            Order[]                @relation("OrderCreatedBy")
+  updatedOrders            Order[]                @relation("OrderUpdatedBy")
+  orderSplitSnapshots      OrderOwnerSplitSnapshot[]
+  assignedProductionWorkItems ProductionWorkItem[] @relation("ProductionWorkItemAssignedTo")
+  createdProductionWorkItems  ProductionWorkItem[] @relation("ProductionWorkItemCreatedBy")
+  updatedProductionWorkItems  ProductionWorkItem[] @relation("ProductionWorkItemUpdatedBy")
+  assignedProductionStages    ProductionStageInstance[] @relation("ProductionStageAssignedTo")
+  completedProductionStages   ProductionStageInstance[] @relation("ProductionStageCompletedBy")
+  createdProductionNotes      ProductionNote[]     @relation("ProductionNoteCreatedBy")
 }
 
 model LeadCustomer {
@@ -101,6 +128,7 @@ model LeadCustomer {
   activities       Activity[]
   ownershipHistory LeadOwnershipHistory[]
   opportunities    Opportunity[]
+  orders           Order[]
 
   @@index([ownerId])
   @@index([state])
@@ -129,6 +157,7 @@ model Branch {
   contacts     Contact[]
   activities   Activity[]
   opportunities Opportunity[]
+  orders       Order[]
 
   @@index([leadCustomerId])
   @@index([city])
@@ -249,6 +278,7 @@ model Opportunity {
   updatedBy    User                    @relation("OpportunityUpdatedBy", fields: [updatedById], references: [id])
   splits       OpportunityOwnerSplit[]
   proposals    Proposal[]
+  orders       Order[]
 
   @@index([leadCustomerId])
   @@index([branchId])
@@ -305,6 +335,7 @@ model ProductService {
   createdBy User @relation("ProductServiceCreatedBy", fields: [createdById], references: [id])
   updatedBy User @relation("ProductServiceUpdatedBy", fields: [updatedById], references: [id])
   proposalLineItems ProposalLineItem[]
+  orderLineItems OrderLineItem[]
 
   @@index([active, sortOrder])
   @@index([category])
@@ -340,6 +371,7 @@ model Proposal {
   updatedBy   User                     @relation("ProposalUpdatedBy", fields: [updatedById], references: [id])
   lineItems   ProposalLineItem[]
   pdfAttachments ProposalPdfAttachment[]
+  order       Order?
 
   @@unique([opportunityId, sequenceNumber])
   @@index([opportunityId])
@@ -367,6 +399,7 @@ model ProposalLineItem {
 
   proposal       Proposal       @relation(fields: [proposalId], references: [id], onDelete: Cascade)
   productService ProductService @relation(fields: [productServiceId], references: [id])
+  orderLineItem  OrderLineItem?
 
   @@index([proposalId])
   @@index([productServiceId])
@@ -392,4 +425,207 @@ model ProposalPdfAttachment {
 
   @@index([proposalId])
   @@index([uploadedAt])
+}
+
+model Order {
+  id              String      @id @default(cuid())
+  orderNumber     String      @unique
+  proposalId      String      @unique
+  opportunityId   String
+  leadCustomerId  String
+  branchId        String?
+  ownerId         String
+  status          OrderStatus @default(BOOKED)
+  poNumber        String?
+  poDate          DateTime?
+  poFileName      String?
+  poStorageKey    String?
+  poFileSizeBytes Int?
+  poMimeType      String?
+  bookedAt        DateTime    @default(now())
+  deliveryDueAt   DateTime?
+  currency        String      @default("INR")
+  subtotalPaisa   Int
+  gstPaisa        Int
+  totalPaisa      Int
+  createdById     String
+  updatedById     String
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  proposal      Proposal       @relation(fields: [proposalId], references: [id])
+  opportunity   Opportunity    @relation(fields: [opportunityId], references: [id])
+  leadCustomer  LeadCustomer   @relation(fields: [leadCustomerId], references: [id])
+  branch        Branch?        @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  owner         User           @relation("OrderOwner", fields: [ownerId], references: [id])
+  createdBy     User           @relation("OrderCreatedBy", fields: [createdById], references: [id])
+  updatedBy     User           @relation("OrderUpdatedBy", fields: [updatedById], references: [id])
+  lineItems     OrderLineItem[]
+  splitSnapshots OrderOwnerSplitSnapshot[]
+
+  @@index([status])
+  @@index([ownerId])
+  @@index([leadCustomerId])
+  @@index([opportunityId])
+  @@index([bookedAt])
+  @@index([deliveryDueAt])
+}
+
+model OrderLineItem {
+  id                            String   @id @default(cuid())
+  orderId                       String
+  proposalLineItemId            String   @unique
+  productServiceId              String?
+  productNameSnapshot           String
+  productCategorySnapshot       String
+  productionTemplateKeySnapshot String?
+  description                   String?
+  quantity                      Int
+  unitPricePaisa                Int
+  gstRateBps                    Int
+  gstOverrideReason             String?
+  lineSubtotalPaisa             Int
+  lineGstPaisa                  Int
+  lineTotalPaisa                Int
+  sortOrder                     Int      @default(0)
+  createdAt                     DateTime @default(now())
+  updatedAt                     DateTime @updatedAt
+
+  order            Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  proposalLineItem ProposalLineItem @relation(fields: [proposalLineItemId], references: [id])
+  productService   ProductService?  @relation(fields: [productServiceId], references: [id], onDelete: SetNull)
+  productionWorkItems ProductionWorkItem[]
+
+  @@index([orderId])
+  @@index([productServiceId])
+  @@index([productCategorySnapshot])
+}
+
+model OrderOwnerSplitSnapshot {
+  orderId String
+  userId  String
+  percent Int
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id])
+
+  @@id([orderId, userId])
+  @@index([userId])
+}
+
+model ProductionTemplate {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  name        String
+  description String?
+  active      Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  stages    ProductionTemplateStage[]
+  workItems ProductionWorkItem[]
+
+  @@index([active, sortOrder])
+}
+
+model ProductionTemplateStage {
+  id                  String   @id @default(cuid())
+  templateId          String
+  key                 String
+  name                String
+  description         String?
+  required            Boolean  @default(true)
+  defaultDurationDays Int?
+  sortOrder           Int      @default(0)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  template       ProductionTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  stageInstances ProductionStageInstance[]
+
+  @@unique([templateId, key])
+  @@index([templateId, sortOrder])
+}
+
+model ProductionWorkItem {
+  id                   String                @id @default(cuid())
+  orderLineItemId      String
+  productionTemplateId String?
+  title                String
+  productNameSnapshot  String
+  productCategorySnapshot String
+  status               ProductionStageStatus @default(NOT_STARTED)
+  assignedToId         String?
+  dueAt                DateTime?
+  startedAt            DateTime?
+  completedAt          DateTime?
+  createdById          String
+  updatedById          String
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+
+  orderLineItem      OrderLineItem       @relation(fields: [orderLineItemId], references: [id], onDelete: Cascade)
+  productionTemplate ProductionTemplate? @relation(fields: [productionTemplateId], references: [id], onDelete: SetNull)
+  assignedTo         User?               @relation("ProductionWorkItemAssignedTo", fields: [assignedToId], references: [id])
+  createdBy          User                @relation("ProductionWorkItemCreatedBy", fields: [createdById], references: [id])
+  updatedBy          User                @relation("ProductionWorkItemUpdatedBy", fields: [updatedById], references: [id])
+  stageInstances     ProductionStageInstance[]
+  notes              ProductionNote[]
+
+  @@index([orderLineItemId])
+  @@index([productionTemplateId])
+  @@index([status])
+  @@index([assignedToId])
+  @@index([dueAt])
+  @@index([productCategorySnapshot])
+}
+
+model ProductionStageInstance {
+  id              String                @id @default(cuid())
+  workItemId      String
+  templateStageId String?
+  name            String
+  description     String?
+  status          ProductionStageStatus @default(NOT_STARTED)
+  required        Boolean               @default(true)
+  sortOrder       Int                   @default(0)
+  assignedToId    String?
+  dueAt           DateTime?
+  startedAt       DateTime?
+  completedAt     DateTime?
+  completedById   String?
+  skippedReason   String?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  workItem      ProductionWorkItem      @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  templateStage ProductionTemplateStage? @relation(fields: [templateStageId], references: [id], onDelete: SetNull)
+  assignedTo    User?                   @relation("ProductionStageAssignedTo", fields: [assignedToId], references: [id])
+  completedBy   User?                   @relation("ProductionStageCompletedBy", fields: [completedById], references: [id])
+  notes         ProductionNote[]
+
+  @@index([workItemId])
+  @@index([templateStageId])
+  @@index([status])
+  @@index([assignedToId])
+  @@index([dueAt])
+}
+
+model ProductionNote {
+  id              String   @id @default(cuid())
+  workItemId      String
+  stageInstanceId String?
+  body            String
+  createdById     String
+  createdAt       DateTime @default(now())
+
+  workItem      ProductionWorkItem     @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  stageInstance ProductionStageInstance? @relation(fields: [stageInstanceId], references: [id], onDelete: SetNull)
+  createdBy     User                   @relation("ProductionNoteCreatedBy", fields: [createdById], references: [id])
+
+  @@index([workItemId])
+  @@index([stageInstanceId])
+  @@index([createdById])
+  @@index([createdAt])
 }

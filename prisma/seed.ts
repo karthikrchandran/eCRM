@@ -70,6 +70,69 @@ const defaultProductServices = [
   }
 ];
 
+const defaultProductionTemplates = [
+  {
+    id: "seed_production_template_elearning",
+    key: "elearning",
+    name: "eLearning production",
+    description: "Default stages for eLearning module delivery.",
+    sortOrder: 10,
+    stages: [
+      { id: "seed_production_stage_elearning_script", key: "script", name: "Script", sortOrder: 10, defaultDurationDays: 3 },
+      { id: "seed_production_stage_elearning_storyboard", key: "storyboard", name: "Storyboard", sortOrder: 20, defaultDurationDays: 4 },
+      { id: "seed_production_stage_elearning_development", key: "development", name: "Development", sortOrder: 30, defaultDurationDays: 10 },
+      { id: "seed_production_stage_elearning_voiceover", key: "voiceover", name: "Voiceover", sortOrder: 40, defaultDurationDays: 3 },
+      { id: "seed_production_stage_elearning_review", key: "review", name: "Review and edits", sortOrder: 50, defaultDurationDays: 5 },
+      { id: "seed_production_stage_elearning_delivery", key: "delivery", name: "Final delivery", sortOrder: 60, defaultDurationDays: 2 }
+    ]
+  },
+  {
+    id: "seed_production_template_video_shoot",
+    key: "video_shoot",
+    name: "Video shoot production",
+    description: "Default stages for scripted video production.",
+    sortOrder: 20,
+    stages: [
+      { id: "seed_production_stage_video_script", key: "script", name: "Script", sortOrder: 10, defaultDurationDays: 3 },
+      { id: "seed_production_stage_video_preproduction", key: "pre_production", name: "Pre-production", sortOrder: 20, defaultDurationDays: 4 },
+      { id: "seed_production_stage_video_shoot", key: "shoot", name: "Shoot", sortOrder: 30, defaultDurationDays: 2 },
+      { id: "seed_production_stage_video_edit", key: "edit", name: "Edit", sortOrder: 40, defaultDurationDays: 7 },
+      { id: "seed_production_stage_video_review", key: "review", name: "Review and edits", sortOrder: 50, defaultDurationDays: 5 },
+      { id: "seed_production_stage_video_delivery", key: "delivery", name: "Final delivery", sortOrder: 60, defaultDurationDays: 2 }
+    ]
+  },
+  {
+    id: "seed_production_template_vr_ar",
+    key: "vr_ar",
+    name: "VR/AR production",
+    description: "Default stages for VR and AR delivery.",
+    sortOrder: 30,
+    stages: [
+      { id: "seed_production_stage_vr_discovery", key: "discovery", name: "Discovery", sortOrder: 10, defaultDurationDays: 3 },
+      { id: "seed_production_stage_vr_design", key: "design", name: "Experience design", sortOrder: 20, defaultDurationDays: 5 },
+      { id: "seed_production_stage_vr_development", key: "development", name: "Development", sortOrder: 30, defaultDurationDays: 12 },
+      { id: "seed_production_stage_vr_testing", key: "testing", name: "Testing", sortOrder: 40, defaultDurationDays: 5 },
+      { id: "seed_production_stage_vr_review", key: "review", name: "Review and edits", sortOrder: 50, defaultDurationDays: 5 },
+      { id: "seed_production_stage_vr_delivery", key: "delivery", name: "Final delivery", sortOrder: 60, defaultDurationDays: 2 }
+    ]
+  },
+  {
+    id: "seed_production_template_animation",
+    key: "animation",
+    name: "Animation production",
+    description: "Default stages for animation delivery.",
+    sortOrder: 40,
+    stages: [
+      { id: "seed_production_stage_animation_script", key: "script", name: "Script", sortOrder: 10, defaultDurationDays: 3 },
+      { id: "seed_production_stage_animation_storyboard", key: "storyboard", name: "Storyboard", sortOrder: 20, defaultDurationDays: 4 },
+      { id: "seed_production_stage_animation_animation", key: "animation", name: "Modeling and animation", sortOrder: 30, defaultDurationDays: 12 },
+      { id: "seed_production_stage_animation_voiceover", key: "voiceover", name: "Voiceover", sortOrder: 40, defaultDurationDays: 3 },
+      { id: "seed_production_stage_animation_review", key: "review", name: "Review and edits", sortOrder: 50, defaultDurationDays: 5 },
+      { id: "seed_production_stage_animation_delivery", key: "delivery", name: "Final delivery", sortOrder: 60, defaultDurationDays: 2 }
+    ]
+  }
+];
+
 async function upsertUser(input: {
   name: string;
   email: string;
@@ -328,6 +391,50 @@ async function main() {
         updatedById: admin.id
       }
     });
+  }
+
+  for (const template of defaultProductionTemplates) {
+    await prisma.productionTemplate.upsert({
+      where: { id: template.id },
+      update: {
+        active: true,
+        description: template.description,
+        key: template.key,
+        name: template.name,
+        sortOrder: template.sortOrder
+      },
+      create: {
+        id: template.id,
+        active: true,
+        description: template.description,
+        key: template.key,
+        name: template.name,
+        sortOrder: template.sortOrder
+      }
+    });
+
+    for (const stage of template.stages) {
+      await prisma.productionTemplateStage.upsert({
+        where: { id: stage.id },
+        update: {
+          defaultDurationDays: stage.defaultDurationDays,
+          key: stage.key,
+          name: stage.name,
+          required: true,
+          sortOrder: stage.sortOrder,
+          templateId: template.id
+        },
+        create: {
+          id: stage.id,
+          defaultDurationDays: stage.defaultDurationDays,
+          key: stage.key,
+          name: stage.name,
+          required: true,
+          sortOrder: stage.sortOrder,
+          templateId: template.id
+        }
+      });
+    }
   }
 
   const acceptedProposal = await prisma.proposal.upsert({
