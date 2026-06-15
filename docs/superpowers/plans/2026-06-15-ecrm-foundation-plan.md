@@ -30,7 +30,7 @@ The remaining CRM modules will get separate plans:
 Create these files in this slice:
 
 - `package.json`: npm scripts and pinned package versions.
-- `tsconfig.json`: TypeScript configuration where `@/*` maps to `./src/*` without `baseUrl` because TypeScript 6 deprecates `baseUrl`.
+- `tsconfig.json`: TypeScript configuration where `@/*` maps to `./src/*` without `baseUrl`, uses Next 16's `react-jsx` setting, and includes both `.next/types/**/*.ts` and `.next/dev/types/**/*.ts`.
 - `next.config.ts`: Next.js config.
 - `eslint.config.mjs`: flat ESLint config using Next presets.
 - `postcss.config.mjs`: Tailwind PostCSS plugin.
@@ -157,7 +157,11 @@ Create `tsconfig.json`:
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": ["dom", "dom.iterable", "es2022"],
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "es2022"
+    ],
     "allowJs": false,
     "skipLibCheck": true,
     "strict": true,
@@ -167,15 +171,29 @@ Create `tsconfig.json`:
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "jsx": "preserve",
+    "jsx": "react-jsx",
     "incremental": true,
-    "plugins": [{ "name": "next" }],
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": [
+        "./src/*"
+      ]
     }
   },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules"]
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
 }
 ```
 
