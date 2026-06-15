@@ -24,11 +24,11 @@ export function ActivityForm({ action, owners, branches, contacts }: ActivityFor
   const [state, formAction, pending] = useActionState(action, initialState);
 
   return (
-    <form action={formAction} className="surface grid max-w-3xl gap-4 p-6">
+    <form action={formAction} className="surface grid w-full max-w-3xl gap-4 p-4 sm:p-6">
       <div className="grid gap-4 sm:grid-cols-3">
-        <label className="flex flex-col gap-1 text-sm font-medium">
+        <label className="min-w-0 flex flex-col gap-1 text-sm font-medium">
           Type
-          <select className="rounded-md border border-[var(--border)] px-3 py-2" defaultValue="CALL" name="type">
+          <select className="crm-control" defaultValue="CALL" name="type">
             <option value="CALL">CALL</option>
             <option value="EMAIL">EMAIL</option>
             <option value="MEETING">MEETING</option>
@@ -37,18 +37,18 @@ export function ActivityForm({ action, owners, branches, contacts }: ActivityFor
           </select>
         </label>
 
-        <label className="flex flex-col gap-1 text-sm font-medium">
+        <label className="min-w-0 flex flex-col gap-1 text-sm font-medium">
           Status
-          <select className="rounded-md border border-[var(--border)] px-3 py-2" defaultValue="OPEN" name="status">
+          <select className="crm-control" defaultValue="OPEN" name="status">
             <option value="OPEN">OPEN</option>
             <option value="COMPLETED">COMPLETED</option>
             <option value="CANCELLED">CANCELLED</option>
           </select>
         </label>
 
-        <label className="flex flex-col gap-1 text-sm font-medium">
+        <label className="min-w-0 flex flex-col gap-1 text-sm font-medium">
           Owner
-          <select className="rounded-md border border-[var(--border)] px-3 py-2" name="ownerId" required>
+          <select className="crm-control" name="ownerId" required>
             <option value="">Choose owner</option>
             {owners.map((owner) => (
               <option key={owner.id} value={owner.id}>
@@ -61,9 +61,9 @@ export function ActivityForm({ action, owners, branches, contacts }: ActivityFor
       <FieldError errors={state.fieldErrors?.ownerId} />
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <label className="flex flex-col gap-1 text-sm font-medium">
+        <label className="min-w-0 flex flex-col gap-1 text-sm font-medium">
           Branch
-          <select className="rounded-md border border-[var(--border)] px-3 py-2" name="branchId">
+          <select className="crm-control" name="branchId">
             <option value="">Company level</option>
             {branches.map((branch) => (
               <option key={branch.id} value={branch.id}>
@@ -73,9 +73,9 @@ export function ActivityForm({ action, owners, branches, contacts }: ActivityFor
           </select>
         </label>
 
-        <label className="flex flex-col gap-1 text-sm font-medium">
+        <label className="min-w-0 flex flex-col gap-1 text-sm font-medium">
           Contact
-          <select className="rounded-md border border-[var(--border)] px-3 py-2" name="contactId">
+          <select className="crm-control" name="contactId">
             <option value="">No contact</option>
             {contacts.map((contact) => (
               <option key={contact.id} value={contact.id}>
@@ -88,29 +88,29 @@ export function ActivityForm({ action, owners, branches, contacts }: ActivityFor
 
       <label className="flex flex-col gap-1 text-sm font-medium">
         Subject
-        <input className="rounded-md border border-[var(--border)] px-3 py-2" name="subject" required type="text" />
+        <input className="crm-control" name="subject" required type="text" />
       </label>
       <FieldError errors={state.fieldErrors?.subject} />
 
       <label className="flex flex-col gap-1 text-sm font-medium">
         Body
-        <textarea className="min-h-28 rounded-md border border-[var(--border)] px-3 py-2" name="body" />
+        <textarea className="crm-control min-h-28" name="body" />
       </label>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <label className="flex flex-col gap-1 text-sm font-medium">
+        <label className="min-w-0 flex flex-col gap-1 text-sm font-medium">
           Occurred date
-          <input className="rounded-md border border-[var(--border)] px-3 py-2" name="occurredAt" type="datetime-local" />
+          <input className="crm-control" name="occurredAt" type="datetime-local" />
         </label>
-        <label className="flex flex-col gap-1 text-sm font-medium">
+        <label className="min-w-0 flex flex-col gap-1 text-sm font-medium">
           Due date
-          <input className="rounded-md border border-[var(--border)] px-3 py-2" name="dueAt" type="datetime-local" />
+          <input className="crm-control" name="dueAt" type="datetime-local" />
         </label>
       </div>
       <FieldError errors={state.fieldErrors?.dueAt} />
 
-      <div>
-        <button className="rounded-md bg-[var(--accent)] px-4 py-2 font-semibold text-white disabled:opacity-60" disabled={pending} type="submit">
+      <div className="crm-form-actions">
+        <button className="crm-button crm-button-primary sm:w-auto" disabled={pending} type="submit">
           {pending ? "Saving..." : "Add activity"}
         </button>
       </div>

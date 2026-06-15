@@ -60,6 +60,21 @@ test("admin creates a lead, branch, contact, follow-up, and reassigns owner", as
   await expect(page.getByText("Admin taking temporary ownership for onboarding")).toBeVisible();
 });
 
+test("mobile shell exposes CRM navigation and lead detail stays within the viewport", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await signIn(page, "sales@example.com", "Sales@12345");
+
+  await expect(page.getByRole("link", { name: "Leads" })).toBeVisible();
+  await page.getByRole("link", { name: "Leads" }).click();
+  await expect(page.getByRole("heading", { name: "Leads / Customers" })).toBeVisible();
+
+  await page.getByRole("link", { name: "Acme Learning Pvt Ltd" }).click();
+  await expect(page.getByRole("heading", { name: "Acme Learning Pvt Ltd" })).toBeVisible();
+
+  const hasHorizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
+  expect(hasHorizontalOverflow).toBe(false);
+});
+
 test("sales can see company-wide leads regardless of owner", async ({ page }) => {
   await signIn(page, "sales@example.com", "Sales@12345");
 

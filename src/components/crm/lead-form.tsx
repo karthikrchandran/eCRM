@@ -35,11 +35,11 @@ export function LeadForm({ action, owners, initialValues, submitLabel }: LeadFor
   const [state, formAction, pending] = useActionState(action, initialState);
 
   return (
-    <form action={formAction} className="surface grid max-w-3xl gap-4 p-6">
+    <form action={formAction} className="surface grid w-full max-w-3xl gap-4 p-4 sm:p-6">
       <label className="flex flex-col gap-1 text-sm font-medium">
         Lead/customer name
         <input
-          className="rounded-md border border-[var(--border)] px-3 py-2"
+          className="crm-control"
           defaultValue={initialValues?.name ?? ""}
           name="name"
           required
@@ -49,18 +49,18 @@ export function LeadForm({ action, owners, initialValues, submitLabel }: LeadFor
       <FieldError errors={state.fieldErrors?.name} />
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <label className="flex flex-col gap-1 text-sm font-medium">
+        <label className="min-w-0 flex flex-col gap-1 text-sm font-medium">
           State
-          <select className="rounded-md border border-[var(--border)] px-3 py-2" defaultValue={initialValues?.state ?? "LEAD"} name="state">
+          <select className="crm-control" defaultValue={initialValues?.state ?? "LEAD"} name="state">
             <option value="LEAD">LEAD</option>
             <option value="CUSTOMER">CUSTOMER</option>
             <option value="DORMANT">DORMANT</option>
           </select>
         </label>
 
-        <label className="flex flex-col gap-1 text-sm font-medium">
+        <label className="min-w-0 flex flex-col gap-1 text-sm font-medium">
           Owner
-          <select className="rounded-md border border-[var(--border)] px-3 py-2" defaultValue={initialValues?.ownerId ?? ""} name="ownerId" required>
+          <select className="crm-control" defaultValue={initialValues?.ownerId ?? ""} name="ownerId" required>
             <option value="">Choose owner</option>
             {owners.map((owner) => (
               <option key={owner.id} value={owner.id}>
@@ -73,20 +73,20 @@ export function LeadForm({ action, owners, initialValues, submitLabel }: LeadFor
       <FieldError errors={state.fieldErrors?.ownerId} />
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <label className="flex flex-col gap-1 text-sm font-medium">
+        <label className="min-w-0 flex flex-col gap-1 text-sm font-medium">
           Industry
           <input
-            className="rounded-md border border-[var(--border)] px-3 py-2"
+            className="crm-control"
             defaultValue={initialValues?.industry ?? ""}
             name="industry"
             type="text"
           />
         </label>
 
-        <label className="flex flex-col gap-1 text-sm font-medium">
+        <label className="min-w-0 flex flex-col gap-1 text-sm font-medium">
           Source
           <input
-            className="rounded-md border border-[var(--border)] px-3 py-2"
+            className="crm-control"
             defaultValue={initialValues?.source ?? ""}
             name="source"
             type="text"
@@ -97,7 +97,7 @@ export function LeadForm({ action, owners, initialValues, submitLabel }: LeadFor
       <label className="flex flex-col gap-1 text-sm font-medium">
         Notes
         <textarea
-          className="min-h-28 rounded-md border border-[var(--border)] px-3 py-2"
+          className="crm-control min-h-28"
           defaultValue={initialValues?.notes ?? ""}
           name="notes"
         />
@@ -105,8 +105,8 @@ export function LeadForm({ action, owners, initialValues, submitLabel }: LeadFor
 
       {state.message ? <p className="text-sm text-[var(--muted)]">{state.message}</p> : null}
 
-      <div>
-        <button className="rounded-md bg-[var(--accent)] px-4 py-2 font-semibold text-white disabled:opacity-60" disabled={pending} type="submit">
+      <div className="crm-form-actions">
+        <button className="crm-button crm-button-primary sm:w-auto" disabled={pending} type="submit">
           {pending ? "Saving..." : submitLabel}
         </button>
       </div>

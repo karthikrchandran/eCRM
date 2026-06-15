@@ -14,10 +14,10 @@ export function ReassignOwnerForm({ action, owners }: ReassignOwnerFormProps) {
   const [state, formAction, pending] = useActionState(action, initialState);
 
   return (
-    <form action={formAction} className="surface grid gap-4 p-4">
+    <form action={formAction} className="surface grid w-full gap-4 p-4">
       <label className="flex flex-col gap-1 text-sm font-medium">
         New owner
-        <select className="rounded-md border border-[var(--border)] px-3 py-2" name="toOwnerId" required>
+        <select className="crm-control" name="toOwnerId" required>
           <option value="">Choose owner</option>
           {owners.map((owner) => (
             <option key={owner.id} value={owner.id}>
@@ -29,7 +29,7 @@ export function ReassignOwnerForm({ action, owners }: ReassignOwnerFormProps) {
 
       <label className="flex flex-col gap-1 text-sm font-medium">
         Reassignment reason
-        <textarea className="min-h-24 rounded-md border border-[var(--border)] px-3 py-2" name="reason" required />
+        <textarea className="crm-control min-h-24" name="reason" required />
       </label>
 
       {state.fieldErrors?.reason?.[0] ? (
@@ -39,8 +39,8 @@ export function ReassignOwnerForm({ action, owners }: ReassignOwnerFormProps) {
       ) : null}
       {state.message ? <p className="text-sm text-[var(--muted)]">{state.message}</p> : null}
 
-      <div>
-        <button className="rounded-md bg-[var(--accent)] px-4 py-2 font-semibold text-white disabled:opacity-60" disabled={pending} type="submit">
+      <div className="crm-form-actions">
+        <button className="crm-button crm-button-primary sm:w-auto" disabled={pending} type="submit">
           {pending ? "Saving..." : "Reassign owner"}
         </button>
       </div>

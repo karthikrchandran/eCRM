@@ -21,60 +21,60 @@ export function BranchForm({ action }: BranchFormProps) {
   const [state, formAction, pending] = useActionState(action, initialState);
 
   return (
-    <form action={formAction} className="surface grid max-w-3xl gap-4 p-6">
+    <form action={formAction} className="surface grid w-full max-w-3xl gap-4 p-4 sm:p-6">
       <label className="flex flex-col gap-1 text-sm font-medium">
         Branch name
-        <input className="rounded-md border border-[var(--border)] px-3 py-2" name="name" required type="text" />
+        <input className="crm-control" name="name" required type="text" />
       </label>
       <FieldError errors={state.fieldErrors?.name} />
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <label className="flex flex-col gap-1 text-sm font-medium">
+        <label className="min-w-0 flex flex-col gap-1 text-sm font-medium">
           Address line 1
-          <input className="rounded-md border border-[var(--border)] px-3 py-2" name="addressLine1" type="text" />
+          <input className="crm-control" name="addressLine1" type="text" />
         </label>
-        <label className="flex flex-col gap-1 text-sm font-medium">
+        <label className="min-w-0 flex flex-col gap-1 text-sm font-medium">
           Address line 2
-          <input className="rounded-md border border-[var(--border)] px-3 py-2" name="addressLine2" type="text" />
+          <input className="crm-control" name="addressLine2" type="text" />
         </label>
-        <label className="flex flex-col gap-1 text-sm font-medium">
+        <label className="min-w-0 flex flex-col gap-1 text-sm font-medium">
           City
-          <input className="rounded-md border border-[var(--border)] px-3 py-2" name="city" type="text" />
+          <input className="crm-control" name="city" type="text" />
         </label>
-        <label className="flex flex-col gap-1 text-sm font-medium">
+        <label className="min-w-0 flex flex-col gap-1 text-sm font-medium">
           Region
-          <input className="rounded-md border border-[var(--border)] px-3 py-2" name="region" type="text" />
+          <input className="crm-control" name="region" type="text" />
         </label>
-        <label className="flex flex-col gap-1 text-sm font-medium">
+        <label className="min-w-0 flex flex-col gap-1 text-sm font-medium">
           Postal code
-          <input className="rounded-md border border-[var(--border)] px-3 py-2" name="postalCode" type="text" />
+          <input className="crm-control" name="postalCode" type="text" />
         </label>
-        <label className="flex flex-col gap-1 text-sm font-medium">
+        <label className="min-w-0 flex flex-col gap-1 text-sm font-medium">
           Country
-          <input className="rounded-md border border-[var(--border)] px-3 py-2" defaultValue="India" name="country" type="text" />
+          <input className="crm-control" defaultValue="India" name="country" type="text" />
         </label>
-        <label className="flex flex-col gap-1 text-sm font-medium">
+        <label className="min-w-0 flex flex-col gap-1 text-sm font-medium">
           GSTIN
-          <input className="rounded-md border border-[var(--border)] px-3 py-2" name="gstin" type="text" />
+          <input className="crm-control" name="gstin" type="text" />
         </label>
-        <label className="flex flex-col gap-1 text-sm font-medium">
+        <label className="min-w-0 flex flex-col gap-1 text-sm font-medium">
           Location hint
-          <input className="rounded-md border border-[var(--border)] px-3 py-2" name="locationHint" type="text" />
+          <input className="crm-control" name="locationHint" type="text" />
         </label>
       </div>
 
       <label className="flex flex-col gap-1 text-sm font-medium">
         Sales context
-        <textarea className="min-h-24 rounded-md border border-[var(--border)] px-3 py-2" name="salesContext" />
+        <textarea className="crm-control min-h-24" name="salesContext" />
       </label>
 
       <label className="flex flex-col gap-1 text-sm font-medium">
         Notes
-        <textarea className="min-h-24 rounded-md border border-[var(--border)] px-3 py-2" name="notes" />
+        <textarea className="crm-control min-h-24" name="notes" />
       </label>
 
-      <div>
-        <button className="rounded-md bg-[var(--accent)] px-4 py-2 font-semibold text-white disabled:opacity-60" disabled={pending} type="submit">
+      <div className="crm-form-actions">
+        <button className="crm-button crm-button-primary sm:w-auto" disabled={pending} type="submit">
           {pending ? "Saving..." : "Create branch"}
         </button>
       </div>
