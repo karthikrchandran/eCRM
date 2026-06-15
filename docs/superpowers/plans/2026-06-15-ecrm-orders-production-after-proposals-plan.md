@@ -270,12 +270,12 @@ Minimum test coverage:
 - Create: `src/server/orders/actions.ts`
 - Create: matching tests.
 
-- [ ] Write failing validator tests for booking input, PO metadata, filters, and status transitions.
-- [ ] Implement validators with no client-supplied commercial totals.
-- [ ] Write failing mutation tests for accepted-proposal-only booking and duplicate prevention.
-- [ ] Implement `createOrderFromAcceptedProposal()` as a transaction.
-- [ ] Copy proposal and line item snapshots during booking.
-- [ ] Revalidate proposal, opportunity, order, and dashboard routes after booking.
+- [x] Write failing validator tests for booking input, PO metadata, filters, and status transitions.
+- [x] Implement validators with no client-supplied commercial totals.
+- [x] Write failing mutation tests for accepted-proposal-only booking and duplicate prevention.
+- [x] Implement `createOrderFromAcceptedProposal()` as a transaction.
+- [x] Copy proposal and line item snapshots during booking.
+- [x] Revalidate proposal, opportunity, order, and dashboard routes after booking.
 
 ### Task 4: Add Production Schema
 
@@ -304,11 +304,11 @@ Minimum test coverage:
 - Create: `src/server/production/actions.ts`
 - Create: matching tests.
 
-- [ ] Write failing tests for template expansion and stage transitions.
-- [ ] Implement work item creation from order line items.
-- [ ] Implement production board reads with company-wide visibility.
-- [ ] Implement stage status updates with timestamps and optional notes.
-- [ ] Derive order production status from work item and stage state.
+- [x] Write failing tests for template expansion and stage transitions.
+- [x] Implement work item creation from order line items.
+- [x] Implement production board reads with company-wide visibility.
+- [x] Implement stage status updates with timestamps and optional notes.
+- [x] Derive order production status from work item and stage state.
 
 ### Task 6: Add Order UI
 
