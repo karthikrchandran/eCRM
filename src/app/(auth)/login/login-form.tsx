@@ -37,9 +37,14 @@ export function LoginForm() {
         />
       </label>
 
-      {state.error ? <p className="text-sm font-medium text-red-700">{state.error}</p> : null}
+      {state.error ? (
+        <p className="text-sm font-medium text-red-700" id="login-error" role="alert">
+          {state.error}
+        </p>
+      ) : null}
 
       <button
+        aria-describedby={state.error ? "login-error" : undefined}
         className="rounded-md bg-[var(--accent)] px-4 py-2 font-semibold text-white disabled:opacity-60"
         disabled={pending}
         type="submit"
