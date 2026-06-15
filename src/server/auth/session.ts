@@ -4,6 +4,10 @@ import { getServerEnv } from "@/server/env";
 
 export const SESSION_COOKIE_NAME = "ecrm_session";
 
+const SESSION_ISSUER = "ecrm";
+const SESSION_AUDIENCE = "ecrm-session";
+const SESSION_MAX_TOKEN_AGE = "8h";
+
 const sessionUserSchema = z.object({
   id: z.string().min(1),
   email: z.string().email(),
@@ -22,8 +26,10 @@ export async function signSession(user: SessionUser, secret = getServerEnv().AUT
 
   return new SignJWT(sessionUser)
     .setProtectedHeader({ alg: "HS256" })
+    .setIssuer(SESSION_ISSUER)
+    .setAudience(SESSION_AUDIENCE)
     .setIssuedAt()
-    .setExpirationTime("8h")
+    .setExpirationTime(SESSION_MAX_TOKEN_AGE)
     .sign(encodeSecret(secret));
 }
 
@@ -31,7 +37,10 @@ export async function verifySessionToken(token: string, secret = getServerEnv().
   try {
     const { payload } = await jwtVerify(token, encodeSecret(secret), {
       algorithms: ["HS256"],
-      requiredClaims: ["exp", "iat"]
+      issuer: SESSION_ISSUER,
+      audience: SESSION_AUDIENCE,
+      requiredClaims: ["exp", "iat"],
+      maxTokenAge: SESSION_MAX_TOKEN_AGE
     });
     return sessionUserSchema.parse(payload);
   } catch {
