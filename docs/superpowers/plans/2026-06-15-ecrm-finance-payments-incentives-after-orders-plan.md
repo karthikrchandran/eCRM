@@ -328,13 +328,13 @@ Rounding rules:
 - Create: `src/server/finance/permissions.ts`
 - Create: `src/server/finance/permissions.test.ts`
 
-- [ ] Validate invoice number, dates, amounts, status transitions, and void reason.
-- [ ] Validate payment amount, date, mode, reference, allocation totals, and overpayment acknowledgement.
-- [ ] Validate cost category, amount, status transition, approval/rejection/void reason, and Admin-only approval.
-- [ ] Validate incentive splits total exactly 100 percent when split rows exist.
-- [ ] Validate Admin override amount requires reason.
-- [ ] Enforce company-wide read visibility for Admin and Sales.
-- [ ] Enforce Admin-only writes for invoices, payments, costs, incentive approvals, overrides, payout marking, rejection, and voiding.
+- [x] Validate invoice number, dates, amounts, status transitions, and void reason.
+- [x] Validate payment amount, date, mode, reference, allocation totals, and overpayment acknowledgement.
+- [x] Validate cost category, amount, status transition, approval/rejection/void reason, and Admin-only approval.
+- [x] Validate incentive splits total exactly 100 percent when split rows exist.
+- [x] Validate Admin override amount requires reason.
+- [x] Enforce company-wide read visibility for Admin and Sales.
+- [x] Enforce Admin-only writes for invoices, payments, costs, incentive approvals, overrides, payout marking, rejection, and voiding.
 
 ### Task 5: Add Queries, Mutations, And Actions
 
