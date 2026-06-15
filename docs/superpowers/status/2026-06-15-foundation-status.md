@@ -17,7 +17,7 @@ Date: 2026-06-15
 
 ## Verification Evidence
 
-Current branch: `feature/foundation`
+Current branch: `main`
 
 - `npm run gate` passed.
 - `npm run test:e2e` passed with 2 tests.
