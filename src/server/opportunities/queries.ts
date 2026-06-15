@@ -29,10 +29,16 @@ const opportunityDetailInclude = {
   updatedBy: { select: opportunityOwnerSelect }
 } satisfies Prisma.OpportunityInclude;
 
+const salesTargetInclude = {
+  owner: { select: opportunityOwnerSelect },
+  createdBy: { select: opportunityOwnerSelect }
+} satisfies Prisma.SalesTargetInclude;
+
 export type OpportunityOwner = Pick<User, "id" | "name" | "email" | "role">;
 export type OpportunityListRecord = Prisma.OpportunityGetPayload<{ include: typeof opportunityListInclude }>;
 export type OpportunityDetailRecord = Prisma.OpportunityGetPayload<{ include: typeof opportunityDetailInclude }>;
 export type PipelineStageRecord = Pick<PipelineStage, "id" | "name" | "sortOrder" | "kind" | "active">;
+export type SalesTargetRecord = Prisma.SalesTargetGetPayload<{ include: typeof salesTargetInclude }>;
 
 type QueryDb = {
   opportunity: {
@@ -52,7 +58,7 @@ type QueryDb = {
     findMany: (args: Prisma.BranchFindManyArgs) => Promise<Array<{ id: string; name: string; leadCustomerId: string }>>;
   };
   salesTarget?: {
-    findMany: (args: Prisma.SalesTargetFindManyArgs) => Promise<unknown[]>;
+    findMany: (args: Prisma.SalesTargetFindManyArgs) => Promise<SalesTargetRecord[]>;
   };
 };
 
@@ -184,9 +190,6 @@ export async function listSalesTargets(user: OpportunityUser) {
 
   return db.salesTarget.findMany({
     orderBy: [{ financialYear: "desc" }, { quarter: "asc" }],
-    include: {
-      owner: { select: opportunityOwnerSelect },
-      createdBy: { select: opportunityOwnerSelect }
-    }
+    include: salesTargetInclude
   });
 }
