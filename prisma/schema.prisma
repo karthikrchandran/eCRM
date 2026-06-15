@@ -39,6 +39,15 @@ enum PipelineStageKind {
   DORMANT
 }
 
+enum ProposalStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  REJECTED
+  EXPIRED
+  WITHDRAWN
+}
+
 model User {
   id           String   @id @default(cuid())
   name         String
@@ -66,6 +75,9 @@ model User {
   salesTargetsCreated      SalesTarget[]          @relation("SalesTargetCreatedBy")
   createdProductServices   ProductService[]       @relation("ProductServiceCreatedBy")
   updatedProductServices   ProductService[]       @relation("ProductServiceUpdatedBy")
+  createdProposals         Proposal[]             @relation("ProposalCreatedBy")
+  updatedProposals         Proposal[]             @relation("ProposalUpdatedBy")
+  uploadedProposalPdfs     ProposalPdfAttachment[] @relation("ProposalPdfUploadedBy")
 }
 
 model LeadCustomer {
@@ -236,6 +248,7 @@ model Opportunity {
   createdBy    User                    @relation("OpportunityCreatedBy", fields: [createdById], references: [id])
   updatedBy    User                    @relation("OpportunityUpdatedBy", fields: [updatedById], references: [id])
   splits       OpportunityOwnerSplit[]
+  proposals    Proposal[]
 
   @@index([leadCustomerId])
   @@index([branchId])
@@ -291,8 +304,92 @@ model ProductService {
 
   createdBy User @relation("ProductServiceCreatedBy", fields: [createdById], references: [id])
   updatedBy User @relation("ProductServiceUpdatedBy", fields: [updatedById], references: [id])
+  proposalLineItems ProposalLineItem[]
 
   @@index([active, sortOrder])
   @@index([category])
   @@index([name])
+}
+
+model Proposal {
+  id                String         @id @default(cuid())
+  opportunityId     String
+  title             String
+  sequenceNumber    Int
+  versionLabel      String?
+  status            ProposalStatus @default(DRAFT)
+  currency          String         @default("INR")
+  validUntil        DateTime?
+  commercialSummary String?
+  assumptions       String?
+  inclusions        String?
+  exclusions        String?
+  paymentTerms      String?
+  deliveryTimeline  String?
+  internalNotes     String?
+  subtotalPaisa     Int            @default(0)
+  gstPaisa          Int            @default(0)
+  totalPaisa        Int            @default(0)
+  createdById       String
+  updatedById       String
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  opportunity Opportunity              @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  createdBy   User                     @relation("ProposalCreatedBy", fields: [createdById], references: [id])
+  updatedBy   User                     @relation("ProposalUpdatedBy", fields: [updatedById], references: [id])
+  lineItems   ProposalLineItem[]
+  pdfAttachments ProposalPdfAttachment[]
+
+  @@unique([opportunityId, sequenceNumber])
+  @@index([opportunityId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model ProposalLineItem {
+  id                      String   @id @default(cuid())
+  proposalId              String
+  productServiceId        String
+  productNameSnapshot     String
+  productCategorySnapshot String
+  description             String?
+  quantity                Int
+  unitPricePaisa          Int
+  gstRateBps              Int
+  gstOverrideReason       String?
+  lineSubtotalPaisa       Int
+  lineGstPaisa            Int
+  lineTotalPaisa          Int
+  sortOrder               Int      @default(0)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  proposal       Proposal       @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  productService ProductService @relation(fields: [productServiceId], references: [id])
+
+  @@index([proposalId])
+  @@index([productServiceId])
+}
+
+model ProposalPdfAttachment {
+  id               String    @id @default(cuid())
+  proposalId       String
+  originalFileName String
+  storedFileName   String
+  storageProvider  String
+  storageKey       String
+  mimeType         String
+  fileSizeBytes    Int
+  sha256           String?
+  canvaDesignUrl   String?
+  uploadedById     String
+  uploadedAt       DateTime  @default(now())
+  replacedAt       DateTime?
+
+  proposal   Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  uploadedBy User     @relation("ProposalPdfUploadedBy", fields: [uploadedById], references: [id])
+
+  @@index([proposalId])
+  @@index([uploadedAt])
 }
