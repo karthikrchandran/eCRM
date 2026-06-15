@@ -20,6 +20,11 @@ export type OpportunityInput = {
   notes?: string;
 };
 
+export type OpportunitySplitInput = {
+  userId: string;
+  percent: number;
+};
+
 export type PipelineStageInput = {
   name: string;
   sortOrder: number;
