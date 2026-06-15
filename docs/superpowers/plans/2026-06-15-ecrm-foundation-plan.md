@@ -30,7 +30,7 @@ The remaining CRM modules will get separate plans:
 Create these files in this slice:
 
 - `package.json`: npm scripts and pinned package versions.
-- `tsconfig.json`: TypeScript configuration with `@/*` alias.
+- `tsconfig.json`: TypeScript configuration where `@/*` maps to `./src/*` without `baseUrl` because TypeScript 6 deprecates `baseUrl`.
 - `next.config.ts`: Next.js config.
 - `eslint.config.mjs`: flat ESLint config using Next presets.
 - `postcss.config.mjs`: Tailwind PostCSS plugin.
@@ -170,7 +170,6 @@ Create `tsconfig.json`:
     "jsx": "preserve",
     "incremental": true,
     "plugins": [{ "name": "next" }],
-    "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]
     }
