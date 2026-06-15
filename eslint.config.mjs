@@ -7,6 +7,7 @@ const eslintConfig = [
   {
     settings: {
       react: {
+        // ESLint 10 / Next lint compatibility shim; "detect" crashes in eslint-plugin-react's version resolver.
         version: "19.2.7"
       }
     }

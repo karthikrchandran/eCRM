@@ -1,6 +1,7 @@
 .superpowers/
 .worktrees/
 node_modules/
+*.tsbuildinfo
 .next/
 out/
 dist/
