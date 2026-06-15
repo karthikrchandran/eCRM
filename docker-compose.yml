@@ -1,0 +1,21 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: ecrm-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ecrm
+      POSTGRES_PASSWORD: ecrm
+      POSTGRES_DB: ecrm
+    ports:
+      - "54329:5432"
+    volumes:
+      - ecrm-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ecrm -d ecrm"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  ecrm-postgres-data:
