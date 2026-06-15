@@ -11,7 +11,7 @@ type AppShellProps = {
   children: React.ReactNode;
 };
 
-const navItems = [
+const baseNavItems = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/leads", label: "Leads" },
   { href: "/opportunities", label: "Opportunities" },
@@ -20,6 +20,8 @@ const navItems = [
 ];
 
 export function AppShell({ user, children }: AppShellProps) {
+  const navItems = user.role === "ADMIN" ? [...baseNavItems, { href: "/admin/products", label: "Products" }] : baseNavItems;
+
   return (
     <div className="min-h-screen">
       <header className="border-b border-[var(--border)] bg-white">
