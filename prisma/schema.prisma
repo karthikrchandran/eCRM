@@ -12,6 +12,26 @@ enum UserRole {
   SALES
 }
 
+enum LeadState {
+  LEAD
+  CUSTOMER
+  DORMANT
+}
+
+enum ActivityType {
+  CALL
+  EMAIL
+  MEETING
+  NOTE
+  FOLLOW_UP
+}
+
+enum ActivityStatus {
+  OPEN
+  COMPLETED
+  CANCELLED
+}
+
 model User {
   id           String   @id @default(cuid())
   name         String
@@ -21,4 +41,140 @@ model User {
   active       Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+
+  ownedLeadCustomers       LeadCustomer[]         @relation("LeadOwner")
+  createdLeadCustomers     LeadCustomer[]         @relation("LeadCreatedBy")
+  updatedLeadCustomers     LeadCustomer[]         @relation("LeadUpdatedBy")
+  ownedActivities          Activity[]             @relation("ActivityOwner")
+  createdActivities        Activity[]             @relation("ActivityCreatedBy")
+  completedActivities      Activity[]             @relation("ActivityCompletedBy")
+  ownershipChangesFrom     LeadOwnershipHistory[] @relation("LeadOwnershipFrom")
+  ownershipChangesTo       LeadOwnershipHistory[] @relation("LeadOwnershipTo")
+  ownershipChangesChanged  LeadOwnershipHistory[] @relation("LeadOwnershipChangedBy")
+}
+
+model LeadCustomer {
+  id          String    @id @default(cuid())
+  name        String
+  state       LeadState @default(LEAD)
+  industry    String?
+  source      String?
+  ownerId     String
+  notes       String?
+  createdById String
+  updatedById String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  owner            User                   @relation("LeadOwner", fields: [ownerId], references: [id])
+  createdBy        User                   @relation("LeadCreatedBy", fields: [createdById], references: [id])
+  updatedBy        User                   @relation("LeadUpdatedBy", fields: [updatedById], references: [id])
+  branches         Branch[]
+  contacts         Contact[]
+  activities       Activity[]
+  ownershipHistory LeadOwnershipHistory[]
+
+  @@index([ownerId])
+  @@index([state])
+  @@index([name])
+  @@index([createdAt])
+}
+
+model Branch {
+  id             String   @id @default(cuid())
+  leadCustomerId String
+  name           String
+  addressLine1   String?
+  addressLine2   String?
+  city           String?
+  region         String?
+  postalCode     String?
+  country        String   @default("India")
+  gstin          String?
+  locationHint   String?
+  salesContext   String?
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  leadCustomer LeadCustomer @relation(fields: [leadCustomerId], references: [id], onDelete: Cascade)
+  contacts     Contact[]
+  activities   Activity[]
+
+  @@index([leadCustomerId])
+  @@index([city])
+}
+
+model Contact {
+  id             String   @id @default(cuid())
+  leadCustomerId String
+  branchId       String?
+  name           String
+  designation    String?
+  email          String?
+  phone          String?
+  isPrimary      Boolean  @default(false)
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  leadCustomer LeadCustomer @relation(fields: [leadCustomerId], references: [id], onDelete: Cascade)
+  branch       Branch?      @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  activities   Activity[]
+
+  @@index([leadCustomerId])
+  @@index([branchId])
+  @@index([email])
+  @@index([phone])
+}
+
+model Activity {
+  id             String         @id @default(cuid())
+  leadCustomerId String
+  branchId       String?
+  contactId      String?
+  ownerId        String
+  createdById    String
+  completedById  String?
+  type           ActivityType
+  status         ActivityStatus @default(OPEN)
+  subject        String
+  body           String?
+  occurredAt     DateTime?
+  dueAt          DateTime?
+  completedAt    DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  leadCustomer LeadCustomer @relation(fields: [leadCustomerId], references: [id], onDelete: Cascade)
+  branch       Branch?      @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  contact      Contact?     @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  owner        User         @relation("ActivityOwner", fields: [ownerId], references: [id])
+  createdBy    User         @relation("ActivityCreatedBy", fields: [createdById], references: [id])
+  completedBy  User?        @relation("ActivityCompletedBy", fields: [completedById], references: [id])
+
+  @@index([leadCustomerId])
+  @@index([ownerId])
+  @@index([status])
+  @@index([dueAt])
+  @@index([type])
+}
+
+model LeadOwnershipHistory {
+  id             String   @id @default(cuid())
+  leadCustomerId String
+  fromOwnerId    String?
+  toOwnerId      String
+  changedById    String
+  reason         String
+  createdAt      DateTime @default(now())
+
+  leadCustomer LeadCustomer @relation(fields: [leadCustomerId], references: [id], onDelete: Cascade)
+  fromOwner    User?        @relation("LeadOwnershipFrom", fields: [fromOwnerId], references: [id])
+  toOwner      User         @relation("LeadOwnershipTo", fields: [toOwnerId], references: [id])
+  changedBy    User         @relation("LeadOwnershipChangedBy", fields: [changedById], references: [id])
+
+  @@index([leadCustomerId])
+  @@index([toOwnerId])
+  @@index([createdAt])
 }
