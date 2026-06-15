@@ -348,17 +348,17 @@ Rounding rules:
 - Create: `src/server/finance/actions.ts`
 - Create: `src/server/finance/actions.test.ts`
 
-- [ ] Load order finance summary with invoices, payments, allocations, costs, incentive, and split recipients.
-- [ ] Create and update invoice records transactionally.
-- [ ] Record payment and allocations transactionally.
-- [ ] Recalculate invoice status and order payment completion after each payment write.
-- [ ] Create/update/approve/reject/void cost components.
-- [ ] Recalculate incentive snapshots after approved cost or payment completion changes.
-- [ ] Create default 100 percent incentive split from primary salesperson when no split rows are provided.
-- [ ] Support explicit incentive split recipients and percentages.
-- [ ] Reject incentive approval until full order payment is confirmed.
-- [ ] Store Admin approval, override, rejection, and payout metadata.
-- [ ] Revalidate landed order detail and finance routes after successful writes.
+- [x] Load order finance summary with invoices, payments, allocations, costs, incentive, and split recipients.
+- [x] Create and update invoice records transactionally.
+- [x] Record payment and allocations transactionally.
+- [x] Recalculate invoice status and order payment completion after each payment write.
+- [x] Create/update/approve/reject/void cost components.
+- [x] Recalculate incentive snapshots after approved cost or payment completion changes.
+- [x] Create default 100 percent incentive split from primary salesperson when no split rows are provided.
+- [x] Support explicit incentive split recipients and percentages.
+- [x] Reject incentive approval until full order payment is confirmed.
+- [x] Store Admin approval, override, rejection, and payout metadata.
+- [x] Revalidate landed order detail and finance routes after successful writes.
 
 ### Task 6: Add Finance UI On Orders
 
