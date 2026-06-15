@@ -98,8 +98,9 @@ export function calculateIncentive(grossMarginPaisa: number, rateBps = 500) {
 export function calculateIncentiveSplits(incentiveAmountPaisa: number, splits: IncentiveSplitInput[]): IncentiveSplitAmount[] {
   const sortedSplits = [...splits].sort((left, right) => left.userId.localeCompare(right.userId));
   const calculated = sortedSplits.map((split) => ({
-    ...split,
-    amountPaisa: Math.floor((incentiveAmountPaisa * split.percent) / 100)
+    amountPaisa: Math.floor((incentiveAmountPaisa * split.percent) / 100),
+    percent: split.percent,
+    userId: split.userId
   }));
   const allocatedPaisa = calculated.reduce((total, split) => total + split.amountPaisa, 0);
   const remainderPaisa = incentiveAmountPaisa - allocatedPaisa;

@@ -367,12 +367,12 @@ Rounding rules:
 - Create finance components listed in "Future File Structure After Unblock".
 - Modify landed order detail route or component only after confirming route names.
 
-- [ ] Render order finance summary with booked value excluding GST, GST, total, invoiced amount, collected amount, pending receivable, uninvoiced amount, approved costs, gross margin, incentive readiness, and payout status.
-- [ ] Render Admin invoice form and invoice table.
-- [ ] Render Admin payment form and payment history.
-- [ ] Render Admin cost component form with approval/rejection controls.
-- [ ] Render incentive panel with calculated gross margin, 5 percent incentive default, split recipients, Admin override fields, and approval controls.
-- [ ] Hide or disable write controls for Sales while preserving company-wide read visibility where approved by business rules.
+- [x] Render order finance summary with booked value excluding GST, GST, total, invoiced amount, collected amount, pending receivable, uninvoiced amount, approved costs, gross margin, incentive readiness, and payout status.
+- [x] Render Admin invoice form and invoice table.
+- [x] Render Admin payment form and payment history.
+- [x] Render Admin cost component form with approval/rejection controls.
+- [x] Render incentive panel with calculated gross margin, 5 percent incentive default, split recipients, Admin override fields, and approval controls.
+- [x] Hide or disable write controls for Sales while preserving company-wide read visibility where approved by business rules.
 
 ### Task 7: Add Browser Smoke And Final Gates
 
@@ -380,21 +380,21 @@ Rounding rules:
 
 - Create: `tests/e2e/finance.spec.ts`
 
-- [ ] Admin creates an invoice for a seeded order.
-- [ ] Admin records partial payment and sees order remain partially paid.
-- [ ] Admin records final payment and sees order become fully paid.
-- [ ] Admin adds and approves cost components.
-- [ ] Gross margin recalculates from booked value excluding GST minus approved costs.
-- [ ] Incentive becomes ready only after full payment.
-- [ ] Admin approves incentive payout.
-- [ ] Sales can view payment status but cannot approve costs or incentives.
-- [ ] Run targeted finance unit tests.
-- [ ] Run `npx prisma validate`.
-- [ ] Run `npm run prisma:generate`.
-- [ ] Run `npm run test`.
-- [ ] Run `npm run gate`.
-- [ ] Run `npm run test:e2e`.
-- [ ] Run `git diff --check`.
+- [x] Admin creates an invoice for a freshly booked order.
+- [x] Admin records partial payment and sees order remain partially paid.
+- [x] Admin records final payment and sees order become fully paid.
+- [x] Admin adds and approves cost components.
+- [x] Gross margin recalculates from booked value excluding GST minus approved costs.
+- [x] Incentive becomes ready only after full payment.
+- [x] Admin approves incentive payout.
+- [x] Sales can view payment status but cannot approve costs or incentives.
+- [x] Run targeted finance unit tests.
+- [x] Run `npx prisma validate`.
+- [x] Run `npm run prisma:generate`.
+- [x] Run `npm run test`.
+- [x] Run `npm run gate`.
+- [x] Run `npm run test:e2e`.
+- [x] Run `git diff --check`.
 
 ## Acceptance Criteria
 

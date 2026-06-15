@@ -1,7 +1,7 @@
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/server/auth/current-user";
 import { calculateInvoiceTotals } from "./calculations";
-import { approveIncentive, createCostComponent, createInvoice, recordPayment } from "./mutations";
+import { approveIncentive, changeCostComponentStatus, createCostComponent, createInvoice, recordPayment } from "./mutations";
 import type { ActionState, CostComponentInput, IncentiveApprovalInput, InvoiceInput, PaymentInput } from "./types";
 import { costComponentInputSchema, incentiveApprovalInputSchema, invoiceInputSchema, paymentInputSchema } from "./validators";
 
@@ -31,6 +31,23 @@ function parseAllocations(value: FormDataEntryValue | null) {
   }
 }
 
+function parsePaymentAllocations(formData: FormData) {
+  const parsedAllocations = parseAllocations(formData.get("allocations"));
+
+  if (Array.isArray(parsedAllocations) && parsedAllocations.length > 0) {
+    return parsedAllocations;
+  }
+
+  const invoiceId = formData.get("invoiceId")?.toString();
+  const amountPaisa = Number(formData.get("amountPaisa"));
+
+  if (invoiceId) {
+    return [{ invoiceId, amountPaisa }];
+  }
+
+  return parsedAllocations;
+}
+
 export function parseInvoiceFormForTest(formData: FormData): ParseResult<InvoiceInput & { totalPaisa: number }> {
   const result = invoiceInputSchema.safeParse({
     dueDate: formData.get("dueDate"),
@@ -51,7 +68,7 @@ export function parseInvoiceFormForTest(formData: FormData): ParseResult<Invoice
 
 export function parsePaymentFormForTest(formData: FormData): ParseResult<PaymentInput> {
   const result = paymentInputSchema.safeParse({
-    allocations: parseAllocations(formData.get("allocations")),
+    allocations: parsePaymentAllocations(formData),
     amountPaisa: formData.get("amountPaisa"),
     mode: formData.get("mode"),
     notes: formData.get("notes"),
@@ -155,7 +172,24 @@ export async function approveIncentiveAction(incentiveId: string, _previousState
     return parsed;
   }
 
-  await approveIncentive(user, incentiveId, parsed.data);
+  const incentive = await approveIncentive(user, incentiveId, parsed.data);
   revalidatePath("/orders");
+  if (incentive?.orderId) {
+    revalidatePath(`/orders/${incentive.orderId}`);
+  }
   return { ok: true, message: "Incentive approved." };
+}
+
+export async function changeCostComponentStatusAction(costComponentId: string, status: "APPROVED" | "REJECTED" | "VOID", formData: FormData) {
+  "use server";
+
+  const user = await requireUser();
+  const costComponent = await changeCostComponentStatus(user, costComponentId, {
+    reason: formData.get("reason")?.toString(),
+    status
+  });
+  revalidatePath("/orders");
+  if (costComponent?.orderId) {
+    revalidatePath(`/orders/${costComponent.orderId}`);
+  }
 }

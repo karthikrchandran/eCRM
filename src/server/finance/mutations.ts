@@ -40,7 +40,7 @@ type FinanceTransaction = FinanceOrderRead & {
   costComponent: {
     create: (args: Prisma.CostComponentCreateArgs) => Promise<{ id: string }>;
     findUnique?: (args: Prisma.CostComponentFindUniqueArgs) => Promise<{ id: string; orderId: string } | null>;
-    update?: (args: Prisma.CostComponentUpdateArgs) => Promise<{ id: string }>;
+    update?: (args: Prisma.CostComponentUpdateArgs) => Promise<{ id: string; orderId?: string }>;
   };
   incentive: {
     upsert: (args: Prisma.IncentiveUpsertArgs) => Promise<{ id: string }>;
@@ -60,7 +60,7 @@ type FinanceTransactionDb = {
 type IncentiveApprovalDb = {
   incentive: {
     findUnique: (args: Prisma.IncentiveFindUniqueArgs) => Promise<{ status: IncentiveStatus | string; calculatedAmountPaisa?: number } | null>;
-    update?: (args: Prisma.IncentiveUpdateArgs) => Promise<{ id: string }>;
+    update?: (args: Prisma.IncentiveUpdateArgs) => Promise<{ id: string; orderId?: string }>;
   };
 };
 
@@ -76,7 +76,7 @@ type IncentiveSplitDb = {
 
 type IncentiveStatusDb = {
   incentive: {
-    update: (args: Prisma.IncentiveUpdateArgs) => Promise<{ id: string }>;
+    update: (args: Prisma.IncentiveUpdateArgs) => Promise<{ id: string; orderId?: string }>;
   };
 };
 

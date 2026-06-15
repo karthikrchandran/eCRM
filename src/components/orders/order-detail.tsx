@@ -1,7 +1,11 @@
 import Link from "next/link";
+import { OrderFinanceSummary } from "@/components/finance/order-finance-summary";
+import type { OrderFinanceSummary as OrderFinanceSummaryRecord } from "@/server/finance/queries";
 import type { OrderRecord } from "@/server/orders/queries";
 
 type OrderDetailProps = {
+  canManageFinance: boolean;
+  finance: OrderFinanceSummaryRecord | null;
   instantiateProductionAction: (orderLineItemId: string) => Promise<void>;
   order: OrderRecord;
 };
@@ -19,7 +23,7 @@ function formatDate(date: Date | null) {
     : "Not set";
 }
 
-export function OrderDetail({ instantiateProductionAction, order }: OrderDetailProps) {
+export function OrderDetail({ canManageFinance, finance, instantiateProductionAction, order }: OrderDetailProps) {
   return (
     <div className="space-y-6">
       <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -116,6 +120,8 @@ export function OrderDetail({ instantiateProductionAction, order }: OrderDetailP
           </tbody>
         </table>
       </section>
+
+      <OrderFinanceSummary canManage={canManageFinance} finance={finance} order={order} />
     </div>
   );
 }
