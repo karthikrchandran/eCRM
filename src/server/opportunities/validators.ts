@@ -22,6 +22,10 @@ const requiredTrimmedString = (message: string) =>
 const optionalTrimmedString = z.preprocess(emptyToUndefined, z.string().trim().optional());
 
 const optionalDate = z.preprocess((value) => {
+  if (value === null) {
+    return undefined;
+  }
+
   if (typeof value !== "string") {
     return value;
   }

@@ -1,7 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { db } from "@/server/db";
 import { assertCanWriteOpportunities, type OpportunityUser } from "./permissions";
-import type { OpportunityInput, OpportunitySplitInput, SalesTargetInput } from "./types";
+import type { OpportunityInput, OpportunitySplitInput, PipelineStageInput, SalesTargetInput } from "./types";
 
 type IdResult = { id: string };
 
@@ -54,7 +54,7 @@ type CreateOpportunityDb = OwnerDb &
       create: (args: Prisma.OpportunityCreateArgs) => Promise<IdResult>;
     };
     opportunityOwnerSplit: OpportunityTransactionDb["opportunityOwnerSplit"];
-    $transaction: (callback: (tx: unknown) => Promise<unknown>) => Promise<unknown>;
+    $transaction: (callback: (tx: unknown) => Promise<IdResult>) => Promise<IdResult>;
   };
 
 type UpdateOpportunityDb = OwnerDb &
@@ -66,7 +66,7 @@ type UpdateOpportunityDb = OwnerDb &
       update: (args: Prisma.OpportunityUpdateArgs) => Promise<IdResult>;
     };
     opportunityOwnerSplit: OpportunityTransactionDb["opportunityOwnerSplit"];
-    $transaction: (callback: (tx: unknown) => Promise<unknown>) => Promise<unknown>;
+    $transaction: (callback: (tx: unknown) => Promise<IdResult>) => Promise<IdResult>;
   };
 
 type MoveOpportunityDb = StageDb & {
@@ -78,6 +78,12 @@ type MoveOpportunityDb = StageDb & {
 type TargetDb = OwnerDb & {
   salesTarget: {
     upsert: (args: Prisma.SalesTargetUpsertArgs) => Promise<IdResult>;
+  };
+};
+
+type StageManagementDb = {
+  pipelineStage: {
+    upsert: (args: Prisma.PipelineStageUpsertArgs) => Promise<IdResult>;
   };
 };
 
@@ -289,5 +295,27 @@ export async function upsertSalesTarget(
       targetValueInr: input.targetValueInr,
       createdById: user.id
     }
+  });
+}
+
+export async function upsertPipelineStage(
+  user: OpportunityUser,
+  input: PipelineStageInput,
+  database: StageManagementDb = db as unknown as StageManagementDb
+) {
+  assertCanWriteOpportunities(user);
+
+  if (user.role !== "ADMIN") {
+    throw new Error("Only Admin can manage pipeline stages.");
+  }
+
+  return database.pipelineStage.upsert({
+    where: { name: input.name },
+    update: {
+      sortOrder: input.sortOrder,
+      kind: input.kind,
+      active: input.active
+    },
+    create: input
   });
 }

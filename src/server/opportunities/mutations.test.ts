@@ -34,7 +34,7 @@ describe("opportunity mutations", () => {
         pipelineStage: { findFirst: vi.fn().mockResolvedValue({ id: "stage_qualified" }) },
         opportunity: { create: opportunityCreate },
         opportunityOwnerSplit: { createMany: splitCreateMany, deleteMany: vi.fn() },
-        $transaction: async (callback: (tx: unknown) => Promise<unknown>) =>
+        $transaction: async (callback: (tx: unknown) => Promise<{ id: string }>) =>
           callback({
             opportunity: { create: opportunityCreate },
             opportunityOwnerSplit: { createMany: splitCreateMany, deleteMany: vi.fn() }
