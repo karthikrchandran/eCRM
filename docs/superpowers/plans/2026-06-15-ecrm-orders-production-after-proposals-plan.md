@@ -4,7 +4,7 @@
 
 **Goal:** Build the order booking and production tracking slice after accepted proposal records, proposal line items, product/service snapshots, and PDF metadata are landed.
 
-**Architecture:** Orders are downstream of accepted proposals and must preserve commercial snapshots from Products/Proposals instead of recalculating from mutable catalog rows. Production work should attach to order line items and use product/service production template keys only after those keys are stable. This plan is a docs-only handoff and is explicitly blocked until Products/Proposals lands.
+**Architecture:** Orders are downstream of accepted proposals and must preserve commercial snapshots from Products/Proposals instead of recalculating from mutable catalog rows. Production work should attach to order line items and use product/service production template keys only after those keys are stable. Products/Proposals has landed; this update is a docs-only Task 1 handoff and does not implement Orders/Production.
 
 **Tech Stack:** Next.js App Router, React, TypeScript, Prisma/Postgres, Zod, Vitest, Testing Library, Playwright, Tailwind CSS.
 
@@ -12,17 +12,17 @@
 
 ## Status
 
-Implementation status: **BLOCKED UNTIL PRODUCTS/PROPOSALS LANDS**.
+Implementation status: **PRODUCTS/PROPOSALS LANDED; ORDERS/PRODUCTION IMPLEMENTATION STILL BLOCKED ON SOURCE-CONFIRMED PRE-IMPLEMENTATION GAPS**.
 
 The current source baseline already includes CRM Core and Opportunities:
 
 - CRM Core: `LeadCustomer`, `Branch`, `Contact`, `Activity`, `LeadOwnershipHistory`, and `User`.
 - Opportunities: `Opportunity`, `PipelineStage`, `OpportunityOwnerSplit`, `SalesTarget`, `/opportunities/[opportunityId]`, `getOpportunityDetail()`, `listOpportunityFormOptions()`, `assertCanViewOpportunities()`, and `assertCanWriteOpportunities()`.
-- Products/Proposals: active separately on the `feature/products-proposals` lane and intended to add `ProductService`, `Proposal`, `ProposalLineItem`, and `ProposalPdfAttachment`.
+- Products/Proposals: landed in this worktree with `ProductService`, `Proposal`, `ProposalLineItem`, `ProposalPdfAttachment`, `ProposalStatus`, `/admin/products`, `/admin/products/new`, `/admin/products/[productServiceId]/edit`, `/opportunities/[opportunityId]/proposals/new`, `/opportunities/[opportunityId]/proposals/[proposalId]`, `listActiveProductServices()`, `listProductServicesForAdmin()`, `getProductServiceForAdmin()`, `createProposal()`, `addProposalPdfMetadata()`, `changeProposalStatus()`, `listProposalsForOpportunity()`, and `getProposalDetail()`.
 
-No Orders or Production implementation may start until Products/Proposals has landed on the integration branch and its real model, route, server module, component, seed, and test names are source-backed.
+The old Products/Proposals dependency is no longer a blocker. Orders/Production implementation may start only after the remaining pre-implementation setup gaps below are resolved or explicitly accepted in the implementation plan.
 
-**Hard block:** no implementation may touch `prisma/**`, `src/**`, `tests/**`, package files, config files, seed files, or migrations until Products/Proposals lands. This document is the only allowed output for the current docs-only lane.
+**Hard block for this docs-only lane:** do not touch `prisma/**`, `src/**`, `tests/**`, package files, config files, seed files, or migrations. This document is the only allowed output for the current Task 1 unblock update.
 
 ## Scope
 
@@ -48,20 +48,12 @@ Excluded from this slice:
 
 ## Blockers
 
-Implementation is blocked on the Products/Proposals handoff. Before writing code, confirm the landed source provides:
+The Products/Proposals handoff is source-confirmed, but implementation remains blocked until these real gaps are addressed:
 
-- Proposal model name and primary key.
-- Proposal status enum values and the exact accepted status value.
-- Proposal relation to `Opportunity`.
-- Proposal line item model name, line total fields, GST fields, and product/service snapshot fields.
-- Product/service model name and production template field name.
-- Proposal query function for loading an accepted proposal with opportunity, lead/customer, branch, owner, split, lines, and PDF metadata.
-- Proposal permission helpers or confirmed reuse of opportunity permissions.
-- Proposal routes where an order booking entry point should appear.
-- Seed data with at least one accepted proposal suitable for browser smoke tests.
-- Existing unit and e2e test naming conventions for Products/Proposals.
-
-If any of those contracts are missing, update this plan with the real gap and keep implementation blocked.
+- `prisma/seed.ts` seeds `ProductService` rows and opportunity data, but no `Proposal`, `ProposalLineItem`, `ProposalPdfAttachment`, or accepted proposal fixture. Add or otherwise create one accepted proposal suitable for the Orders/Production browser smoke before e2e implementation.
+- `getProposalDetail()` loads proposal detail, opportunity, lead/customer, branch, owner, stage, line items, active PDF metadata, and product basics, but it does not include `Opportunity.splits` or `productService.defaultProductionTemplateKey`. Orders implementation must add a dedicated booking loader such as `loadAcceptedProposalForBooking()` or extend the include before relying on it for owner-split snapshots and production template snapshots.
+- `ProposalLineItem` snapshots product name/category and commercial fields, but not `defaultProductionTemplateKey`. If production template history must be preserved at booking, copy the key from the current `ProductService.defaultProductionTemplateKey` during order booking or add a proposal-line snapshot field in a future schema decision.
+- `changeProposalStatus()` moves proposals to `SENT`, `ACCEPTED`, `REJECTED`, `EXPIRED`, or `WITHDRAWN`; only the `SENT` transition updates the opportunity stage to `Proposal Sent`. Acceptance does not currently move the opportunity to `WON`, so Orders must not assume proposal acceptance changes opportunity stage.
 
 ## Source-Aware Integration Rules
 
@@ -75,6 +67,11 @@ Use these landed names unless Products/Proposals changes the downstream contract
 - Sales visibility is company-wide. Owner and split fields support responsibility, filtering, and reporting, not row-level visibility.
 - Existing protected routes are under `src/app/(app)/**`.
 - Existing server module pattern is `types.ts`, `validators.ts`, `queries.ts`, `mutations.ts`, `actions.ts`, plus focused tests beside those modules.
+- `ProposalStatus` values are `DRAFT`, `SENT`, `ACCEPTED`, `REJECTED`, `EXPIRED`, and `WITHDRAWN`; the accepted value is exactly `ACCEPTED`.
+- `Proposal.id` is the proposal primary key and `Proposal.opportunityId` is the required relation to `Opportunity`.
+- `ProposalLineItem` uses `productServiceId`, `productNameSnapshot`, `productCategorySnapshot`, `description`, `quantity`, `unitPricePaisa`, `gstRateBps`, `gstOverrideReason`, `lineSubtotalPaisa`, `lineGstPaisa`, `lineTotalPaisa`, and `sortOrder`.
+- `ProductService.defaultProductionTemplateKey` is the landed product/service production template field.
+- Proposal permissions are `assertCanViewProposals()` and `assertCanWriteProposals()`; both currently rely on `canViewCompanyRecords()`, matching company-wide Admin/Sales visibility.
 
 ## Expected Data Model After Unblock
 
@@ -146,12 +143,12 @@ Future route targets:
 - `src/app/(app)/orders/new/page.tsx`: optional proposal lookup route if booking is not launched from proposal detail.
 - `src/app/(app)/orders/[orderId]/page.tsx`: order detail with line items, PO metadata, production summary, and links to source proposal/opportunity/customer.
 - `src/app/(app)/orders/[orderId]/edit/page.tsx`: limited edit route for PO metadata, due date, and internal notes.
-- `src/app/(app)/proposals/[proposalId]/book-order/page.tsx` or the landed nested proposal equivalent: order booking route from accepted proposal.
+- `src/app/(app)/opportunities/[opportunityId]/proposals/[proposalId]/book-order/page.tsx`: order booking route from the landed nested proposal detail route.
 - `src/app/(app)/production/page.tsx`: production board/list grouped by stage status, due date, owner, and product/service category.
 - `src/app/(app)/production/[workItemId]/page.tsx`: production work item detail.
 - `src/app/(app)/admin/production-templates/page.tsx`: Admin template management if templates are editable in this slice.
 
-Use the actual proposal route shape that lands in Products/Proposals. Do not invent a parallel proposal URL.
+Use the landed nested opportunity proposal route shape. Do not invent a parallel proposal URL.
 
 ## Expected Server Modules After Unblock
 
@@ -159,7 +156,7 @@ Future order module:
 
 - `src/server/orders/types.ts`: order input, list filters, detail DTOs, and action state types.
 - `src/server/orders/validators.ts`: Zod schemas for booking, PO metadata, order filters, and status transitions.
-- `src/server/orders/queries.ts`: list orders, load order detail, load accepted proposal for booking, and list booking options.
+- `src/server/orders/queries.ts`: list orders, load order detail, add `loadAcceptedProposalForBooking()` or equivalent, and list booking options. The booking loader must require `Proposal.status === "ACCEPTED"` and include opportunity lead/customer, branch, owner, owner splits, line items, PDF metadata, and product `defaultProductionTemplateKey`.
 - `src/server/orders/mutations.ts`: create order from accepted proposal, update PO metadata, change order status, and snapshot owner splits.
 - `src/server/orders/actions.ts`: server actions for order booking and order updates.
 - `src/server/orders/permissions.ts`: read/write assertions, likely aligned with opportunity visibility.
@@ -230,12 +227,22 @@ Minimum test coverage:
 - Read: landed proposal schema, routes, server modules, components, seed data, and tests.
 - Modify: this plan if the landed names differ from the assumptions above.
 
-- [ ] Confirm accepted proposal status value and whether proposal acceptance changes opportunity stage.
-- [ ] Confirm proposal line item fields that must be copied into order line items.
-- [ ] Confirm product/service production template field name.
-- [ ] Confirm proposal detail route where "Book order" should appear.
-- [ ] Confirm seed data includes an accepted proposal for browser smoke.
-- [ ] Keep implementation blocked if any handoff item is missing.
+- [x] Confirmed accepted proposal status value: `ProposalStatus.ACCEPTED` / `"ACCEPTED"`.
+- [x] Confirmed proposal acceptance does not change opportunity stage in `changeProposalStatus()`; only `SENT` moves the opportunity to the `Proposal Sent` stage.
+- [x] Confirmed proposal model and primary key: `Proposal.id`.
+- [x] Confirmed proposal relation to opportunity: `Proposal.opportunityId` and `Opportunity.proposals`.
+- [x] Confirmed proposal line model: `ProposalLineItem`.
+- [x] Confirmed line fields to copy: `productServiceId`, `productNameSnapshot`, `productCategorySnapshot`, `description`, `quantity`, `unitPricePaisa`, `gstRateBps`, `gstOverrideReason`, `lineSubtotalPaisa`, `lineGstPaisa`, `lineTotalPaisa`, and `sortOrder`.
+- [x] Confirmed proposal total fields to copy: `currency`, `subtotalPaisa`, `gstPaisa`, and `totalPaisa`.
+- [x] Confirmed product/service model and production template field: `ProductService.defaultProductionTemplateKey`.
+- [x] Confirmed proposal detail route where "Book order" should appear: `src/app/(app)/opportunities/[opportunityId]/proposals/[proposalId]/page.tsx`, via `ProposalDetail`.
+- [x] Confirmed proposal list route where created orders can be surfaced later: `src/app/(app)/opportunities/[opportunityId]/page.tsx`.
+- [x] Confirmed landed query/helper names: `getProposalDetail()`, `listProposalsForOpportunity()`, `createProposal()`, `addProposalPdfMetadata()`, `changeProposalStatus()`, `listActiveProductServices()`, `listProductServicesForAdmin()`, and `getProductServiceForAdmin()`.
+- [x] Confirmed permission helper names: `assertCanViewProposals()`, `assertCanWriteProposals()`, `assertCanViewProductServices()`, and `assertCanManageProductServices()`.
+- [x] Confirmed Products/Proposals test naming conventions: `src/server/proposals/*.test.ts`, `src/server/products/*.test.ts`, `src/components/proposals/*.test.tsx`, `src/components/products/*.test.tsx`, and `tests/e2e/products-proposals.spec.ts`.
+- [ ] Remaining setup item: seed or create an accepted proposal with line item and PDF metadata for browser smoke; current seed has product services but no proposal fixture, and current e2e creates a proposal and marks it `SENT` only.
+- [ ] Remaining implementation prerequisite: add or extend a booking-specific accepted proposal loader that includes owner splits and `ProductService.defaultProductionTemplateKey`.
+- [ ] Keep Orders/Production implementation blocked until those remaining setup/prerequisite items are handled.
 
 ### Task 2: Add Order Schema
 
@@ -377,4 +384,4 @@ Minimum test coverage:
 
 ## Handoff Summary
 
-This plan is intentionally blocked. Once Products/Proposals lands, update this document with the actual proposal/product model and route names, then implement Orders and Production as a downstream slice with schema ownership isolated to that future branch.
+Products/Proposals has landed and the source-confirmed model, route, helper, and test names are captured above. Orders/Production remains blocked only on the accepted-proposal browser-smoke setup and a booking-specific accepted proposal loader that includes owner splits and production template keys; after those are handled, implement Orders and Production as a downstream slice with schema ownership isolated to that future branch.
