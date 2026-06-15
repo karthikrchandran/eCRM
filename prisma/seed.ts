@@ -1,6 +1,10 @@
 import bcrypt from "bcryptjs";
 import { PrismaClient, UserRole } from "@prisma/client";
 
+if (process.env.NODE_ENV === "production") {
+  throw new Error("Refusing to run the local seed script in production.");
+}
+
 const prisma = new PrismaClient();
 
 async function upsertUser(input: {

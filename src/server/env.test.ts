@@ -28,4 +28,28 @@ describe("getServerEnv", () => {
 
     expect(() => getServerEnv()).toThrow();
   });
+
+  it.each([
+    ["missing", undefined],
+    ["empty", ""],
+    ["blank", "   "]
+  ])("rejects %s database URLs", (_label, databaseUrl) => {
+    if (databaseUrl === undefined) {
+      delete process.env.DATABASE_URL;
+    } else {
+      process.env.DATABASE_URL = databaseUrl;
+    }
+    process.env.AUTH_SECRET = "replace-with-at-least-32-characters";
+    process.env.APP_BASE_URL = "http://localhost:3000";
+
+    expect(() => getServerEnv()).toThrow();
+  });
+
+  it("rejects invalid app base URLs", () => {
+    process.env.DATABASE_URL = "postgresql://ecrm:ecrm@localhost:54329/ecrm?schema=public";
+    process.env.AUTH_SECRET = "replace-with-at-least-32-characters";
+    process.env.APP_BASE_URL = "not-a-url";
+
+    expect(() => getServerEnv()).toThrow();
+  });
 });

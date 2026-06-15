@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 const serverEnvSchema = z.object({
-  DATABASE_URL: z.string().min(1),
+  DATABASE_URL: z.string().trim().min(1),
   AUTH_SECRET: z.string().min(32),
   APP_BASE_URL: z.string().url().default("http://localhost:3000")
 });
