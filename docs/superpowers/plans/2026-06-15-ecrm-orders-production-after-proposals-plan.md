@@ -12,7 +12,7 @@
 
 ## Status
 
-Implementation status: **PRODUCTS/PROPOSALS LANDED; ORDERS/PRODUCTION IMPLEMENTATION STILL BLOCKED ON SOURCE-CONFIRMED PRE-IMPLEMENTATION GAPS**.
+Implementation status: **UNBLOCKED FOR ORDERS/PRODUCTION IMPLEMENTATION**.
 
 The current source baseline already includes CRM Core and Opportunities:
 
@@ -20,7 +20,7 @@ The current source baseline already includes CRM Core and Opportunities:
 - Opportunities: `Opportunity`, `PipelineStage`, `OpportunityOwnerSplit`, `SalesTarget`, `/opportunities/[opportunityId]`, `getOpportunityDetail()`, `listOpportunityFormOptions()`, `assertCanViewOpportunities()`, and `assertCanWriteOpportunities()`.
 - Products/Proposals: landed in this worktree with `ProductService`, `Proposal`, `ProposalLineItem`, `ProposalPdfAttachment`, `ProposalStatus`, `/admin/products`, `/admin/products/new`, `/admin/products/[productServiceId]/edit`, `/opportunities/[opportunityId]/proposals/new`, `/opportunities/[opportunityId]/proposals/[proposalId]`, `listActiveProductServices()`, `listProductServicesForAdmin()`, `getProductServiceForAdmin()`, `createProposal()`, `addProposalPdfMetadata()`, `changeProposalStatus()`, `listProposalsForOpportunity()`, and `getProposalDetail()`.
 
-The old Products/Proposals dependency is no longer a blocker. Orders/Production implementation may start only after the remaining pre-implementation setup gaps below are resolved or explicitly accepted in the implementation plan.
+The old Products/Proposals dependency is no longer a blocker. The accepted-proposal seed fixture and booking-specific accepted proposal loader are now present, so the Orders/Production implementation tasks may start from this branch.
 
 **Hard block for this docs-only lane:** do not touch `prisma/**`, `src/**`, `tests/**`, package files, config files, seed files, or migrations. This document is the only allowed output for the current Task 1 unblock update.
 
@@ -46,12 +46,12 @@ Excluded from this slice:
 - Object storage implementation beyond reading proposal PDF metadata if Products/Proposals exposes it.
 - Destructive deletes for orders, order line items, or production history.
 
-## Blockers
+## Resolved Pre-Implementation Gaps
 
-The Products/Proposals handoff is source-confirmed, but implementation remains blocked until these real gaps are addressed:
+The Products/Proposals handoff is source-confirmed, and the two source-backed setup gaps have been resolved:
 
-- `prisma/seed.ts` seeds `ProductService` rows and opportunity data, but no `Proposal`, `ProposalLineItem`, `ProposalPdfAttachment`, or accepted proposal fixture. Add or otherwise create one accepted proposal suitable for the Orders/Production browser smoke before e2e implementation.
-- `getProposalDetail()` loads proposal detail, opportunity, lead/customer, branch, owner, stage, line items, active PDF metadata, and product basics, but it does not include `Opportunity.splits` or `productService.defaultProductionTemplateKey`. Orders implementation must add a dedicated booking loader such as `loadAcceptedProposalForBooking()` or extend the include before relying on it for owner-split snapshots and production template snapshots.
+- `prisma/seed.ts` now creates `seed_proposal_acme_lms_accepted` with one `ProposalLineItem`, active `ProposalPdfAttachment`, and `status: "ACCEPTED"` for order-booking smoke setup.
+- `src/server/orders/queries.ts` now provides `loadAcceptedProposalForBooking()`, which requires `Proposal.status === "ACCEPTED"` and includes opportunity lead/customer, branch, owner, owner splits, line items, active PDF metadata, and `ProductService.defaultProductionTemplateKey`.
 - `ProposalLineItem` snapshots product name/category and commercial fields, but not `defaultProductionTemplateKey`. If production template history must be preserved at booking, copy the key from the current `ProductService.defaultProductionTemplateKey` during order booking or add a proposal-line snapshot field in a future schema decision.
 - `changeProposalStatus()` moves proposals to `SENT`, `ACCEPTED`, `REJECTED`, `EXPIRED`, or `WITHDRAWN`; only the `SENT` transition updates the opportunity stage to `Proposal Sent`. Acceptance does not currently move the opportunity to `WON`, so Orders must not assume proposal acceptance changes opportunity stage.
 
@@ -240,9 +240,9 @@ Minimum test coverage:
 - [x] Confirmed landed query/helper names: `getProposalDetail()`, `listProposalsForOpportunity()`, `createProposal()`, `addProposalPdfMetadata()`, `changeProposalStatus()`, `listActiveProductServices()`, `listProductServicesForAdmin()`, and `getProductServiceForAdmin()`.
 - [x] Confirmed permission helper names: `assertCanViewProposals()`, `assertCanWriteProposals()`, `assertCanViewProductServices()`, and `assertCanManageProductServices()`.
 - [x] Confirmed Products/Proposals test naming conventions: `src/server/proposals/*.test.ts`, `src/server/products/*.test.ts`, `src/components/proposals/*.test.tsx`, `src/components/products/*.test.tsx`, and `tests/e2e/products-proposals.spec.ts`.
-- [ ] Remaining setup item: seed or create an accepted proposal with line item and PDF metadata for browser smoke; current seed has product services but no proposal fixture, and current e2e creates a proposal and marks it `SENT` only.
-- [ ] Remaining implementation prerequisite: add or extend a booking-specific accepted proposal loader that includes owner splits and `ProductService.defaultProductionTemplateKey`.
-- [ ] Keep Orders/Production implementation blocked until those remaining setup/prerequisite items are handled.
+- [x] Added accepted proposal seed fixture with line item and PDF metadata: `seed_proposal_acme_lms_accepted`.
+- [x] Added booking-specific accepted proposal loader: `loadAcceptedProposalForBooking()`.
+- [x] Orders/Production implementation is unblocked for Task 2 onward.
 
 ### Task 2: Add Order Schema
 
@@ -384,4 +384,4 @@ Minimum test coverage:
 
 ## Handoff Summary
 
-Products/Proposals has landed and the source-confirmed model, route, helper, and test names are captured above. Orders/Production remains blocked only on the accepted-proposal browser-smoke setup and a booking-specific accepted proposal loader that includes owner splits and production template keys; after those are handled, implement Orders and Production as a downstream slice with schema ownership isolated to that future branch.
+Products/Proposals has landed and the source-confirmed model, route, helper, and test names are captured above. The accepted-proposal browser-smoke fixture and booking-specific accepted proposal loader are now in place, so Orders/Production can proceed as the downstream schema-owning slice from this branch.

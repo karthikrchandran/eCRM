@@ -1,5 +1,5 @@
 import bcrypt from "bcryptjs";
-import { PipelineStageKind, PrismaClient, UserRole } from "@prisma/client";
+import { PipelineStageKind, PrismaClient, ProposalStatus, UserRole } from "@prisma/client";
 
 if (process.env.NODE_ENV === "production") {
   throw new Error("Refusing to run the local seed script in production.");
@@ -329,6 +329,112 @@ async function main() {
       }
     });
   }
+
+  const acceptedProposal = await prisma.proposal.upsert({
+    where: { id: "seed_proposal_acme_lms_accepted" },
+    update: {
+      assumptions: "Client provides SME availability and branding inputs.",
+      commercialSummary: "Accepted commercial proposal for the Acme LMS rollout seed order flow.",
+      currency: "INR",
+      deliveryTimeline: "Six weeks from kickoff.",
+      exclusions: "Translation and third-party LMS license costs.",
+      inclusions: "Storyboard, development, voiceover, review, edits, and final package.",
+      internalNotes: "Seed accepted proposal for order and production smoke checks.",
+      paymentTerms: "50 percent advance and 50 percent on delivery.",
+      status: ProposalStatus.ACCEPTED,
+      subtotalPaisa: 500000,
+      gstPaisa: 90000,
+      title: "Accepted Acme LMS proposal",
+      totalPaisa: 590000,
+      updatedById: admin.id,
+      validUntil: new Date("2026-07-31T00:00:00.000Z"),
+      versionLabel: "Seed accepted"
+    },
+    create: {
+      id: "seed_proposal_acme_lms_accepted",
+      assumptions: "Client provides SME availability and branding inputs.",
+      commercialSummary: "Accepted commercial proposal for the Acme LMS rollout seed order flow.",
+      currency: "INR",
+      deliveryTimeline: "Six weeks from kickoff.",
+      exclusions: "Translation and third-party LMS license costs.",
+      inclusions: "Storyboard, development, voiceover, review, edits, and final package.",
+      internalNotes: "Seed accepted proposal for order and production smoke checks.",
+      opportunityId: opportunity.id,
+      paymentTerms: "50 percent advance and 50 percent on delivery.",
+      sequenceNumber: 9001,
+      status: ProposalStatus.ACCEPTED,
+      subtotalPaisa: 500000,
+      gstPaisa: 90000,
+      title: "Accepted Acme LMS proposal",
+      totalPaisa: 590000,
+      createdById: admin.id,
+      updatedById: admin.id,
+      validUntil: new Date("2026-07-31T00:00:00.000Z"),
+      versionLabel: "Seed accepted"
+    }
+  });
+
+  await prisma.proposalLineItem.upsert({
+    where: { id: "seed_proposal_line_acme_lms_elearning" },
+    update: {
+      description: "Five interactive onboarding modules.",
+      gstRateBps: 1800,
+      lineGstPaisa: 90000,
+      lineSubtotalPaisa: 500000,
+      lineTotalPaisa: 590000,
+      productCategorySnapshot: "eLearning",
+      productNameSnapshot: "eLearning",
+      productServiceId: "seed_product_elearning",
+      quantity: 5,
+      sortOrder: 0,
+      unitPricePaisa: 100000
+    },
+    create: {
+      id: "seed_proposal_line_acme_lms_elearning",
+      description: "Five interactive onboarding modules.",
+      gstRateBps: 1800,
+      lineGstPaisa: 90000,
+      lineSubtotalPaisa: 500000,
+      lineTotalPaisa: 590000,
+      productCategorySnapshot: "eLearning",
+      productNameSnapshot: "eLearning",
+      productServiceId: "seed_product_elearning",
+      proposalId: acceptedProposal.id,
+      quantity: 5,
+      sortOrder: 0,
+      unitPricePaisa: 100000
+    }
+  });
+
+  await prisma.proposalPdfAttachment.upsert({
+    where: { id: "seed_proposal_pdf_acme_lms_accepted" },
+    update: {
+      canvaDesignUrl: "https://www.canva.com/design/seed-acme-lms",
+      fileSizeBytes: 204800,
+      mimeType: "application/pdf",
+      originalFileName: "accepted-acme-lms-proposal.pdf",
+      proposalId: acceptedProposal.id,
+      replacedAt: null,
+      sha256: "seed-acme-lms-proposal-sha256",
+      storageKey: "seed/proposals/accepted-acme-lms-proposal.pdf",
+      storageProvider: "local",
+      storedFileName: "accepted-acme-lms-proposal.pdf",
+      uploadedById: admin.id
+    },
+    create: {
+      id: "seed_proposal_pdf_acme_lms_accepted",
+      canvaDesignUrl: "https://www.canva.com/design/seed-acme-lms",
+      fileSizeBytes: 204800,
+      mimeType: "application/pdf",
+      originalFileName: "accepted-acme-lms-proposal.pdf",
+      proposalId: acceptedProposal.id,
+      sha256: "seed-acme-lms-proposal-sha256",
+      storageKey: "seed/proposals/accepted-acme-lms-proposal.pdf",
+      storageProvider: "local",
+      storedFileName: "accepted-acme-lms-proposal.pdf",
+      uploadedById: admin.id
+    }
+  });
 }
 
 main()
