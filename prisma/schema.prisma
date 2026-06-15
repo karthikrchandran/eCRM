@@ -32,6 +32,13 @@ enum ActivityStatus {
   CANCELLED
 }
 
+enum PipelineStageKind {
+  OPEN
+  WON
+  LOST
+  DORMANT
+}
+
 model User {
   id           String   @id @default(cuid())
   name         String
@@ -51,6 +58,12 @@ model User {
   ownershipChangesFrom     LeadOwnershipHistory[] @relation("LeadOwnershipFrom")
   ownershipChangesTo       LeadOwnershipHistory[] @relation("LeadOwnershipTo")
   ownershipChangesChanged  LeadOwnershipHistory[] @relation("LeadOwnershipChangedBy")
+  ownedOpportunities       Opportunity[]          @relation("OpportunityOwner")
+  createdOpportunities     Opportunity[]          @relation("OpportunityCreatedBy")
+  updatedOpportunities     Opportunity[]          @relation("OpportunityUpdatedBy")
+  opportunitySplits        OpportunityOwnerSplit[]
+  salesTargets             SalesTarget[]          @relation("SalesTargetOwner")
+  salesTargetsCreated      SalesTarget[]          @relation("SalesTargetCreatedBy")
 }
 
 model LeadCustomer {
@@ -73,6 +86,7 @@ model LeadCustomer {
   contacts         Contact[]
   activities       Activity[]
   ownershipHistory LeadOwnershipHistory[]
+  opportunities    Opportunity[]
 
   @@index([ownerId])
   @@index([state])
@@ -100,6 +114,7 @@ model Branch {
   leadCustomer LeadCustomer @relation(fields: [leadCustomerId], references: [id], onDelete: Cascade)
   contacts     Contact[]
   activities   Activity[]
+  opportunities Opportunity[]
 
   @@index([leadCustomerId])
   @@index([city])
@@ -177,4 +192,82 @@ model LeadOwnershipHistory {
   @@index([leadCustomerId])
   @@index([toOwnerId])
   @@index([createdAt])
+}
+
+model PipelineStage {
+  id        String            @id @default(cuid())
+  name      String            @unique
+  sortOrder Int
+  kind      PipelineStageKind @default(OPEN)
+  active    Boolean           @default(true)
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  opportunities Opportunity[]
+
+  @@index([sortOrder])
+  @@index([kind])
+}
+
+model Opportunity {
+  id                String   @id @default(cuid())
+  leadCustomerId    String
+  branchId          String?
+  stageId           String
+  ownerId           String
+  title             String
+  productInterest   String?
+  estimatedValueInr Decimal? @db.Decimal(14, 2)
+  probability       Int?
+  lastReachAt       DateTime?
+  nextFollowUpAt    DateTime?
+  notes             String?
+  createdById       String
+  updatedById       String
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  leadCustomer LeadCustomer            @relation(fields: [leadCustomerId], references: [id], onDelete: Cascade)
+  branch       Branch?                 @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  stage        PipelineStage           @relation(fields: [stageId], references: [id])
+  owner        User                    @relation("OpportunityOwner", fields: [ownerId], references: [id])
+  createdBy    User                    @relation("OpportunityCreatedBy", fields: [createdById], references: [id])
+  updatedBy    User                    @relation("OpportunityUpdatedBy", fields: [updatedById], references: [id])
+  splits       OpportunityOwnerSplit[]
+
+  @@index([leadCustomerId])
+  @@index([branchId])
+  @@index([stageId])
+  @@index([ownerId])
+  @@index([nextFollowUpAt])
+  @@index([updatedAt])
+}
+
+model OpportunityOwnerSplit {
+  opportunityId String
+  userId        String
+  percent       Int
+
+  opportunity Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  user        User        @relation(fields: [userId], references: [id])
+
+  @@id([opportunityId, userId])
+  @@index([userId])
+}
+
+model SalesTarget {
+  id             String   @id @default(cuid())
+  ownerId        String
+  financialYear  Int
+  quarter        Int
+  targetValueInr Decimal  @db.Decimal(14, 2)
+  createdById    String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  owner     User @relation("SalesTargetOwner", fields: [ownerId], references: [id])
+  createdBy User @relation("SalesTargetCreatedBy", fields: [createdById], references: [id])
+
+  @@unique([ownerId, financialYear, quarter])
+  @@index([financialYear, quarter])
 }
