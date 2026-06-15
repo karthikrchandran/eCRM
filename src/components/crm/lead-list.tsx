@@ -47,9 +47,14 @@ export function LeadList({ filters, owners, records }: LeadListProps) {
           <h1 className="text-2xl font-semibold">Leads / Customers</h1>
           <p className="mt-1 text-sm text-[var(--muted)]">Company-wide CRM records for Sales and Admin.</p>
         </div>
-        <Link className="rounded-md bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white" href="/leads/new">
-          New lead/customer
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Link className="rounded-md border border-[var(--border)] px-4 py-2 text-sm font-semibold" href="/leads/import">
+            Import CSV
+          </Link>
+          <Link className="rounded-md bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white" href="/leads/new">
+            New lead/customer
+          </Link>
+        </div>
       </header>
 
       <form action="/leads" className="surface grid gap-4 p-4 md:grid-cols-5" method="get">
