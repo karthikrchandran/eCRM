@@ -10,6 +10,8 @@ eCRM is a single-company CRM for a small sales organization. The foundation slic
    npm install
    ```
 
+   The install step runs `prisma generate` automatically so fresh local checkouts and Vercel installs have Prisma Client ready before seed, typecheck, or build commands.
+
 2. Create a local environment file.
 
    ```powershell
