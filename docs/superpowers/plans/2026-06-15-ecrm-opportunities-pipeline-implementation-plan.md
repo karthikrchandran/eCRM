@@ -887,4 +887,3 @@ Skip this commit if final verification required no fixes.
 - Orders remain blocked until proposals/products land.
 - Reports can use opportunity read models only after this branch lands.
 - CSV import should not write opportunities in this slice.
-
