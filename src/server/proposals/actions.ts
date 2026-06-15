@@ -1,9 +1,9 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/server/auth/current-user";
-import { createProposal } from "./mutations";
-import type { ProposalInput, ProposalLineInput } from "./types";
-import { proposalInputSchema, proposalLineInputSchema } from "./validators";
+import { addProposalPdfMetadata, changeProposalStatus, createProposal } from "./mutations";
+import type { ProposalInput, ProposalLineInput, ProposalPdfMetadataInput, ProposalStatusValue } from "./types";
+import { proposalInputSchema, proposalLineInputSchema, proposalPdfMetadataInputSchema } from "./validators";
 
 type ActionState = {
   ok: boolean;
@@ -80,6 +80,25 @@ export function parseProposalLinesFormForTest(formData: FormData): ProposalLineI
   return lines;
 }
 
+export function parseProposalPdfMetadataFormForTest(formData: FormData): ParseResult<ProposalPdfMetadataInput> {
+  const result = proposalPdfMetadataInputSchema.safeParse({
+    originalFileName: formData.get("originalFileName"),
+    storedFileName: formData.get("storedFileName"),
+    storageProvider: formData.get("storageProvider"),
+    storageKey: formData.get("storageKey"),
+    mimeType: formData.get("mimeType"),
+    fileSizeBytes: formData.get("fileSizeBytes"),
+    sha256: formData.get("sha256"),
+    canvaDesignUrl: formData.get("canvaDesignUrl")
+  });
+
+  if (!result.success) {
+    return fieldErrorState(result.error) as ParseResult<ProposalPdfMetadataInput>;
+  }
+
+  return { ok: true, data: result.data };
+}
+
 export async function createProposalAction(_previousState: ActionState, formData: FormData): Promise<ActionState> {
   "use server";
 
@@ -94,4 +113,37 @@ export async function createProposalAction(_previousState: ActionState, formData
   revalidatePath("/opportunities");
   revalidatePath(`/opportunities/${parsed.data.opportunityId}`);
   redirect(`/opportunities/${parsed.data.opportunityId}/proposals/${proposal.id}`);
+}
+
+export async function addProposalPdfMetadataAction(
+  opportunityId: string,
+  proposalId: string,
+  _previousState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  "use server";
+
+  const user = await requireUser();
+  const parsed = parseProposalPdfMetadataFormForTest(formData);
+
+  if (!parsed.ok) {
+    return parsed;
+  }
+
+  await addProposalPdfMetadata(user, proposalId, parsed.data);
+  revalidatePath(`/opportunities/${opportunityId}`);
+  revalidatePath(`/opportunities/${opportunityId}/proposals/${proposalId}`);
+  return { ok: true, message: "Proposal PDF metadata saved." };
+}
+
+export async function changeProposalStatusAction(opportunityId: string, proposalId: string, formData: FormData) {
+  "use server";
+
+  const user = await requireUser();
+  const status = formData.get("status")?.toString() as ProposalStatusValue;
+
+  await changeProposalStatus(user, proposalId, status);
+  revalidatePath("/opportunities");
+  revalidatePath(`/opportunities/${opportunityId}`);
+  revalidatePath(`/opportunities/${opportunityId}/proposals/${proposalId}`);
 }

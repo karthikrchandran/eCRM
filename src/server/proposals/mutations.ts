@@ -2,7 +2,8 @@ import type { Prisma } from "@prisma/client";
 import { db } from "@/server/db";
 import { calculateProposalTotals } from "./calculations";
 import { assertCanWriteProposals } from "./permissions";
-import type { ProposalInput, ProposalLineInput, ProposalUser } from "./types";
+import { assertProposalStatusTransition } from "./validators";
+import type { ProposalInput, ProposalLineInput, ProposalPdfMetadataInput, ProposalStatusValue, ProposalUser } from "./types";
 
 type ProductSnapshot = {
   id: string;
@@ -22,6 +23,34 @@ type ProposalCreateDb = {
   };
   productService: {
     findMany: (args: Prisma.ProductServiceFindManyArgs) => Promise<ProductSnapshot[]>;
+  };
+};
+
+type ProposalPdfDb = {
+  proposal: {
+    findUnique: (args: Prisma.ProposalFindUniqueArgs) => Promise<{ id: string; opportunityId: string } | null>;
+  };
+  proposalPdfAttachment: {
+    create: (args: Prisma.ProposalPdfAttachmentCreateArgs) => Promise<{ id: string }>;
+  };
+};
+
+type ProposalStatusDb = {
+  pipelineStage: {
+    findFirst: (args: Prisma.PipelineStageFindFirstArgs) => Promise<{ id: string } | null>;
+  };
+  proposal: {
+    findUnique: (args: Prisma.ProposalFindUniqueArgs) => Promise<{
+      id: string;
+      opportunityId: string;
+      status: ProposalStatusValue;
+      lineItems: Array<{ id: string }>;
+      pdfAttachments: Array<{ id: string }>;
+    } | null>;
+    update: (args: Prisma.ProposalUpdateArgs) => Promise<{ id: string; status: ProposalStatusValue }>;
+  };
+  opportunity: {
+    update: (args: Prisma.OpportunityUpdateArgs) => Promise<{ id: string }>;
   };
 };
 
@@ -118,4 +147,85 @@ export async function createProposal(
       }
     }
   });
+}
+
+export async function addProposalPdfMetadata(
+  user: ProposalUser,
+  proposalId: string,
+  input: ProposalPdfMetadataInput,
+  database: ProposalPdfDb = db as unknown as ProposalPdfDb
+) {
+  assertCanWriteProposals(user);
+  const proposal = await database.proposal.findUnique({
+    where: { id: proposalId },
+    select: { id: true, opportunityId: true }
+  });
+
+  if (!proposal) {
+    throw new Error("Proposal was not found.");
+  }
+
+  return database.proposalPdfAttachment.create({
+    data: {
+      proposalId,
+      originalFileName: input.originalFileName,
+      storedFileName: input.storedFileName,
+      storageProvider: input.storageProvider,
+      storageKey: input.storageKey,
+      mimeType: input.mimeType,
+      fileSizeBytes: input.fileSizeBytes,
+      sha256: input.sha256,
+      canvaDesignUrl: input.canvaDesignUrl,
+      uploadedById: user.id
+    }
+  });
+}
+
+export async function changeProposalStatus(
+  user: ProposalUser,
+  proposalId: string,
+  nextStatus: ProposalStatusValue,
+  database: ProposalStatusDb = db as unknown as ProposalStatusDb
+) {
+  assertCanWriteProposals(user);
+  const proposal = await database.proposal.findUnique({
+    where: { id: proposalId },
+    select: {
+      id: true,
+      opportunityId: true,
+      status: true,
+      lineItems: { select: { id: true } },
+      pdfAttachments: { where: { replacedAt: null }, select: { id: true } }
+    }
+  });
+
+  if (!proposal) {
+    throw new Error("Proposal was not found.");
+  }
+
+  assertProposalStatusTransition(proposal.status, nextStatus, {
+    lineItemCount: proposal.lineItems.length,
+    activePdfCount: proposal.pdfAttachments.length
+  });
+
+  const updated = await database.proposal.update({
+    where: { id: proposalId },
+    data: { status: nextStatus, updatedById: user.id }
+  });
+
+  if (nextStatus === "SENT") {
+    const proposalSentStage = await database.pipelineStage.findFirst({
+      where: { name: "Proposal Sent", active: true, kind: "OPEN" },
+      select: { id: true }
+    });
+
+    if (proposalSentStage) {
+      await database.opportunity.update({
+        where: { id: proposal.opportunityId },
+        data: { stageId: proposalSentStage.id, updatedById: user.id }
+      });
+    }
+  }
+
+  return updated;
 }
