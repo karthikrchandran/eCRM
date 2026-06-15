@@ -8,6 +8,8 @@ export type ProductionUser = {
 export type ProductionStatusValue = ProductionStageStatus;
 
 export type ProductionStageStatusInput = {
+  assignedToId?: string;
+  dueAt?: Date;
   status: ProductionStatusValue;
   noteBody?: string;
   skippedReason?: string;

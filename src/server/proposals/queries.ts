@@ -25,6 +25,7 @@ const proposalInclude = {
       uploadedBy: { select: { id: true, name: true, email: true, role: true } }
     }
   },
+  order: { select: { id: true, orderNumber: true } },
   createdBy: { select: { id: true, name: true, email: true, role: true } },
   updatedBy: { select: { id: true, name: true, email: true, role: true } }
 } satisfies Prisma.ProposalInclude;

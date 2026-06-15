@@ -4,7 +4,7 @@
 
 **Goal:** Build the order booking and production tracking slice after accepted proposal records, proposal line items, product/service snapshots, and PDF metadata are landed.
 
-**Architecture:** Orders are downstream of accepted proposals and must preserve commercial snapshots from Products/Proposals instead of recalculating from mutable catalog rows. Production work should attach to order line items and use product/service production template keys only after those keys are stable. Products/Proposals has landed; this update is a docs-only Task 1 handoff and does not implement Orders/Production.
+**Architecture:** Orders are downstream of accepted proposals and must preserve commercial snapshots from Products/Proposals instead of recalculating from mutable catalog rows. Production work attaches to order line items and uses product/service production template keys captured during order booking. Products/Proposals has landed; this implementation adds the downstream Orders/Production schema, server modules, UI, and browser smoke coverage.
 
 **Tech Stack:** Next.js App Router, React, TypeScript, Prisma/Postgres, Zod, Vitest, Testing Library, Playwright, Tailwind CSS.
 
@@ -12,7 +12,7 @@
 
 ## Status
 
-Implementation status: **UNBLOCKED FOR ORDERS/PRODUCTION IMPLEMENTATION**.
+Implementation status: **IMPLEMENTED AND VERIFIED**.
 
 The current source baseline already includes CRM Core and Opportunities:
 
@@ -20,9 +20,7 @@ The current source baseline already includes CRM Core and Opportunities:
 - Opportunities: `Opportunity`, `PipelineStage`, `OpportunityOwnerSplit`, `SalesTarget`, `/opportunities/[opportunityId]`, `getOpportunityDetail()`, `listOpportunityFormOptions()`, `assertCanViewOpportunities()`, and `assertCanWriteOpportunities()`.
 - Products/Proposals: landed in this worktree with `ProductService`, `Proposal`, `ProposalLineItem`, `ProposalPdfAttachment`, `ProposalStatus`, `/admin/products`, `/admin/products/new`, `/admin/products/[productServiceId]/edit`, `/opportunities/[opportunityId]/proposals/new`, `/opportunities/[opportunityId]/proposals/[proposalId]`, `listActiveProductServices()`, `listProductServicesForAdmin()`, `getProductServiceForAdmin()`, `createProposal()`, `addProposalPdfMetadata()`, `changeProposalStatus()`, `listProposalsForOpportunity()`, and `getProposalDetail()`.
 
-The old Products/Proposals dependency is no longer a blocker. The accepted-proposal seed fixture and booking-specific accepted proposal loader are now present, so the Orders/Production implementation tasks may start from this branch.
-
-**Hard block for this docs-only lane:** do not touch `prisma/**`, `src/**`, `tests/**`, package files, config files, seed files, or migrations. This document is the only allowed output for the current Task 1 unblock update.
+The old Products/Proposals dependency is no longer a blocker. The accepted-proposal seed fixture and booking-specific accepted proposal loader are present, and Orders/Production has been implemented from this branch.
 
 ## Scope
 
@@ -318,10 +316,10 @@ Minimum test coverage:
 - Create order routes listed above.
 - Modify the landed proposal detail component or route to expose the order booking entry point.
 
-- [ ] Add "Book order" only for accepted proposals without an existing order.
-- [ ] Render order list and order detail with source proposal, opportunity, customer, branch, owner, split, and commercial snapshots.
-- [ ] Provide PO metadata entry without requiring a PO to create the initial order unless the business requires it.
-- [ ] Render status actions with validation-backed server actions.
+- [x] Add "Book order" only for accepted proposals without an existing order.
+- [x] Render order list and order detail with source proposal, opportunity, customer, branch, owner, split, and commercial snapshots.
+- [x] Provide PO metadata entry without requiring a PO to create the initial order unless the business requires it.
+- [x] Render status actions with validation-backed server actions.
 
 ### Task 7: Add Production UI
 
@@ -331,11 +329,11 @@ Minimum test coverage:
 - Create production routes listed above.
 - Modify order detail to include production summary and work item links.
 
-- [ ] Render production board grouped by stage status or due date.
-- [ ] Render work item detail with order line context, customer, product/service snapshot, current stage, and notes.
-- [ ] Provide stage transition actions.
-- [ ] Provide assignment and due date controls.
-- [ ] Keep commercial values read-only on production screens.
+- [x] Render production board grouped by stage status or due date.
+- [x] Render work item detail with order line context, customer, product/service snapshot, current stage, and notes.
+- [x] Provide stage transition actions.
+- [x] Provide assignment and due date controls.
+- [x] Keep commercial values read-only on production screens.
 
 ### Task 8: Browser Smoke And Final Verification
 
@@ -343,17 +341,17 @@ Minimum test coverage:
 
 - Create: `tests/e2e/orders-production.spec.ts`
 
-- [ ] Seed or create an accepted proposal through supported setup.
-- [ ] Book an order from the accepted proposal.
-- [ ] Verify duplicate booking is not offered for the same proposal.
-- [ ] Open the order detail and confirm commercial snapshots match the proposal.
-- [ ] Open production board, start a stage, complete it, and verify the board updates.
-- [ ] Run `npx prisma validate`.
-- [ ] Run the repo's Prisma generation command.
-- [ ] Run order and production unit/component tests.
-- [ ] Run `npm run gate`.
-- [ ] Run targeted and existing e2e smoke tests.
-- [ ] Run `git diff --check`.
+- [x] Seed or create an accepted proposal through supported setup.
+- [x] Book an order from the accepted proposal.
+- [x] Verify duplicate booking is not offered for the same proposal.
+- [x] Open the order detail and confirm commercial snapshots match the proposal.
+- [x] Open production board, start a stage, complete it, and verify the board updates.
+- [x] Run `npx prisma validate`.
+- [x] Run the repo's Prisma generation command.
+- [x] Run order and production unit/component tests.
+- [x] Run `npm run gate`.
+- [x] Run targeted and existing e2e smoke tests.
+- [x] Run `git diff --check`.
 
 ## Acceptance Criteria
 
@@ -384,4 +382,4 @@ Minimum test coverage:
 
 ## Handoff Summary
 
-Products/Proposals has landed and the source-confirmed model, route, helper, and test names are captured above. The accepted-proposal browser-smoke fixture and booking-specific accepted proposal loader are now in place, so Orders/Production can proceed as the downstream schema-owning slice from this branch.
+Products/Proposals has landed and the source-confirmed model, route, helper, and test names are captured above. Orders/Production now has schema, server modules, UI routes, production stage controls, and end-to-end coverage for accepted proposal to booked order to production completion.

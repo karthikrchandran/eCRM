@@ -22,6 +22,7 @@ type ProposalDetailRecord = {
   subtotalPaisa: number;
   gstPaisa: number;
   totalPaisa: number;
+  order?: { id: string; orderNumber: string } | null;
   opportunity: {
     id: string;
     title: string;
@@ -110,6 +111,18 @@ export function ProposalDetail({ proposal, pdfMetadataAction, statusAction }: Pr
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {proposal.order ? (
+            <Link className="rounded-md bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white" href={`/orders/${proposal.order.id}`}>
+              View order {proposal.order.orderNumber}
+            </Link>
+          ) : proposal.status === "ACCEPTED" ? (
+            <Link
+              className="rounded-md bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white"
+              href={`/opportunities/${proposal.opportunityId}/proposals/${proposal.id}/book-order`}
+            >
+              Book order
+            </Link>
+          ) : null}
           <Link
             className="rounded-md border border-[var(--border)] px-3 py-2 text-sm font-semibold"
             href={`/opportunities/${proposal.opportunityId}`}

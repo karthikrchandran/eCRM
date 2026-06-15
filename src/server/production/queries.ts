@@ -53,6 +53,9 @@ type ProductionQueryDb = {
     findMany: (args: Prisma.ProductionWorkItemFindManyArgs) => Promise<ProductionWorkItemRecord[]>;
     findUnique?: (args: Prisma.ProductionWorkItemFindUniqueArgs) => Promise<ProductionWorkItemRecord | null>;
   };
+  user?: {
+    findMany: (args: Prisma.UserFindManyArgs) => Promise<ProductionOwner[]>;
+  };
 };
 
 function buildProductionWorkItemWhere(filters: ProductionFilters): Prisma.ProductionWorkItemWhereInput {
@@ -135,4 +138,18 @@ export async function getProductionWorkItemDetail(
     where: { id: workItemId },
     include: productionWorkItemInclude
   });
+}
+
+export async function listProductionFormOptions(database: ProductionQueryDb = db as unknown as ProductionQueryDb) {
+  if (!database.user) {
+    throw new Error("Production form options query is unavailable.");
+  }
+
+  const owners = await database.user.findMany({
+    where: { active: true, role: { in: ["ADMIN", "SALES"] } },
+    orderBy: { name: "asc" },
+    select: productionUserSelect
+  });
+
+  return { owners };
 }

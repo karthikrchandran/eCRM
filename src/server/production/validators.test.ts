@@ -12,4 +12,15 @@ describe("production validators", () => {
 
     expect(parsed).toEqual({});
   });
+
+  it("normalizes assignment and due date stage inputs", () => {
+    const parsed = productionStageStatusInputSchema.parse({
+      assignedToId: "user_sales",
+      dueAt: "2026-08-15",
+      status: "IN_PROGRESS"
+    });
+
+    expect(parsed.assignedToId).toBe("user_sales");
+    expect(parsed.dueAt).toEqual(new Date("2026-08-15"));
+  });
 });

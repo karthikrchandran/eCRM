@@ -16,6 +16,7 @@ const baseNavItems = [
   { href: "/leads", label: "Leads" },
   { href: "/opportunities", label: "Opportunities" },
   { href: "/orders", label: "Orders" },
+  { href: "/production", label: "Production" },
   { href: "/reports", label: "Reports" }
 ];
 

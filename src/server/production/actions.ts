@@ -20,6 +20,8 @@ function fieldErrorState(error: FieldErrorSource): ActionState {
 
 export function parseProductionStageStatusFormForTest(formData: FormData): ParseResult<ProductionStageStatusInput> {
   const result = productionStageStatusInputSchema.safeParse({
+    assignedToId: formData.get("assignedToId"),
+    dueAt: formData.get("dueAt"),
     status: formData.get("status"),
     noteBody: formData.get("noteBody"),
     skippedReason: formData.get("skippedReason")

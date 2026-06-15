@@ -175,13 +175,18 @@ function stageUpdateData(
 
 function stageUpdateDataForPrismaArgs(input: ProductionStageStatusInput, startedAt: Date | null, userId: string, now: Date) {
   const data = stageUpdateData(input, startedAt, userId, now);
-
-  return {
+  const updateData = {
     completedAt: data.completedAt,
     completedById: input.status === "DONE" || input.status === "SKIPPED" ? userId : null,
     skippedReason: data.skippedReason,
     startedAt: data.startedAt,
     status: input.status
+  } satisfies Prisma.ProductionStageInstanceUncheckedUpdateInput;
+
+  return {
+    ...updateData,
+    ...(input.assignedToId !== undefined ? { assignedToId: input.assignedToId || null } : {}),
+    ...(input.dueAt !== undefined ? { dueAt: input.dueAt } : {})
   };
 }
 
