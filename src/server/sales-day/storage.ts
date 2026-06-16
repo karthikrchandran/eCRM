@@ -34,7 +34,7 @@ export type SaveVoiceNoteAudioInput = {
 
 function storageRoot() {
   const configured = process.env.SALES_VOICE_STORAGE_DIR || ".local-storage/sales-voice-notes";
-  return path.isAbsolute(configured) ? configured : path.join(process.cwd(), configured);
+  return path.isAbsolute(configured) ? configured : path.join(/* turbopackIgnore: true */ process.cwd(), configured);
 }
 
 function safePathSegment(value: string) {
