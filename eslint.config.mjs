@@ -13,7 +13,7 @@ const eslintConfig = [
     }
   },
   {
-    ignores: [".next/**", "node_modules/**", "coverage/**", "playwright-report/**"]
+    ignores: [".next/**", ".worktrees/**", "worktrees/**", "node_modules/**", "coverage/**", "playwright-report/**", "test-results/**"]
   }
 ];
 
