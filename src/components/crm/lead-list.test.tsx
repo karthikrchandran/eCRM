@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { LeadList } from "./lead-list";
 
@@ -31,5 +31,31 @@ describe("LeadList", () => {
     expect(screen.getByText("Call procurement")).toBeVisible();
     expect(screen.getByText("1 branch")).toBeVisible();
     expect(screen.getByText("1 contact")).toBeVisible();
+    expect(screen.getByRole("link", { name: "Add one lead" })).toHaveAttribute("href", "/leads/new");
+    expect(screen.getByRole("link", { name: "Import leads from CSV" })).toHaveAttribute("href", "/leads/import");
+    expect(screen.getByText("Lead intake")).toBeVisible();
+    expect(screen.getByText("Sales")).toBeVisible();
+    expect(within(screen.getByRole("row", { name: /Acme Learning Pvt Ltd/ })).getByText("LEAD")).toBeVisible();
+  });
+
+  it("shows a polished empty state when no leads match", () => {
+    render(
+      <LeadList
+        filters={{ q: "missing", ownerId: "user_sales" }}
+        owners={[{ id: "user_sales", name: "Priya Menon", email: "sales@example.com", role: "SALES" }]}
+        records={[]}
+      />
+    );
+
+    const emptyHeading = screen.getByRole("heading", { name: "No matching leads" });
+    const emptyState = emptyHeading.parentElement;
+
+    if (!emptyState) {
+      throw new Error("Expected empty state wrapper to exist");
+    }
+
+    expect(emptyHeading).toBeVisible();
+    expect(screen.getByText("Change filters or add a lead to keep sales intake moving.")).toBeVisible();
+    expect(within(emptyState).getByRole("link", { name: "Add one lead" })).toHaveAttribute("href", "/leads/new");
   });
 });
