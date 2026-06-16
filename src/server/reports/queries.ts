@@ -130,7 +130,12 @@ function buildPipelineByStage(opportunities: OpportunityRecord[]): PipelineStage
 
   return Array.from(summaries.values())
     .sort((left, right) => left.sortOrder - right.sortOrder)
-    .map(({ sortOrder: _sortOrder, ...summary }) => summary);
+    .map((summary) => ({
+      count: summary.count,
+      stageId: summary.stageId,
+      stageName: summary.stageName,
+      valuePaisa: summary.valuePaisa
+    }));
 }
 
 function buildTopClients(orders: OrderRecord[]): TopClientSummary[] {
@@ -178,7 +183,12 @@ function buildTopProducts(orders: OrderRecord[]): TopProductSummary[] {
   return Array.from(summaries.values())
     .sort((left, right) => right.bookedValuePaisa - left.bookedValuePaisa || left.productName.localeCompare(right.productName))
     .slice(0, 5)
-    .map(({ orderIds: _orderIds, ...summary }) => summary);
+    .map((summary) => ({
+      bookedValuePaisa: summary.bookedValuePaisa,
+      lineItemCount: summary.lineItemCount,
+      orderCount: summary.orderCount,
+      productName: summary.productName
+    }));
 }
 
 function buildCollections(orders: OrderRecord[], payments: PaymentRecord[]) {
