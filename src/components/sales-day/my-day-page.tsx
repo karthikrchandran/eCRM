@@ -2,6 +2,8 @@ import Link from "next/link";
 import type { MyDayLookups } from "@/server/sales-day/queries";
 import type { MyDayInsightsViewModel, MyDayViewModel } from "@/server/sales-day/types";
 import { MetricStrip, PageHeader } from "@/components/ui/sales-primitives";
+import { EndOfDayReview } from "./end-of-day-review";
+import { InsightsPanel } from "./insights-panel";
 import { TaskComposer } from "./task-composer";
 import { TaskList } from "./task-list";
 import { VoiceNotePanel } from "./voice-note-panel";
@@ -84,17 +86,10 @@ export function MyDayPage({ activeView, insights, lookups, myDay }: MyDayPagePro
             <VoiceNotePanel notes={voiceNotes} />
           </div>
         </div>
+      ) : activeView === "insights" ? (
+        <InsightsPanel insights={insights} />
       ) : (
-        <section className="surface p-5">
-          <h2 className="text-base font-semibold text-slate-950">
-            {activeView === "insights" ? "Insights" : "End-of-Day Review"}
-          </h2>
-          <p className="mt-2 text-sm text-[var(--muted)]">
-            {activeView === "insights"
-              ? `${insights.suggestedTomorrowTasks.length} suggested tomorrow items and ${insights.accountsNeedingAttention.length} account reminders are ready for review.`
-              : "Review controls will list the day tasks and let the salesperson choose done, move to tomorrow, blocked, waiting, or cancel."}
-          </p>
-        </section>
+        <EndOfDayReview date={myDay.date} tasks={allTasks} />
       )}
     </div>
   );
