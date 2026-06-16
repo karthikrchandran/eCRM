@@ -19,10 +19,10 @@ test("admin creates a lead, branch, contact, follow-up, and reassigns owner", as
   await signIn(page, "admin@example.com", "Admin@12345");
 
   await page.goto("/leads");
-  await page.getByRole("link", { name: "New lead/customer" }).click();
+  await page.getByRole("link", { name: "Add one lead" }).click();
   await page.getByLabel("Lead/customer name").fill("Northstar Training Pvt Ltd");
   await page.getByLabel("State").selectOption("LEAD");
-  await selectOptionByText(page.getByLabel("Owner"), /Sales User/);
+  await selectOptionByText(page.getByLabel("Owner"), /Priya Menon/);
   await page.getByLabel("Industry").fill("Corporate Training");
   await page.getByLabel("Source").fill("Website");
   await page.getByRole("button", { name: "Create lead/customer" }).click();
@@ -48,13 +48,13 @@ test("admin creates a lead, branch, contact, follow-up, and reassigns owner", as
   await page.getByRole("link", { name: "Add activity" }).click();
   await page.getByLabel("Type").selectOption("FOLLOW_UP");
   await page.getByLabel("Status").selectOption("OPEN");
-  await selectOptionByText(page.getByLabel("Owner"), /Sales User/);
+  await selectOptionByText(page.getByLabel("Owner"), /Priya Menon/);
   await page.getByLabel("Subject").fill("Schedule discovery call");
   await page.getByLabel("Due date").fill("2026-06-20T10:00");
   await page.getByRole("button", { name: "Add activity" }).click();
   await expect(page.getByText("Schedule discovery call")).toBeVisible();
 
-  await selectOptionByText(page.getByLabel("New owner"), /Admin User/);
+  await selectOptionByText(page.getByLabel("New owner"), /Kavya Iyer/);
   await page.getByLabel("Reassignment reason").fill("Admin taking temporary ownership for onboarding");
   await page.getByRole("button", { name: "Reassign owner" }).click();
   await expect(page.getByText("Admin taking temporary ownership for onboarding")).toBeVisible();
@@ -66,10 +66,10 @@ test("mobile shell exposes CRM navigation and lead detail stays within the viewp
 
   await expect(page.getByRole("link", { name: "Leads" })).toBeVisible();
   await page.getByRole("link", { name: "Leads" }).click();
-  await expect(page.getByRole("heading", { name: "Leads / Customers" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Leads and customers" })).toBeVisible();
 
-  await page.getByRole("link", { name: "Acme Learning Pvt Ltd" }).click();
-  await expect(page.getByRole("heading", { name: "Acme Learning Pvt Ltd" })).toBeVisible();
+  await page.getByRole("link", { name: "Northstar Learning Pvt Ltd" }).click();
+  await expect(page.getByRole("heading", { name: "Northstar Learning Pvt Ltd" })).toBeVisible();
 
   const hasHorizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
   expect(hasHorizontalOverflow).toBe(false);
@@ -79,10 +79,10 @@ test("sales can see company-wide leads regardless of owner", async ({ page }) =>
   await signIn(page, "sales@example.com", "Sales@12345");
 
   await page.goto("/leads");
-  await expect(page.getByRole("heading", { name: "Leads / Customers" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Acme Learning Pvt Ltd" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Leads and customers" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Northstar Learning Pvt Ltd" })).toBeVisible();
 
-  await selectOptionByText(page.getByLabel("Owner"), /Admin User/);
+  await selectOptionByText(page.getByLabel("Owner"), /Kavya Iyer/);
   await page.getByRole("button", { name: "Apply filters" }).click();
   await expect(page).toHaveURL(/ownerId=/);
 });

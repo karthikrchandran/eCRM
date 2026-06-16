@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { isSafeExternalUrl } from "@/lib/safe-external-url";
 import type { ActionState } from "@/server/products/types";
+import { EmptyState, StatusBadge } from "@/components/ui/sales-primitives";
 import { ProposalPdfUpload } from "./proposal-pdf-upload";
 import { ProposalStatusActions } from "./proposal-status-actions";
 
@@ -232,24 +234,43 @@ export function ProposalDetail({ proposal, pdfMetadataAction, statusAction }: Pr
       </section>
 
       <section className="surface p-4">
-        <h2 className="text-lg font-semibold">PDF metadata</h2>
-        {proposal.pdfAttachments.length === 0 ? <p className="mt-3 text-sm text-[var(--muted)]">No PDF metadata uploaded yet.</p> : null}
+        <h2 className="text-lg font-semibold">Proposal documents</h2>
+        {proposal.pdfAttachments.length === 0 ? (
+          <EmptyState title="No proposal document linked yet." description="Add a PDF or document URL so the proposal can be opened from the CRM." />
+        ) : null}
         <div className="mt-3 space-y-3">
-          {proposal.pdfAttachments.map((attachment) => (
-            <article className="rounded-md border border-[var(--border)] p-3" key={attachment.id}>
-              <p className="font-medium">{attachment.originalFileName}</p>
-              <p className="text-sm text-[var(--muted)]">
-                {attachment.mimeType} - {formatFileSize(attachment.fileSizeBytes)} - {attachment.storageProvider}
-              </p>
-              <p className="text-sm text-[var(--muted)]">Uploaded by {attachment.uploadedBy.name}</p>
-              <p className="text-sm text-[var(--muted)]">Storage key: {attachment.storageKey}</p>
-              {attachment.canvaDesignUrl ? (
-                <a className="text-sm font-semibold text-[var(--accent-strong)] hover:underline" href={attachment.canvaDesignUrl}>
-                  Canva design
-                </a>
-              ) : null}
-            </article>
-          ))}
+          {proposal.pdfAttachments.map((attachment) => {
+            const documentUrl = isSafeExternalUrl(attachment.storageKey) ? attachment.storageKey : null;
+            const canvaUrl = isSafeExternalUrl(attachment.canvaDesignUrl) ? attachment.canvaDesignUrl : null;
+
+            return (
+              <article className="rounded-md border border-[var(--border)] p-3" key={attachment.id}>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <p className="font-medium">{attachment.originalFileName}</p>
+                    <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-[var(--muted)]">
+                      <StatusBadge tone="info">{attachment.storageProvider}</StatusBadge>
+                      <span>Added by {attachment.uploadedBy.name}</span>
+                      <span>{formatFileSize(attachment.fileSizeBytes)}</span>
+                    </div>
+                    <p className="mt-2 break-all text-xs text-[var(--muted)]">{attachment.storageKey}</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {documentUrl ? (
+                      <a className="crm-button crm-button-primary text-sm" href={documentUrl} rel="noreferrer" target="_blank">
+                        Open document
+                      </a>
+                    ) : null}
+                    {canvaUrl ? (
+                      <a className="crm-button crm-button-secondary text-sm" href={canvaUrl} rel="noreferrer" target="_blank">
+                        Open Canva design
+                      </a>
+                    ) : null}
+                  </div>
+                </div>
+              </article>
+            );
+          })}
         </div>
         {pdfMetadataAction ? <ProposalPdfUpload action={pdfMetadataAction} /> : null}
       </section>

@@ -19,8 +19,9 @@ test("admin manages products and proposals, then sales can view the proposal", a
   const timestamp = Date.now();
   const productName = `Proposal e2e service ${timestamp}`;
   const opportunityTitle = `Proposal opportunity e2e ${timestamp}`;
-  const proposalTitle = `Acme proposal e2e ${timestamp}`;
-  const pdfName = `proposal-${timestamp}.pdf`;
+  const proposalTitle = `Northstar proposal e2e ${timestamp}`;
+  const documentName = `proposal-${timestamp}.pdf`;
+  const documentUrl = `https://example.com/proposals/proposal-${timestamp}.pdf`;
 
   await signIn(page, "admin@example.com", "Admin@12345");
 
@@ -41,10 +42,10 @@ test("admin manages products and proposals, then sales can view the proposal", a
   await expect(page.getByRole("link", { name: productName })).toBeVisible();
 
   await page.goto("/opportunities/new");
-  await selectOptionByText(page.getByLabel("Lead/customer"), /Acme Learning Pvt Ltd/);
-  await selectOptionByText(page.getByLabel("Branch"), /Bengaluru Branch/);
+  await selectOptionByText(page.getByLabel("Lead/customer"), /Northstar Learning Pvt Ltd/);
+  await selectOptionByText(page.getByLabel("Branch"), /Bengaluru Delivery Office/);
   await selectOptionByText(page.getByLabel("Stage"), /Qualified/);
-  await selectOptionByText(page.getByRole("combobox", { exact: true, name: "Owner" }), /Sales User/);
+  await selectOptionByText(page.getByRole("combobox", { exact: true, name: "Owner" }), /Priya Menon/);
   await page.getByLabel("Opportunity title").fill(opportunityTitle);
   await page.getByLabel("Product/service interest").fill("Custom LMS rollout");
   await page.getByLabel("Estimated value INR").fill("1250000");
@@ -70,7 +71,7 @@ test("admin manages products and proposals, then sales can view the proposal", a
   await selectOptionByText(page.getByLabel("Product or service"), new RegExp(productName));
   await page.getByLabel("Line description").fill("Five interactive modules.");
   await page.getByLabel("Quantity").fill("5");
-  await page.getByLabel("Unit price paise").fill("100000");
+  await page.getByLabel("Unit price (paise)").fill("100000");
   await page.getByLabel("GST basis points").last().fill("1800");
   await page.getByRole("button", { name: "Create proposal" }).click();
 
@@ -79,17 +80,15 @@ test("admin manages products and proposals, then sales can view the proposal", a
   await expect(page.getByText(productName)).toBeVisible();
   await expect(page.getByText("INR 5,000.00")).toHaveCount(2);
 
-  await page.getByLabel("Original file name").fill(pdfName);
-  await page.getByLabel("Stored file name").fill(`stored-${pdfName}`);
-  await page.getByLabel("Storage provider").fill("local");
-  await page.getByLabel("Storage key").fill(`e2e/${pdfName}`);
-  await page.getByLabel("MIME type").fill("application/pdf");
-  await page.getByLabel("File size bytes").fill("2048");
-  await page.getByLabel("Canva design URL").fill("https://www.canva.com/design/e2e");
-  await page.getByRole("button", { name: "Save PDF metadata" }).click();
+  await page.getByLabel("Document name").fill(documentName);
+  await page.getByLabel("Document URL").fill(documentUrl);
+  await page.getByLabel("Document source").selectOption("external");
+  await page.getByLabel("Canva/design URL").fill("https://www.canva.com/design/e2e");
+  await page.getByRole("button", { name: "Save document link" }).click();
 
-  await expect(page.getByText("Proposal PDF metadata saved.")).toBeVisible();
-  await expect(page.getByText(pdfName, { exact: true })).toBeVisible();
+  await expect(page.getByText("Proposal document link saved.")).toBeVisible();
+  await expect(page.getByText(documentName, { exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Open document" })).toHaveAttribute("href", documentUrl);
 
   await page.getByRole("button", { name: "Mark sent" }).click();
   await expect(page.getByText("SENT", { exact: true })).toBeVisible();

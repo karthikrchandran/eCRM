@@ -55,10 +55,57 @@ describe("proposal validators", () => {
       })
     ).toMatchObject({
       originalFileName: "proposal.pdf",
+      storedFileName: "proposal-123.pdf",
+      storageProvider: "local",
+      storageKey: "proposals/proposal-123.pdf",
       mimeType: "application/pdf",
       fileSizeBytes: 250000,
       canvaDesignUrl: "https://www.canva.com/design/abc"
     });
+  });
+
+  it("rejects unsafe external proposal and Canva URL schemes", () => {
+    const result = proposalPdfMetadataInputSchema.safeParse({
+      originalFileName: "proposal.pdf",
+      documentUrl: "javascript:alert(1)",
+      canvaDesignUrl: "file:///tmp/design.pdf"
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const fieldErrors = result.error.flatten().fieldErrors as Record<string, string[] | undefined>;
+      expect(fieldErrors.documentUrl).toContain("Enter a valid proposal document URL.");
+      expect(fieldErrors.canvaDesignUrl).toContain("Enter a valid Canva URL.");
+    }
+  });
+
+  it("keeps accepting legacy path-like storage keys for PDF metadata", () => {
+    expect(
+      proposalPdfMetadataInputSchema.parse({
+        originalFileName: "proposal.pdf",
+        storageProvider: "local",
+        storageKey: "proposals/proposal-123.pdf"
+      })
+    ).toMatchObject({
+      originalFileName: "proposal.pdf",
+      storageKey: "proposals/proposal-123.pdf"
+    });
+  });
+
+  it("rejects oversized legacy PDF metadata", () => {
+    const result = proposalPdfMetadataInputSchema.safeParse({
+      originalFileName: "proposal.pdf",
+      storedFileName: "proposal-123.pdf",
+      storageProvider: "local",
+      storageKey: "proposals/proposal-123.pdf",
+      mimeType: "application/pdf",
+      fileSizeBytes: String(25 * 1024 * 1024 + 1)
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.flatten().fieldErrors.fileSizeBytes).toContain("PDF must be 25 MB or smaller.");
+    }
   });
 
   it("requires line items and PDF metadata before SENT", () => {
@@ -74,6 +121,6 @@ describe("proposal validators", () => {
         lineItemCount: 1,
         activePdfCount: 0
       })
-    ).toThrow("Upload proposal PDF metadata before sending.");
+    ).toThrow("Add a proposal document link before sending.");
   });
 });

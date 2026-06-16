@@ -18,12 +18,13 @@ async function selectOptionByText(control: Locator, text: RegExp) {
 test("admin books an accepted proposal and completes production stages", async ({ page }) => {
   const timestamp = Date.now();
   const proposalTitle = `Orders production proposal ${timestamp}`;
-  const pdfName = `orders-production-${timestamp}.pdf`;
+  const documentName = `orders-production-${timestamp}.pdf`;
+  const documentUrl = `https://example.com/proposals/orders-production-${timestamp}.pdf`;
 
   await signIn(page, "admin@example.com", "Admin@12345");
 
   await page.goto("/opportunities");
-  await page.getByRole("link", { name: "Acme LMS rollout" }).click();
+  await page.getByRole("link", { name: "Northstar LMS modernization" }).click();
   await page.getByRole("link", { name: "New proposal" }).click();
 
   await page.getByLabel("Proposal title").fill(proposalTitle);
@@ -32,20 +33,18 @@ test("admin books an accepted proposal and completes production stages", async (
   await selectOptionByText(page.getByLabel("Product or service"), /eLearning - eLearning/);
   await page.getByLabel("Line description").fill("Five onboarding modules.");
   await page.getByLabel("Quantity").fill("5");
-  await page.getByLabel("Unit price paise").fill("100000");
+  await page.getByLabel("Unit price (paise)").fill("100000");
   await page.getByRole("button", { name: "Create proposal" }).click();
 
   await expect(page).toHaveURL(/\/opportunities\/[^/]+\/proposals\/[^/]+$/);
   await expect(page.getByRole("heading", { name: proposalTitle })).toBeVisible();
 
-  await page.getByLabel("Original file name").fill(pdfName);
-  await page.getByLabel("Stored file name").fill(`stored-${pdfName}`);
-  await page.getByLabel("Storage provider").fill("local");
-  await page.getByLabel("Storage key").fill(`e2e/${pdfName}`);
-  await page.getByLabel("MIME type").fill("application/pdf");
-  await page.getByLabel("File size bytes").fill("2048");
-  await page.getByRole("button", { name: "Save PDF metadata" }).click();
-  await expect(page.getByText("Proposal PDF metadata saved.")).toBeVisible();
+  await page.getByLabel("Document name").fill(documentName);
+  await page.getByLabel("Document URL").fill(documentUrl);
+  await page.getByLabel("Document source").selectOption("external");
+  await page.getByLabel("Canva/design URL").fill("https://www.canva.com/design/e2e-orders");
+  await page.getByRole("button", { name: "Save document link" }).click();
+  await expect(page.getByText("Proposal document link saved.")).toBeVisible();
 
   await page.getByRole("button", { name: "Mark sent" }).click();
   await expect(page.getByText("SENT", { exact: true })).toBeVisible();

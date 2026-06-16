@@ -143,7 +143,7 @@ describe("proposal mutations", () => {
           opportunityId: "opp_1",
           status: "DRAFT",
           lineItems: [{ id: "line_1" }],
-          pdfAttachments: [{ id: "pdf_1" }]
+          pdfAttachments: [{ id: "pdf_1", storageKey: "https://example.com/proposals/acme.pdf" }]
         }),
         update: proposalUpdate
       },
@@ -158,5 +158,28 @@ describe("proposal mutations", () => {
       where: { id: "opp_1" },
       data: { stageId: "stage_proposal_sent", updatedById: "user_sales" }
     });
+  });
+
+  it("does not send a proposal when only legacy path-like PDF metadata exists", async () => {
+    const proposalUpdate = vi.fn();
+
+    await expect(
+      changeProposalStatus(actor, "proposal_1", "SENT", {
+        pipelineStage: { findFirst: vi.fn() },
+        proposal: {
+          findUnique: vi.fn().mockResolvedValue({
+            id: "proposal_1",
+            opportunityId: "opp_1",
+            status: "DRAFT",
+            lineItems: [{ id: "line_1" }],
+            pdfAttachments: [{ id: "pdf_1", storageKey: "proposals/proposal-1.pdf" }]
+          }),
+          update: proposalUpdate
+        },
+        opportunity: { update: vi.fn() }
+      })
+    ).rejects.toThrow("Add a proposal document link before sending.");
+
+    expect(proposalUpdate).not.toHaveBeenCalled();
   });
 });

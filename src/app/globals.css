@@ -6,6 +6,7 @@
   --muted: #667085;
   --border: #d9dee8;
   --panel: #ffffff;
+  --surface-muted: #f2f5f8;
   --accent: #126b5f;
   --accent-strong: #0f5149;
 }
@@ -47,6 +48,7 @@ textarea {
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 8px;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.04);
 }
 
 .crm-control {
@@ -83,9 +85,18 @@ textarea {
   color: #ffffff;
 }
 
+.crm-button-primary:hover {
+  background: var(--accent-strong);
+  color: #ffffff;
+}
+
 .crm-button-secondary {
   border: 1px solid var(--border);
   background: #ffffff;
+}
+
+.crm-button-secondary:hover {
+  background: var(--surface-muted);
 }
 
 .crm-button:disabled {
