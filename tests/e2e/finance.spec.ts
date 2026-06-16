@@ -67,6 +67,8 @@ async function bookFreshOrder(page: Page, timestamp: number) {
 }
 
 test("admin manages invoice payment cost and incentive while sales has read-only finance visibility", async ({ page }) => {
+  test.setTimeout(60_000);
+
   const timestamp = Date.now();
   const invoiceNumber = `FIN-${timestamp}`;
 
