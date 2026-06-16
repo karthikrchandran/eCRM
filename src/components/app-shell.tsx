@@ -1,6 +1,7 @@
 import type { UserRole } from "@prisma/client";
 import Link from "next/link";
 import { logoutAction } from "@/server/auth/actions";
+import { RoleBadge } from "@/components/ui/sales-primitives";
 
 type AppShellProps = {
   user: {
@@ -29,7 +30,7 @@ export function AppShell({ user, children }: AppShellProps) {
         <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-3 md:flex-row md:items-center md:justify-between">
           <div className="flex min-w-0 items-start justify-between gap-3 md:block">
             <div className="min-w-0">
-              <Link className="text-lg font-semibold" href="/dashboard">
+              <Link className="text-lg font-semibold text-slate-950" href="/dashboard">
                 eCRM
               </Link>
               <p className="text-xs text-[var(--muted)]">Lead-to-cash workspace</p>
@@ -40,17 +41,24 @@ export function AppShell({ user, children }: AppShellProps) {
               </button>
             </form>
           </div>
-          <nav className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 text-sm md:mx-0 md:items-center md:overflow-visible md:px-0 md:pb-0">
+          <nav className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1 text-sm md:mx-0 md:items-center md:overflow-visible md:px-0 md:pb-0">
             {navItems.map((item) => (
-              <Link className="shrink-0 rounded-md px-3 py-2 hover:bg-slate-100" href={item.href} key={item.href}>
+              <Link
+                className="shrink-0 rounded-md px-3 py-2 font-medium text-slate-700 hover:bg-[var(--surface-muted)] hover:text-slate-950"
+                href={item.href}
+                key={item.href}
+              >
                 {item.label}
               </Link>
             ))}
           </nav>
           <div className="hidden items-center gap-3 text-sm md:flex">
             <div className="hidden text-right sm:block">
-              <p className="font-medium">{user.name}</p>
-              <p className="text-xs text-[var(--muted)]">{user.role}</p>
+              <div className="flex items-center justify-end gap-2">
+                <p className="font-medium text-slate-950">{user.name}</p>
+                <RoleBadge role={user.role} />
+              </div>
+              <p className="text-xs text-[var(--muted)]">{user.email}</p>
             </div>
             <form action={logoutAction}>
               <button className="crm-button crm-button-secondary text-sm" type="submit">
