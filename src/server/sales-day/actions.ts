@@ -1,3 +1,5 @@
+"use server";
+
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/server/auth/current-user";
 import {
@@ -33,8 +35,6 @@ export async function createSalesTaskAction(
   _previousState: SalesDayActionState,
   formData: FormData
 ): Promise<SalesDayActionState> {
-  "use server";
-
   const user = await requireUser();
   const result = salesTaskInputSchema.safeParse({
     title: formData.get("title"),
@@ -66,8 +66,6 @@ export async function updateSalesTaskAction(
   _previousState: SalesDayActionState,
   formData: FormData
 ): Promise<SalesDayActionState> {
-  "use server";
-
   const user = await requireUser();
   const result = salesTaskUpdateSchema.safeParse({
     title: formData.get("title"),
@@ -95,32 +93,24 @@ export async function updateSalesTaskAction(
 }
 
 export async function completeSalesTaskAction(taskId: string) {
-  "use server";
-
   const user = await requireUser();
   await completeSalesTask(user, taskId);
   revalidatePath("/my-day");
 }
 
 export async function reopenSalesTaskAction(taskId: string) {
-  "use server";
-
   const user = await requireUser();
   await reopenSalesTask(user, taskId);
   revalidatePath("/my-day");
 }
 
 export async function cancelSalesTaskAction(taskId: string) {
-  "use server";
-
   const user = await requireUser();
   await cancelSalesTask(user, taskId);
   revalidatePath("/my-day");
 }
 
 export async function acceptSuggestedActionAction(actionId: string) {
-  "use server";
-
   const user = await requireUser();
   const result = acceptSuggestedActionSchema.safeParse({ actionId });
 
@@ -133,8 +123,6 @@ export async function acceptSuggestedActionAction(actionId: string) {
 }
 
 export async function rejectSuggestedActionAction(actionId: string) {
-  "use server";
-
   const user = await requireUser();
   const result = acceptSuggestedActionSchema.safeParse({ actionId });
 
@@ -150,8 +138,6 @@ export async function saveEndOfDayReviewAction(
   _previousState: SalesDayActionState,
   formData: FormData
 ): Promise<SalesDayActionState> {
-  "use server";
-
   const user = await requireUser();
   const taskIds = formData.getAll("taskId").map(String);
   const result = salesDayReviewSchema.safeParse({
