@@ -18,6 +18,7 @@ async function selectOptionByText(control: Locator, text: RegExp) {
 test("admin manages products and proposals, then sales can view the proposal", async ({ page }) => {
   const timestamp = Date.now();
   const productName = `Proposal e2e service ${timestamp}`;
+  const opportunityTitle = `Proposal opportunity e2e ${timestamp}`;
   const proposalTitle = `Acme proposal e2e ${timestamp}`;
   const pdfName = `proposal-${timestamp}.pdf`;
 
@@ -39,9 +40,21 @@ test("admin manages products and proposals, then sales can view the proposal", a
   await expect(page).toHaveURL(/\/admin\/products$/);
   await expect(page.getByRole("link", { name: productName })).toBeVisible();
 
-  await page.goto("/opportunities");
-  await page.getByRole("link", { name: "Acme LMS rollout" }).click();
-  await expect(page.getByRole("heading", { name: "Acme LMS rollout" })).toBeVisible();
+  await page.goto("/opportunities/new");
+  await selectOptionByText(page.getByLabel("Lead/customer"), /Acme Learning Pvt Ltd/);
+  await selectOptionByText(page.getByLabel("Branch"), /Bengaluru Branch/);
+  await selectOptionByText(page.getByLabel("Stage"), /Qualified/);
+  await selectOptionByText(page.getByRole("combobox", { exact: true, name: "Owner" }), /Sales User/);
+  await page.getByLabel("Opportunity title").fill(opportunityTitle);
+  await page.getByLabel("Product/service interest").fill("Custom LMS rollout");
+  await page.getByLabel("Estimated value INR").fill("1250000");
+  await page.getByLabel("Probability").fill("60");
+  await page.getByLabel("Next follow-up").fill("2026-06-20T10:00");
+  await page.getByRole("button", { name: "Create opportunity" }).click();
+
+  await expect(page).toHaveURL(/\/opportunities\/[^/]+$/);
+  await expect(page.getByRole("heading", { name: opportunityTitle })).toBeVisible();
+  const opportunityUrl = page.url();
   await page.getByRole("link", { name: "New proposal" }).click();
 
   await page.getByLabel("Proposal title").fill(proposalTitle);
@@ -85,8 +98,7 @@ test("admin manages products and proposals, then sales can view the proposal", a
   await expect(page).toHaveURL(/\/login$/);
   await signIn(page, "sales@example.com", "Sales@12345");
 
-  await page.goto("/opportunities");
-  await page.getByRole("link", { name: "Acme LMS rollout" }).click();
-  await expect(page.getByRole("heading", { name: "Acme LMS rollout" })).toBeVisible();
+  await page.goto(opportunityUrl);
+  await expect(page.getByRole("heading", { name: opportunityTitle })).toBeVisible();
   await expect(page.getByRole("link", { name: proposalTitle })).toBeVisible();
 });
