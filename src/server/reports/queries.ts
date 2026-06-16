@@ -234,7 +234,7 @@ function buildDashboardMetrics({
   upcomingFollowUpCount: number;
 }): DashboardMetric[] {
   return [
-    { detail: "Open opportunities", label: "Open opportunities", value: String(openOpportunityCount) },
+    { detail: "Opportunities in open stages", label: "Open opportunities", value: String(openOpportunityCount) },
     { detail: "Open estimated value", label: "Pipeline value", value: formatInrPaisa(pipelineValuePaisa) },
     {
       detail: "Excludes GST",

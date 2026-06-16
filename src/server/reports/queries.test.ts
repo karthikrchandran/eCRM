@@ -145,7 +145,7 @@ describe("reports overview", () => {
     const overview = await getReportsOverview(admin, createDatabase());
 
     expect(overview.dashboardMetrics).toEqual([
-      { detail: "Open opportunities", label: "Open opportunities", value: "1" },
+      { detail: "Opportunities in open stages", label: "Open opportunities", value: "1" },
       { detail: "Open estimated value", label: "Pipeline value", value: "INR 2,500.50" },
       { detail: "Excludes GST", label: "Booked value excl. GST", value: "INR 3,000.00" },
       { detail: "Outstanding against order totals", label: "Pending receivables", value: "INR 1,360.00" },
