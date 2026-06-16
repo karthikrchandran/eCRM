@@ -83,16 +83,42 @@ export const proposalLineInputSchema = z
     return output;
   });
 
-export const proposalPdfMetadataInputSchema = z.object({
-  originalFileName: requiredTrimmedString("Enter the original file name."),
-  storedFileName: requiredTrimmedString("Enter the stored file name."),
-  storageProvider: requiredTrimmedString("Enter the storage provider."),
-  storageKey: requiredTrimmedString("Enter the storage key."),
-  mimeType: z.literal("application/pdf", { error: "Upload a PDF file." }),
-  fileSizeBytes: z.coerce.number().int().min(1, "Upload a non-empty PDF file.").max(maxPdfSizeBytes, "PDF must be 25 MB or smaller."),
-  sha256: optionalTrimmedString,
-  canvaDesignUrl: z.preprocess(emptyToUndefined, z.string().trim().url("Enter a valid Canva URL.").optional())
-});
+const proposalDocumentUrl = z.preprocess(emptyToUndefined, z.string().trim().url("Enter a valid proposal document URL.").optional());
+
+export const proposalPdfMetadataInputSchema = z
+  .object({
+    originalFileName: requiredTrimmedString("Enter the proposal document name."),
+    documentUrl: proposalDocumentUrl,
+    storedFileName: optionalTrimmedString,
+    storageProvider: z.preprocess(emptyToUndefined, z.string().trim().default("external")),
+    storageKey: optionalTrimmedString,
+    mimeType: z.preprocess(emptyToUndefined, z.literal("application/pdf").default("application/pdf")),
+    fileSizeBytes: z.preprocess(
+      emptyToUndefined,
+      z.coerce.number().int().min(1).max(maxPdfSizeBytes, "PDF must be 25 MB or smaller.").default(1)
+    ),
+    sha256: optionalTrimmedString,
+    canvaDesignUrl: z.preprocess(emptyToUndefined, z.string().trim().url("Enter a valid Canva URL.").optional())
+  })
+  .superRefine((value, context) => {
+    if (!value.documentUrl && !value.storageKey) {
+      context.addIssue({
+        code: "custom",
+        path: ["documentUrl"],
+        message: "Enter a valid proposal document URL."
+      });
+    }
+  })
+  .transform((value) => ({
+    originalFileName: value.originalFileName,
+    storedFileName: value.storedFileName ?? value.originalFileName,
+    storageProvider: value.storageProvider,
+    storageKey: value.storageKey ?? value.documentUrl!,
+    mimeType: value.mimeType,
+    fileSizeBytes: value.fileSizeBytes,
+    sha256: value.sha256,
+    canvaDesignUrl: value.canvaDesignUrl
+  }));
 
 export function assertProposalStatusTransition(
   currentStatus: ProposalStatusValue,
@@ -109,7 +135,7 @@ export function assertProposalStatusTransition(
     }
 
     if (context.activePdfCount < 1) {
-      throw new Error("Upload proposal PDF metadata before sending.");
+      throw new Error("Add a proposal document link before sending.");
     }
   }
 

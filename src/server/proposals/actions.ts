@@ -83,6 +83,7 @@ export function parseProposalLinesFormForTest(formData: FormData): ProposalLineI
 export function parseProposalPdfMetadataFormForTest(formData: FormData): ParseResult<ProposalPdfMetadataInput> {
   const result = proposalPdfMetadataInputSchema.safeParse({
     originalFileName: formData.get("originalFileName"),
+    documentUrl: formData.get("documentUrl"),
     storedFileName: formData.get("storedFileName"),
     storageProvider: formData.get("storageProvider"),
     storageKey: formData.get("storageKey"),
@@ -133,7 +134,7 @@ export async function addProposalPdfMetadataAction(
   await addProposalPdfMetadata(user, proposalId, parsed.data);
   revalidatePath(`/opportunities/${opportunityId}`);
   revalidatePath(`/opportunities/${opportunityId}/proposals/${proposalId}`);
-  return { ok: true, message: "Proposal PDF metadata saved." };
+  return { ok: true, message: "Proposal document link saved." };
 }
 
 export async function changeProposalStatusAction(opportunityId: string, proposalId: string, formData: FormData) {

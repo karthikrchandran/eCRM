@@ -48,26 +48,66 @@ describe("proposal actions", () => {
     });
   });
 
-  it("parses PDF metadata forms", () => {
+  it("parses proposal document link forms", () => {
     const formData = new FormData();
-    formData.set("originalFileName", " proposal.pdf ");
-    formData.set("storedFileName", "proposal-1.pdf");
-    formData.set("storageProvider", "local");
-    formData.set("storageKey", "proposals/proposal-1.pdf");
-    formData.set("mimeType", "application/pdf");
-    formData.set("fileSizeBytes", "250000");
+    formData.set("originalFileName", " Acme proposal ");
+    formData.set("documentUrl", "https://example.com/proposals/acme.pdf");
+    formData.set("storageProvider", "sharepoint");
     formData.set("canvaDesignUrl", "https://www.canva.com/design/abc");
 
     expect(parseProposalPdfMetadataFormForTest(formData)).toEqual({
       ok: true,
       data: {
-        originalFileName: "proposal.pdf",
-        storedFileName: "proposal-1.pdf",
-        storageProvider: "local",
-        storageKey: "proposals/proposal-1.pdf",
+        originalFileName: "Acme proposal",
+        storedFileName: "Acme proposal",
+        storageProvider: "sharepoint",
+        storageKey: "https://example.com/proposals/acme.pdf",
         mimeType: "application/pdf",
-        fileSizeBytes: 250000,
+        fileSizeBytes: 1,
         canvaDesignUrl: "https://www.canva.com/design/abc"
+      }
+    });
+  });
+
+  it("defaults proposal document link storage provider to external", () => {
+    const formData = new FormData();
+    formData.set("originalFileName", "Acme proposal");
+    formData.set("documentUrl", "https://example.com/proposals/acme.pdf");
+
+    expect(parseProposalPdfMetadataFormForTest(formData)).toEqual({
+      ok: true,
+      data: {
+        originalFileName: "Acme proposal",
+        storedFileName: "Acme proposal",
+        storageProvider: "external",
+        storageKey: "https://example.com/proposals/acme.pdf",
+        mimeType: "application/pdf",
+        fileSizeBytes: 1
+      }
+    });
+  });
+
+  it("rejects invalid proposal document URLs", () => {
+    const formData = new FormData();
+    formData.set("originalFileName", "Acme proposal");
+    formData.set("documentUrl", "not-a-url");
+
+    expect(parseProposalPdfMetadataFormForTest(formData)).toEqual({
+      ok: false,
+      fieldErrors: {
+        documentUrl: ["Enter a valid proposal document URL."]
+      }
+    });
+  });
+
+  it("rejects missing proposal document links", () => {
+    const formData = new FormData();
+    formData.set("originalFileName", "Acme proposal");
+
+    expect(parseProposalPdfMetadataFormForTest(formData)).toEqual({
+      ok: false,
+      fieldErrors: {
+        documentUrl: ["Enter a valid proposal document URL."]
       }
     });
   });

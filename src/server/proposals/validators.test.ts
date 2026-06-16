@@ -55,10 +55,29 @@ describe("proposal validators", () => {
       })
     ).toMatchObject({
       originalFileName: "proposal.pdf",
+      storedFileName: "proposal-123.pdf",
+      storageProvider: "local",
+      storageKey: "proposals/proposal-123.pdf",
       mimeType: "application/pdf",
       fileSizeBytes: 250000,
       canvaDesignUrl: "https://www.canva.com/design/abc"
     });
+  });
+
+  it("rejects oversized legacy PDF metadata", () => {
+    const result = proposalPdfMetadataInputSchema.safeParse({
+      originalFileName: "proposal.pdf",
+      storedFileName: "proposal-123.pdf",
+      storageProvider: "local",
+      storageKey: "proposals/proposal-123.pdf",
+      mimeType: "application/pdf",
+      fileSizeBytes: String(25 * 1024 * 1024 + 1)
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.flatten().fieldErrors.fileSizeBytes).toContain("PDF must be 25 MB or smaller.");
+    }
   });
 
   it("requires line items and PDF metadata before SENT", () => {
@@ -74,6 +93,6 @@ describe("proposal validators", () => {
         lineItemCount: 1,
         activePdfCount: 0
       })
-    ).toThrow("Upload proposal PDF metadata before sending.");
+    ).toThrow("Add a proposal document link before sending.");
   });
 });
