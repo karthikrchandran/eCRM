@@ -1,15 +1,30 @@
 # eCRM Reports After CRM Core Plan
 
 Date: 2026-06-15
-Status: Planning artifact only
-Branch: `plan/reports-after-crm`
-Source baseline: `main` at `22587ce` after CRM Core landed
+Status: Implemented as read-only reports/dashboard slice
+Implementation branch: `feature/reports-dashboard`
+Source baseline: `main` at `7efa51b` after Finance landed
 
 ## Purpose
 
-Define the dashboard and reports metrics that can be planned immediately after CRM Core, without building queries or introducing future data models. This document is a metric contract and dependency map for future reports/dashboard work.
+Define the dashboard and reports metrics now backed by landed CRM, Opportunity, Product/Proposal, Order/Production, and Finance models. The implemented slice adds live dashboard metrics and a read-only `/reports` page without new Prisma schema, migrations, seed data, exports, or mutation workflows.
 
-CRM Core now provides reliable lead/customer, branch, contact, activity, follow-up, owner, and ownership history data. It does not provide opportunities, orders, invoices, payments, costs, incentives, production stages, products/services, targets, or proposal commercial values. Dashboard cards must respect that boundary.
+The historical CRM-only sections below are retained for dependency context, but the current implementation is no longer limited to CRM Core. Landed downstream sources now include `Opportunity`, `PipelineStage`, `Order`, `OrderLineItem`, `Payment`, `Invoice`, and `ProductionWorkItem`.
+
+Implemented report scope:
+
+- Open opportunities and pipeline value.
+- Booked value excluding GST from `Order.subtotalPaisa`.
+- Pending receivables and collected payments from order totals and payment records.
+- Production pending from non-final production work items.
+- Upcoming follow-ups from open future-dated activities.
+- Top clients, top products/services, top billings, collections, recent booked orders, open pipeline by stage, and production pending.
+
+Explicitly excluded from this slice:
+
+- Gross margin metrics.
+- Incentives pending approval, payable incentives, or payout reporting.
+- Admin approval controls or other report mutations.
 
 ## Current Source Of Truth
 

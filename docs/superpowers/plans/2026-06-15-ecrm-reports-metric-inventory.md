@@ -1,12 +1,19 @@
 # Reports Metric Inventory
 
 Date: 2026-06-15
-Status: Planning-only while CRM Core is active
-Depends on: stable read models from CRM Core and later slices
+Status: Updated after read-only reports/dashboard implementation
+Depends on: stable read models through Finance
 
 ## Purpose
 
-Define report metrics and source fields early without building queries against unstable tables.
+Define report metrics and source fields. The current implemented slice covers live dashboard cards and a read-only `/reports` page for open pipeline, booked value excluding GST, pending receivables, collected payments, production pending, upcoming follow-ups, top clients, top products/services, top billings, collections, and recent booked orders.
+
+Explicit exclusions for the implemented slice:
+
+- Gross margin.
+- Incentives pending approval.
+- Incentives payable or paid.
+- Payroll or commission reporting.
 
 ## Reporting Principles
 
@@ -14,7 +21,6 @@ Define report metrics and source fields early without building queries against u
 - Currency metrics use INR.
 - Sales target achievement uses booked order value excluding GST.
 - Payment completion uses cumulative payments across invoices and orders.
-- Incentive readiness requires full payment receipt and approved/finalized costs.
 - Ownership is reporting responsibility, not authorization.
 - Sales users see company-wide report data unless a future Admin-only approval workflow requires a restricted action.
 
@@ -48,16 +54,15 @@ Define report metrics and source fields early without building queries against u
 | Production completion rate | Stage instance status | Define denominator in order plan. |
 | Repeat customer orders | Lead/customer and order history | Do not collapse repeat orders into one customer status. |
 
-## Finance And Incentive Metrics
+## Finance Metrics
 
 | Metric | Source Needed | Notes |
 | --- | --- | --- |
 | Pending receivables | Order total, invoices, payments | Reuse finance test matrix scenarios. |
 | Collected payments | Payment records and period filters | Period filter needed before final report UI. |
 | Uninvoiced work in progress | Order totals minus invoice totals | Finance workflow metric. |
-| Gross margin | Booked value excluding GST minus approved costs | Draft costs excluded. |
-| Incentives pending approval | Calculated incentive and approval status | Admin action, Sales visibility. |
-| Incentives payable | Full payment plus approved incentive | Avoid payout before full payment. |
+
+Gross margin and incentive metrics are intentionally excluded from the current reports/dashboard implementation.
 
 ## Dashboard Card Readiness
 
@@ -70,7 +75,8 @@ Define report metrics and source fields early without building queries against u
 | Pending payments | Invoices/Payments |
 | Collected payments | Invoices/Payments |
 | Production pending | Orders/Production |
-| Incentives pending | Costs/Incentives |
+
+Incentive cards are intentionally excluded from the current dashboard.
 
 ## Implementation Guardrails
 
