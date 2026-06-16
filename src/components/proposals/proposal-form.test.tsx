@@ -34,12 +34,12 @@ describe("ProposalForm", () => {
     expect(screen.getByLabelText("Internal notes")).toHaveAttribute("name", "internalNotes");
     expect(screen.getByDisplayValue("opp_1")).toHaveAttribute("name", "opportunityId");
 
-    expect(screen.getByRole("heading", { name: "Line items" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Commercial line items" })).toBeVisible();
     expect(screen.getByLabelText("Product or service")).toHaveAttribute("name", "productServiceId");
     expect(screen.getByRole("option", { name: "eLearning module - eLearning - GST 18%" })).toHaveValue("product_ele");
     expect(screen.getByLabelText("Line description")).toHaveAttribute("name", "lineDescription");
     expect(screen.getByLabelText("Quantity")).toHaveAttribute("name", "quantity");
-    expect(screen.getByLabelText("Unit price paise")).toHaveAttribute("name", "unitPricePaisa");
+    expect(screen.getByLabelText("Unit price (paise)")).toHaveAttribute("name", "unitPricePaisa");
     expect(screen.getByLabelText("GST basis points")).toHaveAttribute("name", "gstRateBps");
     expect(screen.getByLabelText("GST override reason")).toHaveAttribute("name", "gstOverrideReason");
     expect(screen.getByRole("button", { name: "Create proposal" })).toBeEnabled();
