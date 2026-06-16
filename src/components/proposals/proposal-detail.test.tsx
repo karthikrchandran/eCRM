@@ -105,4 +105,31 @@ describe("ProposalDetail", () => {
     );
     expect(screen.getByRole("link", { name: "Open Canva design" })).toHaveAttribute("href", "https://www.canva.com/design/acme");
   });
+
+  it("does not render open links for legacy path-like attachment metadata", () => {
+    render(
+      <ProposalDetail
+        proposal={{
+          ...proposal,
+          pdfAttachments: [
+            {
+              id: "doc_1",
+              originalFileName: "Legacy proposal metadata",
+              storageProvider: "local",
+              storageKey: "proposals/acme-final.pdf",
+              mimeType: "application/pdf",
+              fileSizeBytes: 1,
+              canvaDesignUrl: "file:///tmp/acme-canva.pdf",
+              uploadedAt: new Date("2026-06-16T10:00:00.000Z"),
+              uploadedBy: { name: "Kavya Iyer", email: "admin@example.com" }
+            }
+          ]
+        }}
+      />
+    );
+
+    expect(screen.getByText("Legacy proposal metadata")).toBeVisible();
+    expect(screen.queryByRole("link", { name: "Open document" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Open Canva design" })).not.toBeInTheDocument();
+  });
 });

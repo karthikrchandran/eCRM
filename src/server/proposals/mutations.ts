@@ -1,4 +1,5 @@
 import type { Prisma } from "@prisma/client";
+import { isSafeExternalUrl } from "@/lib/safe-external-url";
 import { db } from "@/server/db";
 import { calculateProposalTotals } from "./calculations";
 import { assertCanWriteProposals } from "./permissions";
@@ -45,7 +46,7 @@ type ProposalStatusDb = {
       opportunityId: string;
       status: ProposalStatusValue;
       lineItems: Array<{ id: string }>;
-      pdfAttachments: Array<{ id: string }>;
+      pdfAttachments: Array<{ id: string; storageKey: string }>;
     } | null>;
     update: (args: Prisma.ProposalUpdateArgs) => Promise<{ id: string; status: ProposalStatusValue }>;
   };
@@ -195,7 +196,7 @@ export async function changeProposalStatus(
       opportunityId: true,
       status: true,
       lineItems: { select: { id: true } },
-      pdfAttachments: { where: { replacedAt: null }, select: { id: true } }
+      pdfAttachments: { where: { replacedAt: null }, select: { id: true, storageKey: true } }
     }
   });
 
@@ -205,7 +206,7 @@ export async function changeProposalStatus(
 
   assertProposalStatusTransition(proposal.status, nextStatus, {
     lineItemCount: proposal.lineItems.length,
-    activePdfCount: proposal.pdfAttachments.length
+    activePdfCount: proposal.pdfAttachments.filter((attachment) => isSafeExternalUrl(attachment.storageKey)).length
   });
 
   const updated = await database.proposal.update({

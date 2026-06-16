@@ -188,7 +188,7 @@ async function main() {
       industry: "Education",
       source: "Referral",
       ownerId: sales.id,
-      notes: "Seed lead for CRM core smoke checks.",
+      notes: "Exploring a phased LMS modernization program for new-hire onboarding.",
       updatedById: admin.id
     },
     create: {
@@ -198,7 +198,7 @@ async function main() {
       industry: "Education",
       source: "Referral",
       ownerId: sales.id,
-      notes: "Seed lead for CRM core smoke checks.",
+      notes: "Exploring a phased LMS modernization program for new-hire onboarding.",
       createdById: admin.id,
       updatedById: admin.id
     }
@@ -273,7 +273,7 @@ async function main() {
       fromOwnerId: admin.id,
       toOwnerId: sales.id,
       changedById: admin.id,
-      reason: "Initial seed assignment for CRM core smoke checks."
+      reason: "Assigned to Priya after referral qualification."
     },
     create: {
       id: "seed_history_acme_admin_to_sales",
@@ -281,7 +281,7 @@ async function main() {
       fromOwnerId: admin.id,
       toOwnerId: sales.id,
       changedById: admin.id,
-      reason: "Initial seed assignment for CRM core smoke checks."
+      reason: "Assigned to Priya after referral qualification."
     }
   });
 
@@ -309,7 +309,7 @@ async function main() {
       lastReachAt: new Date("2026-06-14T10:00:00.000Z"),
       leadCustomerId: sampleLead.id,
       nextFollowUpAt: new Date("2026-06-20T10:00:00.000Z"),
-      notes: "Seed opportunity for pipeline smoke checks.",
+      notes: "Client wants a modular rollout that can expand across business units after pilot approval.",
       ownerId: sales.id,
       probability: 60,
       productInterest: "LMS modernization and onboarding content",
@@ -325,7 +325,7 @@ async function main() {
       lastReachAt: new Date("2026-06-14T10:00:00.000Z"),
       leadCustomerId: sampleLead.id,
       nextFollowUpAt: new Date("2026-06-20T10:00:00.000Z"),
-      notes: "Seed opportunity for pipeline smoke checks.",
+      notes: "Client wants a modular rollout that can expand across business units after pilot approval.",
       ownerId: sales.id,
       probability: 60,
       productInterest: "LMS modernization and onboarding content",
@@ -446,7 +446,7 @@ async function main() {
       deliveryTimeline: "Six weeks from kickoff.",
       exclusions: "Translation and third-party LMS license costs.",
       inclusions: "Storyboard, development, voiceover, review, edits, and final package.",
-      internalNotes: "Seed accepted proposal for order and production smoke checks.",
+      internalNotes: "Accepted scope is ready for order booking and production kickoff.",
       paymentTerms: "50 percent advance and 50 percent on delivery.",
       status: ProposalStatus.ACCEPTED,
       subtotalPaisa: 500000,
@@ -465,7 +465,7 @@ async function main() {
       deliveryTimeline: "Six weeks from kickoff.",
       exclusions: "Translation and third-party LMS license costs.",
       inclusions: "Storyboard, development, voiceover, review, edits, and final package.",
-      internalNotes: "Seed accepted proposal for order and production smoke checks.",
+      internalNotes: "Accepted scope is ready for order booking and production kickoff.",
       opportunityId: opportunity.id,
       paymentTerms: "50 percent advance and 50 percent on delivery.",
       sequenceNumber: 9001,

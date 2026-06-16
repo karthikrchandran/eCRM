@@ -41,6 +41,15 @@ export function AppShell({ user, children }: AppShellProps) {
               </button>
             </form>
           </div>
+          <div className="flex items-center justify-between gap-3 text-sm md:hidden">
+            <div className="min-w-0">
+              <div className="flex min-w-0 items-center gap-2">
+                <p className="truncate font-medium text-slate-950">{user.name}</p>
+                <RoleBadge role={user.role} />
+              </div>
+              <p className="truncate text-xs text-[var(--muted)]">{user.email}</p>
+            </div>
+          </div>
           <nav className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1 text-sm md:mx-0 md:items-center md:overflow-visible md:px-0 md:pb-0">
             {navItems.map((item) => (
               <Link

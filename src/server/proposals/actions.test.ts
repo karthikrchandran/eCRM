@@ -100,6 +100,21 @@ describe("proposal actions", () => {
     });
   });
 
+  it("returns field errors for unsafe proposal document and Canva URL schemes", () => {
+    const formData = new FormData();
+    formData.set("originalFileName", "Acme proposal");
+    formData.set("documentUrl", "javascript:alert(1)");
+    formData.set("canvaDesignUrl", "file:///tmp/design.pdf");
+
+    expect(parseProposalPdfMetadataFormForTest(formData)).toEqual({
+      ok: false,
+      fieldErrors: {
+        documentUrl: ["Enter a valid proposal document URL."],
+        canvaDesignUrl: ["Enter a valid Canva URL."]
+      }
+    });
+  });
+
   it("rejects missing proposal document links", () => {
     const formData = new FormData();
     formData.set("originalFileName", "Acme proposal");

@@ -64,6 +64,34 @@ describe("proposal validators", () => {
     });
   });
 
+  it("rejects unsafe external proposal and Canva URL schemes", () => {
+    const result = proposalPdfMetadataInputSchema.safeParse({
+      originalFileName: "proposal.pdf",
+      documentUrl: "javascript:alert(1)",
+      canvaDesignUrl: "file:///tmp/design.pdf"
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const fieldErrors = result.error.flatten().fieldErrors as Record<string, string[] | undefined>;
+      expect(fieldErrors.documentUrl).toContain("Enter a valid proposal document URL.");
+      expect(fieldErrors.canvaDesignUrl).toContain("Enter a valid Canva URL.");
+    }
+  });
+
+  it("keeps accepting legacy path-like storage keys for PDF metadata", () => {
+    expect(
+      proposalPdfMetadataInputSchema.parse({
+        originalFileName: "proposal.pdf",
+        storageProvider: "local",
+        storageKey: "proposals/proposal-123.pdf"
+      })
+    ).toMatchObject({
+      originalFileName: "proposal.pdf",
+      storageKey: "proposals/proposal-123.pdf"
+    });
+  });
+
   it("rejects oversized legacy PDF metadata", () => {
     const result = proposalPdfMetadataInputSchema.safeParse({
       originalFileName: "proposal.pdf",

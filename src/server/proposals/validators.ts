@@ -83,7 +83,17 @@ export const proposalLineInputSchema = z
     return output;
   });
 
-const proposalDocumentUrl = z.preprocess(emptyToUndefined, z.string().trim().url("Enter a valid proposal document URL.").optional());
+const hasSafeExternalScheme = (value: string) => {
+  try {
+    const protocol = new URL(value).protocol;
+    return protocol === "https:" || protocol === "http:";
+  } catch {
+    return true;
+  }
+};
+
+const safeExternalUrl = (message: string) => z.string().trim().url(message).refine(hasSafeExternalScheme, message);
+const proposalDocumentUrl = z.preprocess(emptyToUndefined, safeExternalUrl("Enter a valid proposal document URL.").optional());
 
 export const proposalPdfMetadataInputSchema = z
   .object({
@@ -98,7 +108,7 @@ export const proposalPdfMetadataInputSchema = z
       z.coerce.number().int().min(1).max(maxPdfSizeBytes, "PDF must be 25 MB or smaller.").default(1)
     ),
     sha256: optionalTrimmedString,
-    canvaDesignUrl: z.preprocess(emptyToUndefined, z.string().trim().url("Enter a valid Canva URL.").optional())
+    canvaDesignUrl: z.preprocess(emptyToUndefined, safeExternalUrl("Enter a valid Canva URL.").optional())
   })
   .superRefine((value, context) => {
     if (!value.documentUrl && !value.storageKey) {
