@@ -4,6 +4,8 @@ import type { MyDayInsightsViewModel, MyDayViewModel } from "@/server/sales-day/
 import { MetricStrip, PageHeader } from "@/components/ui/sales-primitives";
 import { TaskComposer } from "./task-composer";
 import { TaskList } from "./task-list";
+import { VoiceNotePanel } from "./voice-note-panel";
+import { VoiceNoteRecorder } from "./voice-note-recorder";
 
 type MyDayPageProps = {
   activeView: "today" | "insights" | "review";
@@ -36,6 +38,8 @@ function tabClassName(active: boolean) {
 
 export function MyDayPage({ activeView, insights, lookups, myDay }: MyDayPageProps) {
   const date = dateValue(myDay.date);
+  const allTasks = [...myDay.overdueTasks, ...myDay.openTasks, ...myDay.completedTasks];
+  const voiceNotes = allTasks.flatMap((task) => task.voiceNotes);
 
   return (
     <div className="space-y-6">
@@ -74,7 +78,11 @@ export function MyDayPage({ activeView, insights, lookups, myDay }: MyDayPagePro
       {activeView === "today" ? (
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_24rem]">
           <TaskList completedTasks={myDay.completedTasks} openTasks={myDay.openTasks} overdueTasks={myDay.overdueTasks} />
-          <TaskComposer lookups={lookups} />
+          <div className="space-y-4">
+            <TaskComposer lookups={lookups} />
+            <VoiceNoteRecorder tasks={allTasks} />
+            <VoiceNotePanel notes={voiceNotes} />
+          </div>
         </div>
       ) : (
         <section className="surface p-5">

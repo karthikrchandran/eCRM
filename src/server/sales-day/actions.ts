@@ -125,12 +125,11 @@ export async function acceptSuggestedActionAction(actionId: string) {
   const result = acceptSuggestedActionSchema.safeParse({ actionId });
 
   if (!result.success) {
-    return fieldErrorState(result.error);
+    throw new Error("Choose a suggested action.");
   }
 
   await acceptSuggestedAction(user, result.data.actionId);
   revalidatePath("/my-day");
-  return { ok: true, message: "Task created from voice note." };
 }
 
 export async function rejectSuggestedActionAction(actionId: string) {
@@ -140,12 +139,11 @@ export async function rejectSuggestedActionAction(actionId: string) {
   const result = acceptSuggestedActionSchema.safeParse({ actionId });
 
   if (!result.success) {
-    return fieldErrorState(result.error);
+    throw new Error("Choose a suggested action.");
   }
 
   await rejectSuggestedAction(user, result.data.actionId);
   revalidatePath("/my-day");
-  return { ok: true, message: "Suggested action rejected." };
 }
 
 export async function saveEndOfDayReviewAction(
