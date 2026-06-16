@@ -37,6 +37,7 @@ type CreateTaskDb = {
 type UpdateTaskDb = TaskLifecycleDb;
 
 type VoiceNoteInput = {
+  id?: string;
   taskId?: string;
   leadCustomerId?: string;
   opportunityId?: string;
@@ -314,6 +315,7 @@ export async function createSalesVoiceNote(
 
   return database.salesVoiceNote.create({
     data: {
+      id: input.id,
       ownerId: user.id,
       taskId: input.taskId ?? null,
       leadCustomerId: input.leadCustomerId ?? null,
