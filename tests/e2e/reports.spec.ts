@@ -10,8 +10,7 @@ async function signIn(page: Page, email: string, password: string) {
 }
 
 async function expectReportsSections(page: Page) {
-  await page.getByRole("link", { name: "Reports", exact: true }).click();
-  await expect(page).toHaveURL(/\/reports$/);
+  await Promise.all([page.waitForURL(/\/reports$/), page.getByRole("link", { name: "Reports", exact: true }).click()]);
   await expect(page.getByRole("heading", { name: "Reports" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Top clients" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Top products/services" })).toBeVisible();
