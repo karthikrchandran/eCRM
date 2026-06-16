@@ -73,6 +73,36 @@ describe("ProposalDetail", () => {
     expect(screen.getAllByText("INR 2,50,000.00")).toHaveLength(2);
     expect(screen.getByText("INR 45,000.00")).toBeVisible();
     expect(screen.getAllByText("INR 2,95,000.00")).toHaveLength(3);
-    expect(screen.getByText("No PDF metadata uploaded yet.")).toBeVisible();
+    expect(screen.getByText("No proposal document linked yet.")).toBeVisible();
+  });
+
+  it("renders external proposal document and optional Canva links", () => {
+    render(
+      <ProposalDetail
+        proposal={{
+          ...proposal,
+          pdfAttachments: [
+            {
+              id: "doc_1",
+              originalFileName: "Acme proposal final",
+              storageProvider: "sharepoint",
+              storageKey: "https://example.com/proposals/acme-final.pdf",
+              mimeType: "application/pdf",
+              fileSizeBytes: 1,
+              canvaDesignUrl: "https://www.canva.com/design/acme",
+              uploadedAt: new Date("2026-06-16T10:00:00.000Z"),
+              uploadedBy: { name: "Kavya Iyer", email: "admin@example.com" }
+            }
+          ]
+        }}
+      />
+    );
+
+    expect(screen.getByRole("heading", { name: "Proposal documents" })).toBeVisible();
+    expect(screen.getByRole("link", { name: "Open document" })).toHaveAttribute(
+      "href",
+      "https://example.com/proposals/acme-final.pdf"
+    );
+    expect(screen.getByRole("link", { name: "Open Canva design" })).toHaveAttribute("href", "https://www.canva.com/design/acme");
   });
 });
