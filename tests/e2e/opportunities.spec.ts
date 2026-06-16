@@ -16,15 +16,15 @@ async function selectOptionByText(control: Locator, text: RegExp) {
 }
 
 test("opportunity pipeline smoke", async ({ page }) => {
-  const title = `Acme pipeline smoke ${Date.now()}`;
+  const title = `Northstar pipeline smoke ${Date.now()}`;
 
   await signIn(page, "admin@example.com", "Admin@12345");
 
   await page.goto("/opportunities/new");
-  await selectOptionByText(page.getByLabel("Lead/customer"), /Acme Learning Pvt Ltd/);
-  await selectOptionByText(page.getByLabel("Branch"), /Bengaluru Branch/);
+  await selectOptionByText(page.getByLabel("Lead/customer"), /Northstar Learning Pvt Ltd/);
+  await selectOptionByText(page.getByLabel("Branch"), /Bengaluru Delivery Office/);
   await selectOptionByText(page.getByLabel("Stage"), /Qualified/);
-  await selectOptionByText(page.getByRole("combobox", { exact: true, name: "Owner" }), /Admin User/);
+  await selectOptionByText(page.getByRole("combobox", { exact: true, name: "Owner" }), /Kavya Iyer/);
   await page.getByLabel("Opportunity title").fill(title);
   await page.getByLabel("Product/service interest").fill("Custom LMS rollout");
   await page.getByLabel("Estimated value INR").fill("1750000");
@@ -34,7 +34,7 @@ test("opportunity pipeline smoke", async ({ page }) => {
 
   await expect(page).toHaveURL(/\/opportunities\/[^/]+$/, { timeout: 15_000 });
   await expect(page.getByRole("heading", { name: title })).toBeVisible();
-  await expect(page.getByText("Acme Learning Pvt Ltd", { exact: true })).toBeVisible();
+  await expect(page.getByText("Northstar Learning Pvt Ltd", { exact: true })).toBeVisible();
 
   await page.goto("/opportunities");
   await expect(page.getByRole("link", { name: title })).toBeVisible();
@@ -54,7 +54,7 @@ test("opportunity pipeline smoke", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Opportunities" })).toBeVisible();
   await expect(page.getByRole("link", { name: title })).toBeVisible();
 
-  await selectOptionByText(page.getByRole("combobox", { exact: true, name: "Owner" }), /Admin User/);
+  await selectOptionByText(page.getByRole("combobox", { exact: true, name: "Owner" }), /Kavya Iyer/);
   await page.getByRole("button", { name: "Apply filters" }).click();
   await expect(page).toHaveURL(/ownerId=/);
   await expect(page.getByRole("link", { name: title })).toBeVisible();

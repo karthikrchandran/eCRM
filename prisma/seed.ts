@@ -161,14 +161,14 @@ async function upsertUser(input: {
 
 async function main() {
   await upsertUser({
-    name: "Admin User",
+    name: "Kavya Iyer",
     email: process.env.SEED_ADMIN_EMAIL ?? "admin@example.com",
     password: process.env.SEED_ADMIN_PASSWORD ?? "Admin@12345",
     role: UserRole.ADMIN
   });
 
   await upsertUser({
-    name: "Sales User",
+    name: "Priya Menon",
     email: process.env.SEED_SALES_EMAIL ?? "sales@example.com",
     password: process.env.SEED_SALES_PASSWORD ?? "Sales@12345",
     role: UserRole.SALES
@@ -183,7 +183,7 @@ async function main() {
   const sampleLead = await prisma.leadCustomer.upsert({
     where: { id: "seed_lead_acme_learning" },
     update: {
-      name: "Acme Learning Pvt Ltd",
+      name: "Northstar Learning Pvt Ltd",
       state: "LEAD",
       industry: "Education",
       source: "Referral",
@@ -193,7 +193,7 @@ async function main() {
     },
     create: {
       id: "seed_lead_acme_learning",
-      name: "Acme Learning Pvt Ltd",
+      name: "Northstar Learning Pvt Ltd",
       state: "LEAD",
       industry: "Education",
       source: "Referral",
@@ -207,20 +207,20 @@ async function main() {
   await prisma.branch.upsert({
     where: { id: "seed_branch_acme_bengaluru" },
     update: {
-      name: "Bengaluru Branch",
+      name: "Bengaluru Delivery Office",
       city: "Bengaluru",
       region: "Karnataka",
       country: "India",
-      salesContext: "Primary learning and development team"
+      salesContext: "Primary learning operations and enablement team"
     },
     create: {
       id: "seed_branch_acme_bengaluru",
       leadCustomerId: sampleLead.id,
-      name: "Bengaluru Branch",
+      name: "Bengaluru Delivery Office",
       city: "Bengaluru",
       region: "Karnataka",
       country: "India",
-      salesContext: "Primary learning and development team"
+      salesContext: "Primary learning operations and enablement team"
     }
   });
 
@@ -228,8 +228,8 @@ async function main() {
     where: { id: "seed_contact_acme_anita" },
     update: {
       name: "Anita Rao",
-      designation: "L&D Manager",
-      email: "anita.rao@example.com",
+      designation: "Head of Learning Operations",
+      email: "anita.rao@northstar.example",
       phone: "+91 98765 43210",
       isPrimary: true
     },
@@ -238,8 +238,8 @@ async function main() {
       leadCustomerId: sampleLead.id,
       branchId: "seed_branch_acme_bengaluru",
       name: "Anita Rao",
-      designation: "L&D Manager",
-      email: "anita.rao@example.com",
+      designation: "Head of Learning Operations",
+      email: "anita.rao@northstar.example",
       phone: "+91 98765 43210",
       isPrimary: true
     }
@@ -312,9 +312,9 @@ async function main() {
       notes: "Seed opportunity for pipeline smoke checks.",
       ownerId: sales.id,
       probability: 60,
-      productInterest: "Custom LMS rollout",
+      productInterest: "LMS modernization and onboarding content",
       stageId: "seed_stage_qualified",
-      title: "Acme LMS rollout",
+      title: "Northstar LMS modernization",
       updatedById: admin.id
     },
     create: {
@@ -328,9 +328,9 @@ async function main() {
       notes: "Seed opportunity for pipeline smoke checks.",
       ownerId: sales.id,
       probability: 60,
-      productInterest: "Custom LMS rollout",
+      productInterest: "LMS modernization and onboarding content",
       stageId: "seed_stage_qualified",
-      title: "Acme LMS rollout",
+      title: "Northstar LMS modernization",
       updatedById: admin.id
     }
   });
@@ -441,7 +441,7 @@ async function main() {
     where: { id: "seed_proposal_acme_lms_accepted" },
     update: {
       assumptions: "Client provides SME availability and branding inputs.",
-      commercialSummary: "Accepted commercial proposal for the Acme LMS rollout seed order flow.",
+      commercialSummary: "Accepted commercial proposal for the Northstar LMS modernization seed order flow.",
       currency: "INR",
       deliveryTimeline: "Six weeks from kickoff.",
       exclusions: "Translation and third-party LMS license costs.",
@@ -451,7 +451,7 @@ async function main() {
       status: ProposalStatus.ACCEPTED,
       subtotalPaisa: 500000,
       gstPaisa: 90000,
-      title: "Accepted Acme LMS proposal",
+      title: "Northstar LMS modernization proposal",
       totalPaisa: 590000,
       updatedById: admin.id,
       validUntil: new Date("2026-07-31T00:00:00.000Z"),
@@ -460,7 +460,7 @@ async function main() {
     create: {
       id: "seed_proposal_acme_lms_accepted",
       assumptions: "Client provides SME availability and branding inputs.",
-      commercialSummary: "Accepted commercial proposal for the Acme LMS rollout seed order flow.",
+      commercialSummary: "Accepted commercial proposal for the Northstar LMS modernization seed order flow.",
       currency: "INR",
       deliveryTimeline: "Six weeks from kickoff.",
       exclusions: "Translation and third-party LMS license costs.",
@@ -472,7 +472,7 @@ async function main() {
       status: ProposalStatus.ACCEPTED,
       subtotalPaisa: 500000,
       gstPaisa: 90000,
-      title: "Accepted Acme LMS proposal",
+      title: "Northstar LMS modernization proposal",
       totalPaisa: 590000,
       createdById: admin.id,
       updatedById: admin.id,
@@ -519,13 +519,13 @@ async function main() {
       canvaDesignUrl: "https://www.canva.com/design/seed-acme-lms",
       fileSizeBytes: 204800,
       mimeType: "application/pdf",
-      originalFileName: "accepted-acme-lms-proposal.pdf",
+      originalFileName: "northstar-lms-modernization-proposal.pdf",
       proposalId: acceptedProposal.id,
       replacedAt: null,
       sha256: "seed-acme-lms-proposal-sha256",
-      storageKey: "seed/proposals/accepted-acme-lms-proposal.pdf",
-      storageProvider: "local",
-      storedFileName: "accepted-acme-lms-proposal.pdf",
+      storageKey: "https://example.com/proposals/northstar-lms-modernization-proposal.pdf",
+      storageProvider: "external",
+      storedFileName: "northstar-lms-modernization-proposal.pdf",
       uploadedById: admin.id
     },
     create: {
@@ -533,12 +533,12 @@ async function main() {
       canvaDesignUrl: "https://www.canva.com/design/seed-acme-lms",
       fileSizeBytes: 204800,
       mimeType: "application/pdf",
-      originalFileName: "accepted-acme-lms-proposal.pdf",
+      originalFileName: "northstar-lms-modernization-proposal.pdf",
       proposalId: acceptedProposal.id,
       sha256: "seed-acme-lms-proposal-sha256",
-      storageKey: "seed/proposals/accepted-acme-lms-proposal.pdf",
-      storageProvider: "local",
-      storedFileName: "accepted-acme-lms-proposal.pdf",
+      storageKey: "https://example.com/proposals/northstar-lms-modernization-proposal.pdf",
+      storageProvider: "external",
+      storedFileName: "northstar-lms-modernization-proposal.pdf",
       uploadedById: admin.id
     }
   });

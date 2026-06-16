@@ -22,10 +22,11 @@ async function selectOptionByText(control: Locator, text: RegExp) {
 
 async function bookFreshOrder(page: Page, timestamp: number) {
   const proposalTitle = `Finance proposal ${timestamp}`;
-  const pdfName = `finance-${timestamp}.pdf`;
+  const documentName = `finance-${timestamp}.pdf`;
+  const documentUrl = `https://example.com/proposals/finance-${timestamp}.pdf`;
 
   await page.goto("/opportunities");
-  await page.getByRole("link", { name: "Acme LMS rollout" }).click();
+  await page.getByRole("link", { name: "Northstar LMS modernization" }).click();
   await page.getByRole("link", { name: "New proposal" }).click();
 
   await page.getByLabel("Proposal title").fill(proposalTitle);
@@ -34,18 +35,16 @@ async function bookFreshOrder(page: Page, timestamp: number) {
   await selectOptionByText(page.getByLabel("Product or service"), /eLearning - eLearning/);
   await page.getByLabel("Line description").fill("Five onboarding modules.");
   await page.getByLabel("Quantity").fill("5");
-  await page.getByLabel("Unit price paise").fill("100000");
+  await page.getByLabel("Unit price (paise)").fill("100000");
   await page.getByRole("button", { name: "Create proposal" }).click();
 
   await expect(page.getByRole("heading", { name: proposalTitle })).toBeVisible();
-  await page.getByLabel("Original file name").fill(pdfName);
-  await page.getByLabel("Stored file name").fill(`stored-${pdfName}`);
-  await page.getByLabel("Storage provider").fill("local");
-  await page.getByLabel("Storage key").fill(`e2e/${pdfName}`);
-  await page.getByLabel("MIME type").fill("application/pdf");
-  await page.getByLabel("File size bytes").fill("2048");
-  await page.getByRole("button", { name: "Save PDF metadata" }).click();
-  await expect(page.getByText("Proposal PDF metadata saved.")).toBeVisible();
+  await page.getByLabel("Document name").fill(documentName);
+  await page.getByLabel("Document URL").fill(documentUrl);
+  await page.getByLabel("Document source").selectOption("external");
+  await page.getByLabel("Canva/design URL").fill("https://www.canva.com/design/e2e-finance");
+  await page.getByRole("button", { name: "Save document link" }).click();
+  await expect(page.getByText("Proposal document link saved.")).toBeVisible();
 
   await page.getByRole("button", { name: "Mark sent" }).click();
   await expect(page.getByText("SENT", { exact: true })).toBeVisible();
@@ -110,7 +109,7 @@ test("admin manages invoice payment cost and incentive while sales has read-only
   await page.reload();
   await page.getByRole("button", { name: "Approve cost" }).click();
   await expect(page.getByText("External vendor - APPROVED")).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByText("Sales User: 100% - INR 200.00")).toBeVisible();
+  await expect(page.getByText("Priya Menon: 100% - INR 200.00")).toBeVisible();
 
   await signOut(page);
   await signIn(page, "sales@example.com", "Sales@12345");
