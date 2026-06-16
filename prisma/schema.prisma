@@ -32,6 +32,59 @@ enum ActivityStatus {
   CANCELLED
 }
 
+enum SalesTaskStatus {
+  OPEN
+  COMPLETED
+  CARRIED_FORWARD
+  CANCELLED
+}
+
+enum SalesTaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum SalesTaskType {
+  CALL
+  EMAIL
+  FOLLOW_UP
+  SEND_MATERIAL
+  MEETING
+  CRM_UPDATE
+  CUSTOM
+}
+
+enum SalesTaskSource {
+  MANUAL
+  VOICE_NOTE
+  CARRY_FORWARD
+  INSIGHT
+  CRM
+}
+
+enum SalesVoiceNoteStatus {
+  UPLOADED
+  TRANSCRIBING
+  TRANSCRIBED
+  FAILED
+}
+
+enum SalesSuggestedActionStatus {
+  DRAFT
+  ACCEPTED
+  REJECTED
+}
+
+enum SalesDayReviewItemStatus {
+  DONE
+  MOVE_TO_TOMORROW
+  BLOCKED
+  WAITING_ON_CUSTOMER
+  CANCEL
+}
+
 enum PipelineStageKind {
   OPEN
   WON
@@ -108,50 +161,53 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  ownedLeadCustomers       LeadCustomer[]         @relation("LeadOwner")
-  createdLeadCustomers     LeadCustomer[]         @relation("LeadCreatedBy")
-  updatedLeadCustomers     LeadCustomer[]         @relation("LeadUpdatedBy")
-  ownedActivities          Activity[]             @relation("ActivityOwner")
-  createdActivities        Activity[]             @relation("ActivityCreatedBy")
-  completedActivities      Activity[]             @relation("ActivityCompletedBy")
-  ownershipChangesFrom     LeadOwnershipHistory[] @relation("LeadOwnershipFrom")
-  ownershipChangesTo       LeadOwnershipHistory[] @relation("LeadOwnershipTo")
-  ownershipChangesChanged  LeadOwnershipHistory[] @relation("LeadOwnershipChangedBy")
-  ownedOpportunities       Opportunity[]          @relation("OpportunityOwner")
-  createdOpportunities     Opportunity[]          @relation("OpportunityCreatedBy")
-  updatedOpportunities     Opportunity[]          @relation("OpportunityUpdatedBy")
-  opportunitySplits        OpportunityOwnerSplit[]
-  salesTargets             SalesTarget[]          @relation("SalesTargetOwner")
-  salesTargetsCreated      SalesTarget[]          @relation("SalesTargetCreatedBy")
-  createdProductServices   ProductService[]       @relation("ProductServiceCreatedBy")
-  updatedProductServices   ProductService[]       @relation("ProductServiceUpdatedBy")
-  createdProposals         Proposal[]             @relation("ProposalCreatedBy")
-  updatedProposals         Proposal[]             @relation("ProposalUpdatedBy")
-  uploadedProposalPdfs     ProposalPdfAttachment[] @relation("ProposalPdfUploadedBy")
-  ownedOrders              Order[]                @relation("OrderOwner")
-  createdOrders            Order[]                @relation("OrderCreatedBy")
-  updatedOrders            Order[]                @relation("OrderUpdatedBy")
-  orderSplitSnapshots      OrderOwnerSplitSnapshot[]
-  assignedProductionWorkItems ProductionWorkItem[] @relation("ProductionWorkItemAssignedTo")
-  createdProductionWorkItems  ProductionWorkItem[] @relation("ProductionWorkItemCreatedBy")
-  updatedProductionWorkItems  ProductionWorkItem[] @relation("ProductionWorkItemUpdatedBy")
+  ownedLeadCustomers          LeadCustomer[]            @relation("LeadOwner")
+  createdLeadCustomers        LeadCustomer[]            @relation("LeadCreatedBy")
+  updatedLeadCustomers        LeadCustomer[]            @relation("LeadUpdatedBy")
+  ownedActivities             Activity[]                @relation("ActivityOwner")
+  createdActivities           Activity[]                @relation("ActivityCreatedBy")
+  completedActivities         Activity[]                @relation("ActivityCompletedBy")
+  ownershipChangesFrom        LeadOwnershipHistory[]    @relation("LeadOwnershipFrom")
+  ownershipChangesTo          LeadOwnershipHistory[]    @relation("LeadOwnershipTo")
+  ownershipChangesChanged     LeadOwnershipHistory[]    @relation("LeadOwnershipChangedBy")
+  ownedOpportunities          Opportunity[]             @relation("OpportunityOwner")
+  createdOpportunities        Opportunity[]             @relation("OpportunityCreatedBy")
+  updatedOpportunities        Opportunity[]             @relation("OpportunityUpdatedBy")
+  opportunitySplits           OpportunityOwnerSplit[]
+  salesTargets                SalesTarget[]             @relation("SalesTargetOwner")
+  salesTargetsCreated         SalesTarget[]             @relation("SalesTargetCreatedBy")
+  createdProductServices      ProductService[]          @relation("ProductServiceCreatedBy")
+  updatedProductServices      ProductService[]          @relation("ProductServiceUpdatedBy")
+  createdProposals            Proposal[]                @relation("ProposalCreatedBy")
+  updatedProposals            Proposal[]                @relation("ProposalUpdatedBy")
+  uploadedProposalPdfs        ProposalPdfAttachment[]   @relation("ProposalPdfUploadedBy")
+  ownedOrders                 Order[]                   @relation("OrderOwner")
+  createdOrders               Order[]                   @relation("OrderCreatedBy")
+  updatedOrders               Order[]                   @relation("OrderUpdatedBy")
+  orderSplitSnapshots         OrderOwnerSplitSnapshot[]
+  assignedProductionWorkItems ProductionWorkItem[]      @relation("ProductionWorkItemAssignedTo")
+  createdProductionWorkItems  ProductionWorkItem[]      @relation("ProductionWorkItemCreatedBy")
+  updatedProductionWorkItems  ProductionWorkItem[]      @relation("ProductionWorkItemUpdatedBy")
   assignedProductionStages    ProductionStageInstance[] @relation("ProductionStageAssignedTo")
   completedProductionStages   ProductionStageInstance[] @relation("ProductionStageCompletedBy")
-  createdProductionNotes      ProductionNote[]     @relation("ProductionNoteCreatedBy")
-  createdInvoices             Invoice[]            @relation("InvoiceCreatedBy")
-  updatedInvoices             Invoice[]            @relation("InvoiceUpdatedBy")
-  voidedInvoices              Invoice[]            @relation("InvoiceVoidedBy")
-  createdPayments             Payment[]            @relation("PaymentCreatedBy")
-  createdCostComponents       CostComponent[]      @relation("CostComponentCreatedBy")
-  updatedCostComponents       CostComponent[]      @relation("CostComponentUpdatedBy")
-  approvedCostComponents      CostComponent[]      @relation("CostComponentApprovedBy")
-  rejectedCostComponents      CostComponent[]      @relation("CostComponentRejectedBy")
-  voidedCostComponents        CostComponent[]      @relation("CostComponentVoidedBy")
-  approvedIncentives          Incentive[]          @relation("IncentiveApprovedBy")
-  overriddenIncentives        Incentive[]          @relation("IncentiveOverrideBy")
-  rejectedIncentives          Incentive[]          @relation("IncentiveRejectedBy")
-  paidIncentives              Incentive[]          @relation("IncentivePaidBy")
+  createdProductionNotes      ProductionNote[]          @relation("ProductionNoteCreatedBy")
+  createdInvoices             Invoice[]                 @relation("InvoiceCreatedBy")
+  updatedInvoices             Invoice[]                 @relation("InvoiceUpdatedBy")
+  voidedInvoices              Invoice[]                 @relation("InvoiceVoidedBy")
+  createdPayments             Payment[]                 @relation("PaymentCreatedBy")
+  createdCostComponents       CostComponent[]           @relation("CostComponentCreatedBy")
+  updatedCostComponents       CostComponent[]           @relation("CostComponentUpdatedBy")
+  approvedCostComponents      CostComponent[]           @relation("CostComponentApprovedBy")
+  rejectedCostComponents      CostComponent[]           @relation("CostComponentRejectedBy")
+  voidedCostComponents        CostComponent[]           @relation("CostComponentVoidedBy")
+  approvedIncentives          Incentive[]               @relation("IncentiveApprovedBy")
+  overriddenIncentives        Incentive[]               @relation("IncentiveOverrideBy")
+  rejectedIncentives          Incentive[]               @relation("IncentiveRejectedBy")
+  paidIncentives              Incentive[]               @relation("IncentivePaidBy")
   incentiveSplits             IncentiveSplit[]
+  salesTasks                  SalesTask[]               @relation("SalesTaskOwner")
+  salesVoiceNotes             SalesVoiceNote[]          @relation("SalesVoiceNoteOwner")
+  salesDayReviews             SalesDayReview[]          @relation("SalesDayReviewOwner")
 }
 
 model LeadCustomer {
@@ -176,6 +232,8 @@ model LeadCustomer {
   ownershipHistory LeadOwnershipHistory[]
   opportunities    Opportunity[]
   orders           Order[]
+  salesTasks       SalesTask[]
+  salesVoiceNotes  SalesVoiceNote[]
 
   @@index([ownerId])
   @@index([state])
@@ -200,11 +258,11 @@ model Branch {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  leadCustomer LeadCustomer @relation(fields: [leadCustomerId], references: [id], onDelete: Cascade)
-  contacts     Contact[]
-  activities   Activity[]
+  leadCustomer  LeadCustomer  @relation(fields: [leadCustomerId], references: [id], onDelete: Cascade)
+  contacts      Contact[]
+  activities    Activity[]
   opportunities Opportunity[]
-  orders       Order[]
+  orders        Order[]
 
   @@index([leadCustomerId])
   @@index([city])
@@ -265,6 +323,131 @@ model Activity {
   @@index([type])
 }
 
+model SalesTask {
+  id                String            @id @default(cuid())
+  ownerId           String
+  leadCustomerId    String?
+  opportunityId     String?
+  proposalId        String?
+  orderId           String?
+  title             String
+  description       String?
+  type              SalesTaskType
+  priority          SalesTaskPriority @default(MEDIUM)
+  status            SalesTaskStatus   @default(OPEN)
+  source            SalesTaskSource   @default(MANUAL)
+  dueAt             DateTime?
+  completedAt       DateTime?
+  cancelledAt       DateTime?
+  createdFromNoteId String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  owner            User                   @relation("SalesTaskOwner", fields: [ownerId], references: [id])
+  leadCustomer     LeadCustomer?          @relation(fields: [leadCustomerId], references: [id], onDelete: SetNull)
+  opportunity      Opportunity?           @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  proposal         Proposal?              @relation(fields: [proposalId], references: [id], onDelete: SetNull)
+  order            Order?                 @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  voiceNotes       SalesVoiceNote[]
+  suggestedActions SalesVoiceNoteAction[] @relation("CreatedSalesTaskFromAction")
+  reviewItems      SalesDayReviewItem[]
+
+  @@index([ownerId, dueAt])
+  @@index([ownerId, status])
+  @@index([leadCustomerId])
+  @@index([opportunityId])
+  @@index([proposalId])
+  @@index([orderId])
+}
+
+model SalesVoiceNote {
+  id               String               @id @default(cuid())
+  ownerId          String
+  taskId           String?
+  leadCustomerId   String?
+  opportunityId    String?
+  proposalId       String?
+  orderId          String?
+  audioStorageKey  String
+  originalFileName String
+  mimeType         String
+  fileSizeBytes    Int
+  durationSeconds  Int?
+  status           SalesVoiceNoteStatus @default(UPLOADED)
+  transcript       String?
+  summary          String?
+  customerAsk      String?
+  nextStep         String?
+  processingError  String?
+  retainedUntil    DateTime?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  owner        User                   @relation("SalesVoiceNoteOwner", fields: [ownerId], references: [id])
+  task         SalesTask?             @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  leadCustomer LeadCustomer?          @relation(fields: [leadCustomerId], references: [id], onDelete: SetNull)
+  opportunity  Opportunity?           @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  proposal     Proposal?              @relation(fields: [proposalId], references: [id], onDelete: SetNull)
+  order        Order?                 @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  actions      SalesVoiceNoteAction[]
+
+  @@index([ownerId, createdAt])
+  @@index([taskId])
+  @@index([leadCustomerId])
+  @@index([status])
+}
+
+model SalesVoiceNoteAction {
+  id              String                     @id @default(cuid())
+  voiceNoteId     String
+  createdTaskId   String?
+  title           String
+  description     String?
+  type            SalesTaskType
+  suggestedDueAt  DateTime?
+  status          SalesSuggestedActionStatus @default(DRAFT)
+  confidenceLabel String?
+  createdAt       DateTime                   @default(now())
+  acceptedAt      DateTime?
+  rejectedAt      DateTime?
+
+  voiceNote   SalesVoiceNote @relation(fields: [voiceNoteId], references: [id], onDelete: Cascade)
+  createdTask SalesTask?     @relation("CreatedSalesTaskFromAction", fields: [createdTaskId], references: [id], onDelete: SetNull)
+
+  @@index([voiceNoteId])
+  @@index([status])
+}
+
+model SalesDayReview {
+  id         String   @id @default(cuid())
+  ownerId    String
+  reviewDate DateTime
+  notes      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  owner User                 @relation("SalesDayReviewOwner", fields: [ownerId], references: [id])
+  items SalesDayReviewItem[]
+
+  @@unique([ownerId, reviewDate])
+  @@index([ownerId, reviewDate])
+}
+
+model SalesDayReviewItem {
+  id        String                   @id @default(cuid())
+  reviewId  String
+  taskId    String
+  status    SalesDayReviewItemStatus
+  note      String?
+  createdAt DateTime                 @default(now())
+
+  review SalesDayReview @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  task   SalesTask      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@unique([reviewId, taskId])
+  @@index([taskId])
+}
+
 model LeadOwnershipHistory {
   id             String   @id @default(cuid())
   leadCustomerId String
@@ -300,32 +483,34 @@ model PipelineStage {
 }
 
 model Opportunity {
-  id                String   @id @default(cuid())
+  id                String    @id @default(cuid())
   leadCustomerId    String
   branchId          String?
   stageId           String
   ownerId           String
   title             String
   productInterest   String?
-  estimatedValueInr Decimal? @db.Decimal(14, 2)
+  estimatedValueInr Decimal?  @db.Decimal(14, 2)
   probability       Int?
   lastReachAt       DateTime?
   nextFollowUpAt    DateTime?
   notes             String?
   createdById       String
   updatedById       String
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
-  leadCustomer LeadCustomer            @relation(fields: [leadCustomerId], references: [id], onDelete: Cascade)
-  branch       Branch?                 @relation(fields: [branchId], references: [id], onDelete: SetNull)
-  stage        PipelineStage           @relation(fields: [stageId], references: [id])
-  owner        User                    @relation("OpportunityOwner", fields: [ownerId], references: [id])
-  createdBy    User                    @relation("OpportunityCreatedBy", fields: [createdById], references: [id])
-  updatedBy    User                    @relation("OpportunityUpdatedBy", fields: [updatedById], references: [id])
-  splits       OpportunityOwnerSplit[]
-  proposals    Proposal[]
-  orders       Order[]
+  leadCustomer    LeadCustomer            @relation(fields: [leadCustomerId], references: [id], onDelete: Cascade)
+  branch          Branch?                 @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  stage           PipelineStage           @relation(fields: [stageId], references: [id])
+  owner           User                    @relation("OpportunityOwner", fields: [ownerId], references: [id])
+  createdBy       User                    @relation("OpportunityCreatedBy", fields: [createdById], references: [id])
+  updatedBy       User                    @relation("OpportunityUpdatedBy", fields: [updatedById], references: [id])
+  splits          OpportunityOwnerSplit[]
+  proposals       Proposal[]
+  orders          Order[]
+  salesTasks      SalesTask[]
+  salesVoiceNotes SalesVoiceNote[]
 
   @@index([leadCustomerId])
   @@index([branchId])
@@ -379,10 +564,10 @@ model ProductService {
   createdAt                    DateTime @default(now())
   updatedAt                    DateTime @updatedAt
 
-  createdBy User @relation("ProductServiceCreatedBy", fields: [createdById], references: [id])
-  updatedBy User @relation("ProductServiceUpdatedBy", fields: [updatedById], references: [id])
+  createdBy         User               @relation("ProductServiceCreatedBy", fields: [createdById], references: [id])
+  updatedBy         User               @relation("ProductServiceUpdatedBy", fields: [updatedById], references: [id])
   proposalLineItems ProposalLineItem[]
-  orderLineItems OrderLineItem[]
+  orderLineItems    OrderLineItem[]
 
   @@index([active, sortOrder])
   @@index([category])
@@ -413,12 +598,14 @@ model Proposal {
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt
 
-  opportunity Opportunity              @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
-  createdBy   User                     @relation("ProposalCreatedBy", fields: [createdById], references: [id])
-  updatedBy   User                     @relation("ProposalUpdatedBy", fields: [updatedById], references: [id])
-  lineItems   ProposalLineItem[]
-  pdfAttachments ProposalPdfAttachment[]
-  order       Order?
+  opportunity     Opportunity             @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  createdBy       User                    @relation("ProposalCreatedBy", fields: [createdById], references: [id])
+  updatedBy       User                    @relation("ProposalUpdatedBy", fields: [updatedById], references: [id])
+  lineItems       ProposalLineItem[]
+  pdfAttachments  ProposalPdfAttachment[]
+  order           Order?
+  salesTasks      SalesTask[]
+  salesVoiceNotes SalesVoiceNote[]
 
   @@unique([opportunityId, sequenceNumber])
   @@index([opportunityId])
@@ -500,19 +687,21 @@ model Order {
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 
-  proposal      Proposal       @relation(fields: [proposalId], references: [id])
-  opportunity   Opportunity    @relation(fields: [opportunityId], references: [id])
-  leadCustomer  LeadCustomer   @relation(fields: [leadCustomerId], references: [id])
-  branch        Branch?        @relation(fields: [branchId], references: [id], onDelete: SetNull)
-  owner         User           @relation("OrderOwner", fields: [ownerId], references: [id])
-  createdBy     User           @relation("OrderCreatedBy", fields: [createdById], references: [id])
-  updatedBy     User           @relation("OrderUpdatedBy", fields: [updatedById], references: [id])
-  lineItems     OrderLineItem[]
-  splitSnapshots OrderOwnerSplitSnapshot[]
-  invoices      Invoice[]
-  payments      Payment[]
-  costComponents CostComponent[]
-  incentive     Incentive?
+  proposal        Proposal                  @relation(fields: [proposalId], references: [id])
+  opportunity     Opportunity               @relation(fields: [opportunityId], references: [id])
+  leadCustomer    LeadCustomer              @relation(fields: [leadCustomerId], references: [id])
+  branch          Branch?                   @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  owner           User                      @relation("OrderOwner", fields: [ownerId], references: [id])
+  createdBy       User                      @relation("OrderCreatedBy", fields: [createdById], references: [id])
+  updatedBy       User                      @relation("OrderUpdatedBy", fields: [updatedById], references: [id])
+  lineItems       OrderLineItem[]
+  splitSnapshots  OrderOwnerSplitSnapshot[]
+  invoices        Invoice[]
+  payments        Payment[]
+  costComponents  CostComponent[]
+  incentive       Incentive?
+  salesTasks      SalesTask[]
+  salesVoiceNotes SalesVoiceNote[]
 
   @@index([status])
   @@index([ownerId])
@@ -542,11 +731,11 @@ model OrderLineItem {
   createdAt                     DateTime @default(now())
   updatedAt                     DateTime @updatedAt
 
-  order            Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  proposalLineItem ProposalLineItem @relation(fields: [proposalLineItemId], references: [id])
-  productService   ProductService?  @relation(fields: [productServiceId], references: [id], onDelete: SetNull)
+  order               Order                @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  proposalLineItem    ProposalLineItem     @relation(fields: [proposalLineItemId], references: [id])
+  productService      ProductService?      @relation(fields: [productServiceId], references: [id], onDelete: SetNull)
   productionWorkItems ProductionWorkItem[]
-  costComponents CostComponent[]
+  costComponents      CostComponent[]
 
   @@index([orderId])
   @@index([productServiceId])
@@ -593,7 +782,7 @@ model ProductionTemplateStage {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
-  template       ProductionTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  template       ProductionTemplate        @relation(fields: [templateId], references: [id], onDelete: Cascade)
   stageInstances ProductionStageInstance[]
 
   @@unique([templateId, key])
@@ -601,27 +790,27 @@ model ProductionTemplateStage {
 }
 
 model ProductionWorkItem {
-  id                   String                @id @default(cuid())
-  orderLineItemId      String
-  productionTemplateId String?
-  title                String
-  productNameSnapshot  String
+  id                      String                @id @default(cuid())
+  orderLineItemId         String
+  productionTemplateId    String?
+  title                   String
+  productNameSnapshot     String
   productCategorySnapshot String
-  status               ProductionStageStatus @default(NOT_STARTED)
-  assignedToId         String?
-  dueAt                DateTime?
-  startedAt            DateTime?
-  completedAt          DateTime?
-  createdById          String
-  updatedById          String
-  createdAt            DateTime              @default(now())
-  updatedAt            DateTime              @updatedAt
+  status                  ProductionStageStatus @default(NOT_STARTED)
+  assignedToId            String?
+  dueAt                   DateTime?
+  startedAt               DateTime?
+  completedAt             DateTime?
+  createdById             String
+  updatedById             String
+  createdAt               DateTime              @default(now())
+  updatedAt               DateTime              @updatedAt
 
-  orderLineItem      OrderLineItem       @relation(fields: [orderLineItemId], references: [id], onDelete: Cascade)
-  productionTemplate ProductionTemplate? @relation(fields: [productionTemplateId], references: [id], onDelete: SetNull)
-  assignedTo         User?               @relation("ProductionWorkItemAssignedTo", fields: [assignedToId], references: [id])
-  createdBy          User                @relation("ProductionWorkItemCreatedBy", fields: [createdById], references: [id])
-  updatedBy          User                @relation("ProductionWorkItemUpdatedBy", fields: [updatedById], references: [id])
+  orderLineItem      OrderLineItem             @relation(fields: [orderLineItemId], references: [id], onDelete: Cascade)
+  productionTemplate ProductionTemplate?       @relation(fields: [productionTemplateId], references: [id], onDelete: SetNull)
+  assignedTo         User?                     @relation("ProductionWorkItemAssignedTo", fields: [assignedToId], references: [id])
+  createdBy          User                      @relation("ProductionWorkItemCreatedBy", fields: [createdById], references: [id])
+  updatedBy          User                      @relation("ProductionWorkItemUpdatedBy", fields: [updatedById], references: [id])
   stageInstances     ProductionStageInstance[]
   notes              ProductionNote[]
 
@@ -651,10 +840,10 @@ model ProductionStageInstance {
   createdAt       DateTime              @default(now())
   updatedAt       DateTime              @updatedAt
 
-  workItem      ProductionWorkItem      @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  workItem      ProductionWorkItem       @relation(fields: [workItemId], references: [id], onDelete: Cascade)
   templateStage ProductionTemplateStage? @relation(fields: [templateStageId], references: [id], onDelete: SetNull)
-  assignedTo    User?                   @relation("ProductionStageAssignedTo", fields: [assignedToId], references: [id])
-  completedBy   User?                   @relation("ProductionStageCompletedBy", fields: [completedById], references: [id])
+  assignedTo    User?                    @relation("ProductionStageAssignedTo", fields: [assignedToId], references: [id])
+  completedBy   User?                    @relation("ProductionStageCompletedBy", fields: [completedById], references: [id])
   notes         ProductionNote[]
 
   @@index([workItemId])
@@ -672,9 +861,9 @@ model ProductionNote {
   createdById     String
   createdAt       DateTime @default(now())
 
-  workItem      ProductionWorkItem     @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  workItem      ProductionWorkItem       @relation(fields: [workItemId], references: [id], onDelete: Cascade)
   stageInstance ProductionStageInstance? @relation(fields: [stageInstanceId], references: [id], onDelete: SetNull)
-  createdBy     User                   @relation("ProductionNoteCreatedBy", fields: [createdById], references: [id])
+  createdBy     User                     @relation("ProductionNoteCreatedBy", fields: [createdById], references: [id])
 
   @@index([workItemId])
   @@index([stageInstanceId])
@@ -713,16 +902,16 @@ model Invoice {
 }
 
 model Payment {
-  id           String      @id @default(cuid())
-  orderId      String
-  paymentDate  DateTime
-  amountPaisa  Int
-  mode         PaymentMode
-  reference    String?
-  notes        String?
-  createdById  String
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
+  id          String      @id @default(cuid())
+  orderId     String
+  paymentDate DateTime
+  amountPaisa Int
+  mode        PaymentMode
+  reference   String?
+  notes       String?
+  createdById String
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
 
   order       Order               @relation(fields: [orderId], references: [id], onDelete: Cascade)
   createdBy   User                @relation("PaymentCreatedBy", fields: [createdById], references: [id])
@@ -807,12 +996,12 @@ model Incentive {
   createdAt              DateTime        @default(now())
   updatedAt              DateTime        @updatedAt
 
-  order       Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  approvedBy  User?            @relation("IncentiveApprovedBy", fields: [approvedById], references: [id])
-  overrideBy  User?            @relation("IncentiveOverrideBy", fields: [overrideById], references: [id])
-  rejectedBy  User?            @relation("IncentiveRejectedBy", fields: [rejectedById], references: [id])
-  paidBy      User?            @relation("IncentivePaidBy", fields: [paidById], references: [id])
-  splits      IncentiveSplit[]
+  order      Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  approvedBy User?            @relation("IncentiveApprovedBy", fields: [approvedById], references: [id])
+  overrideBy User?            @relation("IncentiveOverrideBy", fields: [overrideById], references: [id])
+  rejectedBy User?            @relation("IncentiveRejectedBy", fields: [rejectedById], references: [id])
+  paidBy     User?            @relation("IncentivePaidBy", fields: [paidById], references: [id])
+  splits     IncentiveSplit[]
 
   @@index([status])
   @@index([approvedById])
