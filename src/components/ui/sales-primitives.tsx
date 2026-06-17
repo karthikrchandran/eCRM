@@ -14,7 +14,7 @@ const statusToneClasses: Record<StatusTone, string> = {
   danger: "border-red-200 bg-red-50 text-red-700",
   info: "border-sky-200 bg-sky-50 text-sky-700",
   neutral: "border-slate-200 bg-slate-100 text-slate-700",
-  success: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  success: "border-[var(--status-positive-border)] bg-[var(--status-positive-bg)] text-[var(--status-positive-text)]",
   warning: "border-amber-200 bg-amber-50 text-amber-800"
 };
 
@@ -35,8 +35,8 @@ export function RoleBadge({ role }: { role: UserRole | "ADMIN" | "SALES" }) {
   const label = role === "ADMIN" ? "Admin" : "Sales";
   const classes =
     role === "ADMIN"
-      ? "border-indigo-200 bg-indigo-50 text-indigo-700"
-      : "border-emerald-200 bg-emerald-50 text-emerald-700";
+      ? "border-[#bfdbfe] bg-[#eff6ff] text-[var(--brand-navy)]"
+      : "border-[var(--status-positive-border)] bg-[var(--status-positive-bg)] text-[var(--status-positive-text)]";
 
   return <span className={clsx("inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold", classes)}>{label}</span>;
 }

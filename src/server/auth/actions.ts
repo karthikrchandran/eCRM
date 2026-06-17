@@ -3,7 +3,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { authenticateLogin, type LoginState } from "./login";
-import { SESSION_COOKIE_NAME, signSession } from "./session";
+import { SESSION_COOKIE_NAME, shouldUseSecureSessionCookie, signSession } from "./session";
 
 export type { LoginState } from "./login";
 
@@ -23,7 +23,7 @@ export async function loginAction(_previousState: LoginState, formData: FormData
   cookieStore.set(SESSION_COOKIE_NAME, token, {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: shouldUseSecureSessionCookie(),
     path: "/",
     maxAge: 60 * 60 * 8
   });

@@ -17,6 +17,10 @@ const sessionUserSchema = z.object({
 
 export type SessionUser = z.infer<typeof sessionUserSchema>;
 
+export function shouldUseSecureSessionCookie(appBaseUrl = getServerEnv().APP_BASE_URL) {
+  return new URL(appBaseUrl).protocol === "https:";
+}
+
 function encodeSecret(secret: string) {
   return new TextEncoder().encode(secret);
 }

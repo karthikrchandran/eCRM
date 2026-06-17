@@ -2,7 +2,7 @@
 
 import { SignJWT } from "jose";
 import { describe, expect, it } from "vitest";
-import { signSession, verifySessionToken, type SessionUser } from "./session";
+import { shouldUseSecureSessionCookie, signSession, verifySessionToken, type SessionUser } from "./session";
 
 const secret = "12345678901234567890123456789012";
 const otherSecret = "abcdefghijklmnopqrstuvwxzy123456";
@@ -21,6 +21,12 @@ function encodeSecret(value: string) {
 }
 
 describe("session utilities", () => {
+  it("uses secure cookies only for HTTPS application URLs", () => {
+    expect(shouldUseSecureSessionCookie("https://crm.example.com")).toBe(true);
+    expect(shouldUseSecureSessionCookie("http://127.0.0.1:5050")).toBe(false);
+    expect(shouldUseSecureSessionCookie("http://localhost:3000")).toBe(false);
+  });
+
   it("round-trips a signed session token", async () => {
     const token = await signSession(validUser, secret);
 

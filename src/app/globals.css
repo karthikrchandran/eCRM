@@ -1,14 +1,22 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f7f8fa;
-  --foreground: #17181c;
-  --muted: #667085;
-  --border: #d9dee8;
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --muted: #475569;
+  --border: #d1dae5;
   --panel: #ffffff;
-  --surface-muted: #f2f5f8;
-  --accent: #126b5f;
-  --accent-strong: #0f5149;
+  --surface-muted: #eef6ff;
+  --surface-tint: #def0ff;
+  --brand-navy: #00205f;
+  --brand-navy-deep: #001842;
+  --accent: #0067ff;
+  --accent-strong: #005ee9;
+  --accent-soft: #def0ff;
+  --status-positive-bg: #def0ff;
+  --status-positive-border: #7acdee;
+  --status-positive-text: #00205f;
+  --header-muted: #c9dcff;
 }
 
 * {
@@ -22,7 +30,9 @@ body {
 
 body {
   margin: 0;
-  background: var(--background);
+  background:
+    linear-gradient(180deg, var(--surface-tint) 0, var(--background) 15rem),
+    var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
@@ -48,7 +58,7 @@ textarea {
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 8px;
-  box-shadow: 0 1px 2px rgb(15 23 42 / 0.04);
+  box-shadow: 0 10px 30px rgb(0 32 95 / 0.06), 0 1px 2px rgb(15 23 42 / 0.04);
 }
 
 .crm-control {
@@ -83,20 +93,35 @@ textarea {
 .crm-button-primary {
   background: var(--accent);
   color: #ffffff;
+  border: 1px solid var(--accent);
+  box-shadow: 0 8px 18px rgb(0 103 255 / 0.18);
 }
 
 .crm-button-primary:hover {
   background: var(--accent-strong);
+  border-color: var(--accent-strong);
   color: #ffffff;
 }
 
 .crm-button-secondary {
   border: 1px solid var(--border);
   background: #ffffff;
+  color: var(--brand-navy);
 }
 
 .crm-button-secondary:hover {
   background: var(--surface-muted);
+  border-color: #b8c7dd;
+}
+
+.crm-button-subtle {
+  border: 1px solid rgb(255 255 255 / 0.28);
+  background: rgb(255 255 255 / 0.08);
+  color: #ffffff;
+}
+
+.crm-button-subtle:hover {
+  background: rgb(255 255 255 / 0.16);
 }
 
 .crm-button:disabled {

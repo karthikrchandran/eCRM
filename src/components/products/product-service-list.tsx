@@ -71,8 +71,10 @@ export function ProductServiceList({ products, toggleActiveAction }: ProductServ
                     </td>
                     <td className="px-4 py-4 align-top">
                       <span
-                        className={`rounded px-2 py-1 text-xs font-semibold ${
-                          product.active ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"
+                        className={`rounded border px-2 py-1 text-xs font-semibold ${
+                          product.active
+                            ? "border-[var(--status-positive-border)] bg-[var(--status-positive-bg)] text-[var(--status-positive-text)]"
+                            : "border-slate-200 bg-slate-100 text-slate-600"
                         }`}
                       >
                         {product.active ? "Active" : "Inactive"}

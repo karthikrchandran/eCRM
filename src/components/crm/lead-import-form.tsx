@@ -55,7 +55,7 @@ export function LeadImportForm({ action }: LeadImportFormProps) {
       </form>
 
       {state.message ? (
-        <p className={`text-sm font-medium ${state.ok ? "text-emerald-700" : "text-red-700"}`} role="status">
+        <p className={`text-sm font-medium ${state.ok ? "text-[var(--status-positive-text)]" : "text-red-700"}`} role="status">
           {state.message}
         </p>
       ) : null}
