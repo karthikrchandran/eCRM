@@ -41,9 +41,7 @@ export function ProductionDetail({ owners, stageAction, workItem }: ProductionDe
                 </div>
                 <p className="text-sm font-semibold">{stage.status}</p>
               </div>
-              {stage.status === "DONE" || stage.status === "SKIPPED" ? null : (
-                <ProductionStageActions action={stageAction.bind(null, stage.id)} owners={owners} />
-              )}
+              <ProductionStageActions action={stageAction.bind(null, stage.id)} owners={owners} status={stage.status} />
             </article>
           ))}
         </div>

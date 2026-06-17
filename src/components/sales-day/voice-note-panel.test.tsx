@@ -26,6 +26,13 @@ function note(overrides: Partial<MyDayVoiceNoteRecord>): MyDayVoiceNoteRecord {
 }
 
 describe("VoiceNotePanel", () => {
+  it("explains that voice notes are scoped to the signed-in user and selected date", () => {
+    render(<VoiceNotePanel notes={[]} />);
+
+    expect(screen.getByText("No voice notes for this day")).toBeVisible();
+    expect(screen.getByText(/Voice notes are personal to the signed-in user/)).toBeVisible();
+  });
+
   it("keeps replay visible when transcription fails", () => {
     render(<VoiceNotePanel notes={[note({ status: "FAILED", transcript: null, processingError: "Provider unavailable" })]} />);
 

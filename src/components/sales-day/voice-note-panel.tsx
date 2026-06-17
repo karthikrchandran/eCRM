@@ -22,8 +22,8 @@ export function VoiceNotePanel({ notes }: { notes: MyDayVoiceNoteRecord[] }) {
   if (!notes.length) {
     return (
       <EmptyState
-        title="No voice notes yet"
-        description="Record call notes to preserve replay, transcript, and draft follow-up actions."
+        title="No voice notes for this day"
+        description="Voice notes are personal to the signed-in user and selected date. Sign in as the sales owner or record a call note here to preserve replay, transcript, and draft follow-up actions."
       />
     );
   }

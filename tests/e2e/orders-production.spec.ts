@@ -15,6 +15,13 @@ async function selectOptionByText(control: Locator, text: RegExp) {
   await control.selectOption(value ?? "");
 }
 
+async function updateStageStatus(page: Page, index: number, status: string, note: string) {
+  await page.getByLabel("Change status").nth(index).selectOption(status);
+  await page.getByLabel("Note").nth(index).fill(note);
+  await page.getByRole("button", { name: "Update status" }).nth(index).click();
+  await expect(page.getByText("Production stage updated.").first()).toBeVisible();
+}
+
 test("admin books an accepted proposal and completes production stages", async ({ page }) => {
   const timestamp = Date.now();
   const proposalTitle = `Orders production proposal ${timestamp}`;
@@ -76,20 +83,16 @@ test("admin books an accepted proposal and completes production stages", async (
 
   await expect(page).toHaveURL(/\/production\/[^/]+$/);
   await expect(page.getByRole("heading", { name: /ORD-2026-/ })).toBeVisible();
-  await page.getByLabel("Note").first().fill("Production started");
-  await page.getByRole("button", { name: "Mark in progress" }).first().click();
-  await expect(page.getByText("Production stage updated.")).toBeVisible();
+  await updateStageStatus(page, 0, "IN_PROGRESS", "Production started");
   await page.reload();
   await expect(page.getByText("IN_PROGRESS", { exact: true })).toBeVisible();
 
-  const doneButtons = page.getByRole("button", { name: "Mark done" });
-  for (let remaining = await doneButtons.count(); remaining > 0; remaining -= 1) {
-    await page.getByLabel("Note").first().fill(`Completed stage ${7 - remaining}`);
-    await doneButtons.first().click();
-    await expect(doneButtons).toHaveCount(remaining - 1, { timeout: 15_000 });
+  const stageCount = await page.getByLabel("Change status").count();
+  for (let index = 0; index < stageCount; index += 1) {
+    await updateStageStatus(page, index, "DONE", `Completed stage ${index + 1}`);
   }
 
-  await expect(page.getByRole("button", { name: "Mark done" })).toHaveCount(0);
+  await expect(page.getByText("DONE", { exact: true }).first()).toBeVisible();
   await page.getByRole("link", { name: "Back to production" }).click();
   await expect(page.getByRole("heading", { name: "Production" })).toBeVisible();
   await expect(page.getByText("DONE")).toBeVisible();

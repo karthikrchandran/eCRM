@@ -29,7 +29,7 @@ export function ProductServiceList({ products, toggleActiveAction }: ProductServ
           <h1 className="text-2xl font-semibold">Products and services</h1>
           <p className="mt-1 text-sm text-[var(--muted)]">Admin catalog defaults for proposal line items.</p>
         </div>
-        <Link className="rounded-md bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white" href="/admin/products/new">
+        <Link className="crm-button crm-button-primary text-sm" href="/admin/products/new">
           New product/service
         </Link>
       </header>

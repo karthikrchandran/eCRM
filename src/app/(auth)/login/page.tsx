@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/server/auth/current-user";
-import { LoginForm } from "./login-form";
+import { LoginLanding } from "./login-landing";
 
 export default async function LoginPage() {
   const user = await getCurrentUser();
@@ -9,9 +9,5 @@ export default async function LoginPage() {
     redirect("/dashboard");
   }
 
-  return (
-    <main className="flex min-h-screen items-center justify-center px-4 py-10">
-      <LoginForm />
-    </main>
-  );
+  return <LoginLanding />;
 }

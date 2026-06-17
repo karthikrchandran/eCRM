@@ -97,7 +97,7 @@ export function TargetForm({ action, owners, targets }: TargetFormProps) {
 
         {state.message ? <p className="text-sm text-[var(--muted)]">{state.message}</p> : null}
 
-        <button className="rounded-md bg-[var(--accent)] px-4 py-2 font-semibold text-white disabled:opacity-60" disabled={pending} type="submit">
+        <button className="crm-button crm-button-primary" disabled={pending} type="submit">
           {pending ? "Saving..." : "Save target"}
         </button>
       </form>

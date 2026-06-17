@@ -59,4 +59,10 @@ describe("ARA Global theme", () => {
 
     expect(offenders).toEqual([]);
   });
+
+  it("does not override link text color utilities globally", () => {
+    const globals = readFileSync(join(sourceRoot, "app", "globals.css"), "utf8").toLowerCase();
+
+    expect(globals).not.toMatch(/a\s*\{[^}]*color\s*:/);
+  });
 });

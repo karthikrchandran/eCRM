@@ -64,7 +64,7 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
           <Link className="rounded-md border border-[var(--border)] px-3 py-2 text-sm font-semibold" href="/opportunities">
             Back
           </Link>
-          <Link className="rounded-md bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white" href={`/opportunities/${opportunity.id}/edit`}>
+          <Link className="crm-button crm-button-primary text-sm" href={`/opportunities/${opportunity.id}/edit`}>
             Edit
           </Link>
         </div>
@@ -147,10 +147,7 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
             <h2 className="text-lg font-semibold">Proposals</h2>
             <p className="mt-1 text-sm text-[var(--muted)]">Commercial proposals and uploaded Canva PDF metadata.</p>
           </div>
-          <Link
-            className="rounded-md bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white"
-            href={`/opportunities/${opportunity.id}/proposals/new`}
-          >
+          <Link className="crm-button crm-button-primary text-sm" href={`/opportunities/${opportunity.id}/proposals/new`}>
             New proposal
           </Link>
         </div>

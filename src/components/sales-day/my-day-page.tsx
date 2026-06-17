@@ -34,8 +34,8 @@ function getMetrics(myDay: MyDayViewModel) {
 
 function tabClassName(active: boolean) {
   return active
-    ? "rounded-md bg-slate-950 px-3 py-2 text-sm font-semibold text-white"
-    : "rounded-md px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-[var(--surface-muted)]";
+    ? "rounded-md bg-[var(--brand-navy)] px-3 py-2 text-sm font-semibold text-white"
+    : "rounded-md px-3 py-2 text-sm font-semibold text-[var(--brand-navy)] hover:bg-[var(--surface-muted)]";
 }
 
 export function MyDayPage({ activeView, insights, lookups, myDay }: MyDayPageProps) {

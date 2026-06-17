@@ -110,7 +110,7 @@ export function OpportunityList({ children, filters, owners, records, stages }: 
           <Link className="rounded-md border border-[var(--border)] px-3 py-2 text-sm font-semibold" href="/opportunities/targets">
             Targets
           </Link>
-          <Link className="rounded-md bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white" href="/opportunities/new">
+          <Link className="crm-button crm-button-primary text-sm" href="/opportunities/new">
             New opportunity
           </Link>
         </div>

@@ -114,12 +114,12 @@ export function ProposalDetail({ proposal, pdfMetadataAction, statusAction }: Pr
         </div>
         <div className="flex flex-wrap gap-2">
           {proposal.order ? (
-            <Link className="rounded-md bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white" href={`/orders/${proposal.order.id}`}>
+            <Link className="crm-button crm-button-primary text-sm" href={`/orders/${proposal.order.id}`}>
               View order {proposal.order.orderNumber}
             </Link>
           ) : proposal.status === "ACCEPTED" ? (
             <Link
-              className="rounded-md bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white"
+              className="crm-button crm-button-primary text-sm"
               href={`/opportunities/${proposal.opportunityId}/proposals/${proposal.id}/book-order`}
             >
               Book order

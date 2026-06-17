@@ -45,7 +45,7 @@ export function LoginForm() {
 
       <button
         aria-describedby={state.error ? "login-error" : undefined}
-        className="rounded-md bg-[var(--accent)] px-4 py-2 font-semibold text-white disabled:opacity-60"
+        className="crm-button crm-button-primary"
         disabled={pending}
         type="submit"
       >

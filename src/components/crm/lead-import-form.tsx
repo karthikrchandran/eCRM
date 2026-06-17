@@ -43,7 +43,7 @@ export function LeadImportForm({ action }: LeadImportFormProps) {
             {pending ? "Checking..." : "Preview CSV"}
           </button>
           <button
-            className="rounded-md bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+            className="crm-button crm-button-primary text-sm"
             disabled={pending}
             name="intent"
             type="submit"
