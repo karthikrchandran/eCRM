@@ -66,6 +66,7 @@ export type MyDayViewModel = {
   overdueTasks: MyDayTaskRecord[];
   completedTasks: MyDayTaskRecord[];
   cancelledTasks: MyDayTaskRecord[];
+  voiceNotes: MyDayVoiceNoteRecord[];
 };
 
 export type MyDayInsightItem = {

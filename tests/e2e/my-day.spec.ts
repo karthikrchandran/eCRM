@@ -15,9 +15,9 @@ test("salesperson plans, completes, reopens, reviews, and uploads a voice note",
 
   await signIn(page, "sales@example.com", "Sales@12345");
   await page.getByRole("link", { name: "My Day" }).click();
-  await expect(page.getByRole("heading", { name: "My Day" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "My Day", exact: true })).toBeVisible();
 
-  await page.getByLabel("Task").fill(taskTitle);
+  await page.getByLabel("Task title").fill(taskTitle);
   await page.getByLabel("Type").selectOption("CALL");
   await page.getByLabel("Priority").selectOption("HIGH");
   await page.getByRole("button", { name: "Add task" }).click();
@@ -36,7 +36,7 @@ test("salesperson plans, completes, reopens, reviews, and uploads a voice note",
   await expect(page.getByRole("heading", { name: "Suggested tomorrow plan" })).toBeVisible();
 
   await page.getByRole("link", { name: "End-of-Day Review" }).click();
-  const reviewRow = page.locator("div", { hasText: taskTitle }).filter({ has: page.getByLabel("Outcome") }).first();
+  const reviewRow = page.getByRole("group", { name: `Review ${taskTitle}` });
   await reviewRow.getByLabel("Outcome").selectOption("MOVE_TO_TOMORROW");
   await page.getByRole("button", { name: "Save review" }).click();
   await expect(page.getByText("End-of-day review saved.")).toBeVisible();
@@ -50,7 +50,7 @@ test("salesperson plans, completes, reopens, reviews, and uploads a voice note",
       }
     }
   });
-  expect(upload.ok()).toBeTruthy();
+  expect(upload.ok(), await upload.text()).toBeTruthy();
   const uploaded = (await upload.json()) as { voiceNoteId: string };
   await page.request.post(`/my-day/voice-notes/${uploaded.voiceNoteId}/transcribe`);
 

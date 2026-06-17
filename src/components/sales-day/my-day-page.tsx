@@ -41,7 +41,7 @@ function tabClassName(active: boolean) {
 export function MyDayPage({ activeView, insights, lookups, myDay }: MyDayPageProps) {
   const date = dateValue(myDay.date);
   const allTasks = [...myDay.overdueTasks, ...myDay.openTasks, ...myDay.completedTasks];
-  const voiceNotes = allTasks.flatMap((task) => task.voiceNotes);
+  const voiceNotes = [...myDay.voiceNotes, ...allTasks.flatMap((task) => task.voiceNotes)];
 
   return (
     <div className="space-y-6">

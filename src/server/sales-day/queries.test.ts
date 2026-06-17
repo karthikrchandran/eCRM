@@ -74,6 +74,56 @@ describe("sales-day queries", () => {
     expect(result.openTasks).toEqual([]);
   });
 
+  it("loads standalone voice notes created on the selected day", async () => {
+    const database = {
+      salesTask: {
+        findMany: vi.fn().mockResolvedValue([])
+      },
+      salesVoiceNote: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            id: "note_1",
+            taskId: null,
+            status: "FAILED",
+            transcript: null,
+            summary: null,
+            customerAsk: null,
+            nextStep: null,
+            processingError: "Transcription provider is not configured.",
+            createdAt: new Date("2026-06-17T11:00:00.000Z"),
+            actions: []
+          }
+        ])
+      }
+    };
+
+    const result = await loadMyDay(salesUser, selectedDate, database);
+
+    expect(database.salesVoiceNote.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          ownerId: "sales_1",
+          taskId: null
+        })
+      })
+    );
+    expect(result.voiceNotes).toEqual([
+      {
+        id: "note_1",
+        taskId: null,
+        status: "FAILED",
+        audioUrl: "/my-day/voice-notes/note_1/audio",
+        transcript: null,
+        summary: null,
+        customerAsk: null,
+        nextStep: null,
+        processingError: "Transcription provider is not configured.",
+        createdAt: new Date("2026-06-17T11:00:00.000Z"),
+        actions: []
+      }
+    ]);
+  });
+
   it("includes opportunity follow-up reminders in accounts needing attention", async () => {
     const database = {
       salesTask: {

@@ -26,7 +26,7 @@ export function TaskComposer({ lookups }: { lookups: MyDayLookups }) {
     <form action={formAction} className="surface grid gap-4 p-4">
       <div className="grid gap-4 lg:grid-cols-[1.5fr_1fr_1fr]">
         <label className="flex min-w-0 flex-col gap-1 text-sm font-medium">
-          Task
+          Task title
           <input className="crm-control" name="title" placeholder="Call customer, send proposal, follow up" required />
         </label>
         <label className="flex min-w-0 flex-col gap-1 text-sm font-medium">

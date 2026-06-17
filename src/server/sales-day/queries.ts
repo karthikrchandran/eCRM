@@ -27,6 +27,14 @@ const taskInclude = {
 } satisfies Prisma.SalesTaskInclude;
 
 type TaskRecord = Prisma.SalesTaskGetPayload<{ include: typeof taskInclude }>;
+type VoiceNoteRecord = NonNullable<TaskRecord["voiceNotes"][number]>;
+type InsightVoiceNoteRecord = {
+  id: string;
+  summary: string | null;
+  transcript: string | null;
+  createdAt: Date;
+  leadCustomer: { id: string; name: string } | null;
+};
 
 type LookupRecord = { id: string; label?: string; name?: string; title?: string; orderNumber?: string };
 
@@ -35,15 +43,7 @@ type QueryDb = {
     findMany: (args: Prisma.SalesTaskFindManyArgs) => Promise<TaskRecord[]>;
   };
   salesVoiceNote?: {
-    findMany: (args: Prisma.SalesVoiceNoteFindManyArgs) => Promise<
-      Array<{
-        id: string;
-        summary: string | null;
-        transcript: string | null;
-        createdAt: Date;
-        leadCustomer: { id: string; name: string } | null;
-      }>
-    >;
+    findMany: (args: Prisma.SalesVoiceNoteFindManyArgs) => Promise<Array<VoiceNoteRecord | InsightVoiceNoteRecord>>;
   };
   salesVoiceNoteAction?: {
     findMany: (args: Prisma.SalesVoiceNoteActionFindManyArgs) => Promise<
@@ -99,6 +99,30 @@ function audioUrlForVoiceNote(id: string) {
   return `/my-day/voice-notes/${id}/audio`;
 }
 
+function mapVoiceNote(note: VoiceNoteRecord) {
+  return {
+    id: note.id,
+    taskId: note.taskId,
+    status: note.status,
+    audioUrl: audioUrlForVoiceNote(note.id),
+    transcript: note.transcript,
+    summary: note.summary,
+    customerAsk: note.customerAsk,
+    nextStep: note.nextStep,
+    processingError: note.processingError,
+    createdAt: note.createdAt,
+    actions: note.actions.map((action) => ({
+      id: action.id,
+      title: action.title,
+      description: action.description,
+      type: action.type,
+      suggestedDueAt: action.suggestedDueAt,
+      status: action.status,
+      confidenceLabel: action.confidenceLabel
+    }))
+  };
+}
+
 function mapTask(record: TaskRecord): MyDayTaskRecord {
   return {
     id: record.id,
@@ -114,27 +138,7 @@ function mapTask(record: TaskRecord): MyDayTaskRecord {
     opportunity: linkedRecord(record.opportunity),
     proposal: linkedRecord(record.proposal),
     order: linkedRecord(record.order),
-    voiceNotes: record.voiceNotes.map((note) => ({
-      id: note.id,
-      taskId: note.taskId,
-      status: note.status,
-      audioUrl: audioUrlForVoiceNote(note.id),
-      transcript: note.transcript,
-      summary: note.summary,
-      customerAsk: note.customerAsk,
-      nextStep: note.nextStep,
-      processingError: note.processingError,
-      createdAt: note.createdAt,
-      actions: note.actions.map((action) => ({
-        id: action.id,
-        title: action.title,
-        description: action.description,
-        type: action.type,
-        suggestedDueAt: action.suggestedDueAt,
-        status: action.status,
-        confidenceLabel: action.confidenceLabel
-      }))
-    }))
+    voiceNotes: record.voiceNotes.map(mapVoiceNote)
   };
 }
 
@@ -165,25 +169,42 @@ export async function loadMyDay(
   const dayStart = startOfDay(date);
   const dayEnd = addDays(dayStart, 1);
 
-  const records = await database.salesTask.findMany({
-    where: {
-      ownerId: user.id,
-      OR: [
-        { dueAt: { gte: dayStart, lt: dayEnd } },
-        { status: "OPEN", dueAt: { lt: dayStart } },
-        { dueAt: null, createdAt: { gte: dayStart, lt: dayEnd } }
-      ]
-    },
-    include: taskInclude,
-    orderBy: [{ dueAt: "asc" }, { createdAt: "asc" }]
-  });
+  const [records, standaloneVoiceNotes] = await Promise.all([
+    database.salesTask.findMany({
+      where: {
+        ownerId: user.id,
+        OR: [
+          { dueAt: { gte: dayStart, lt: dayEnd } },
+          { status: "OPEN", dueAt: { lt: dayStart } },
+          { dueAt: null, createdAt: { gte: dayStart, lt: dayEnd } }
+        ]
+      },
+      include: taskInclude,
+      orderBy: [{ dueAt: "asc" }, { createdAt: "asc" }]
+    }),
+    database.salesVoiceNote?.findMany({
+      where: {
+        ownerId: user.id,
+        taskId: null,
+        createdAt: { gte: dayStart, lt: dayEnd }
+      },
+      include: {
+        actions: {
+          where: { status: "DRAFT" },
+          orderBy: { createdAt: "asc" }
+        }
+      },
+      orderBy: { createdAt: "desc" }
+    }) ?? Promise.resolve([])
+  ]);
 
   const view: MyDayViewModel = {
     date: dayStart,
     openTasks: [],
     overdueTasks: [],
     completedTasks: [],
-    cancelledTasks: []
+    cancelledTasks: [],
+    voiceNotes: (standaloneVoiceNotes as VoiceNoteRecord[]).map(mapVoiceNote)
   };
 
   for (const task of records.map(mapTask)) {
@@ -315,7 +336,7 @@ export async function loadMyDayInsights(
       detail: "Carry forward unfinished work into tomorrow",
       linkedRecord: task.leadCustomer
     })),
-    voiceNoteSummaries: voiceNotes.map((note) => ({
+    voiceNoteSummaries: (voiceNotes as InsightVoiceNoteRecord[]).map((note) => ({
       id: note.id,
       title: note.summary ?? "Voice note transcript",
       detail: note.transcript?.slice(0, 160) ?? "Summary captured from voice note",

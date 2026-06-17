@@ -5,38 +5,48 @@ const taskPriorities = ["LOW", "MEDIUM", "HIGH", "URGENT"] as const;
 const reviewStatuses = ["DONE", "MOVE_TO_TOMORROW", "BLOCKED", "WAITING_ON_CUSTOMER", "CANCEL"] as const;
 
 const trimmedString = z.string().transform((value) => value.trim());
+const nullToUndefined = (value: unknown) => (value === null ? undefined : value);
 
 const requiredTrimmedString = (message: string) =>
   trimmedString.pipe(z.string().min(1, message));
 
-const optionalTrimmedString = z
-  .string()
-  .optional()
-  .transform((value) => {
-    const trimmed = value?.trim();
-    return trimmed ? trimmed : undefined;
-  });
+const optionalTrimmedString = z.preprocess(
+  nullToUndefined,
+  z
+    .string()
+    .optional()
+    .transform((value) => {
+      const trimmed = value?.trim();
+      return trimmed ? trimmed : undefined;
+    })
+);
 
-const optionalDate = z
-  .union([z.string(), z.date()])
-  .optional()
-  .transform((value) => {
-    if (!value) return undefined;
-    if (value instanceof Date) return value;
-    const trimmed = value.trim();
-    return trimmed ? new Date(trimmed) : undefined;
-  })
-  .refine((value) => value === undefined || !Number.isNaN(value.getTime()), "Choose a valid date.");
+const optionalDate = z.preprocess(
+  nullToUndefined,
+  z
+    .union([z.string(), z.date()])
+    .optional()
+    .transform((value) => {
+      if (!value) return undefined;
+      if (value instanceof Date) return value;
+      const trimmed = value.trim();
+      return trimmed ? new Date(trimmed) : undefined;
+    })
+    .refine((value) => value === undefined || !Number.isNaN(value.getTime()), "Choose a valid date.")
+);
 
-const optionalPositiveInteger = z
-  .union([z.string(), z.number()])
-  .optional()
-  .transform((value) => {
-    if (value === undefined || value === "") return undefined;
-    const parsed = Number(value);
-    return Number.isInteger(parsed) && parsed >= 0 ? parsed : Number.NaN;
-  })
-  .refine((value) => value === undefined || !Number.isNaN(value), "Enter a valid duration.");
+const optionalPositiveInteger = z.preprocess(
+  nullToUndefined,
+  z
+    .union([z.string(), z.number()])
+    .optional()
+    .transform((value) => {
+      if (value === undefined || value === "") return undefined;
+      const parsed = Number(value);
+      return Number.isInteger(parsed) && parsed >= 0 ? parsed : Number.NaN;
+    })
+    .refine((value) => value === undefined || !Number.isNaN(value), "Enter a valid duration.")
+);
 
 export const salesTaskInputSchema = z.object({
   title: requiredTrimmedString("Enter a task title."),

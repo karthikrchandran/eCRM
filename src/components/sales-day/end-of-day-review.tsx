@@ -37,7 +37,12 @@ export function EndOfDayReview({ date, tasks }: { date: Date; tasks: MyDayTaskRe
 
       <div className="overflow-hidden rounded-lg border border-[var(--border)]">
         {tasks.map((task) => (
-          <div className="grid gap-3 border-t border-[var(--border)] bg-white p-4 first:border-t-0 md:grid-cols-[1fr_14rem_1fr]" key={task.id}>
+          <div
+            aria-label={`Review ${task.title}`}
+            className="grid gap-3 border-t border-[var(--border)] bg-white p-4 first:border-t-0 md:grid-cols-[1fr_14rem_1fr]"
+            key={task.id}
+            role="group"
+          >
             <input name="taskId" type="hidden" value={task.id} />
             <div>
               <h3 className="font-semibold text-slate-950">{task.title}</h3>

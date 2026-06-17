@@ -80,6 +80,26 @@ describe("sales-day validators", () => {
     });
   });
 
+  it("normalizes missing FormData voice note metadata fields", () => {
+    expect(
+      salesVoiceNoteUploadMetadataSchema.parse({
+        taskId: null,
+        leadCustomerId: null,
+        opportunityId: null,
+        proposalId: null,
+        orderId: null,
+        durationSeconds: null
+      })
+    ).toEqual({
+      taskId: undefined,
+      leadCustomerId: undefined,
+      opportunityId: undefined,
+      proposalId: undefined,
+      orderId: undefined,
+      durationSeconds: undefined
+    });
+  });
+
   it("validates suggested action acceptance", () => {
     expect(acceptSuggestedActionSchema.parse({ actionId: "action_1" })).toEqual({
       actionId: "action_1"
