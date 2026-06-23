@@ -21,10 +21,10 @@ export default async function OpportunitiesPage({
   const optionsPromise = listOpportunityFormOptions();
 
   if (filters.view === "board") {
-    const [options, board] = await Promise.all([optionsPromise, listPipelineBoard(user, filters)]);
+    const [options, board, records] = await Promise.all([optionsPromise, listPipelineBoard(user, filters), listOpportunities(user, filters)]);
 
     return (
-      <OpportunityList filters={filters} owners={options.owners} records={[]} stages={options.stages}>
+      <OpportunityList filters={filters} owners={options.owners} records={records} stages={options.stages}>
         <OpportunityBoard recordsByStage={board.recordsByStage} stages={board.stages} />
       </OpportunityList>
     );

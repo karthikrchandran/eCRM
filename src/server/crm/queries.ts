@@ -52,6 +52,8 @@ export type LeadCustomerListRecord = Prisma.LeadCustomerGetPayload<{ include: ty
 export type LeadCustomerDetail = Prisma.LeadCustomerGetPayload<{ include: typeof leadDetailInclude }>;
 export type CustomerTimelineKind =
   | "activity"
+  | "follow_up"
+  | "task"
   | "text_note"
   | "voice_note"
   | "opportunity"
@@ -103,6 +105,20 @@ type CustomerTimelineDb = {
       Array<{ id: string; body: string; createdAt: Date; owner: { id: string; name: string } }>
     >;
   };
+  salesTask: {
+    findMany: (args: Prisma.SalesTaskFindManyArgs) => Promise<
+      Array<{
+        id: string;
+        title: string;
+        type: string;
+        priority: string;
+        status: string;
+        dueAt: Date | null;
+        updatedAt: Date;
+        owner: { id: string; name: string };
+      }>
+    >;
+  };
   salesVoiceNote: {
     findMany: (args: Prisma.SalesVoiceNoteFindManyArgs) => Promise<
       Array<{
@@ -117,7 +133,14 @@ type CustomerTimelineDb = {
   };
   opportunity: {
     findMany: (args: Prisma.OpportunityFindManyArgs) => Promise<
-      Array<{ id: string; title: string; updatedAt: Date; stage: { name: string }; owner: { id: string; name: string } }>
+      Array<{
+        id: string;
+        title: string;
+        nextFollowUpAt: Date | null;
+        updatedAt: Date;
+        stage: { name: string };
+        owner: { id: string; name: string };
+      }>
     >;
   };
   proposal: {
@@ -231,9 +254,11 @@ const timelineKindRank: Record<CustomerTimelineKind, number> = {
   order: 4,
   proposal: 5,
   opportunity: 6,
-  voice_note: 7,
-  text_note: 8,
-  activity: 9
+  follow_up: 7,
+  task: 8,
+  voice_note: 9,
+  text_note: 10,
+  activity: 11
 };
 
 export async function getCustomer360Timeline(
@@ -243,7 +268,7 @@ export async function getCustomer360Timeline(
 ): Promise<CustomerTimelineItem[]> {
   assertCanViewCrmRecords(user);
 
-  const [activities, textNotes, voiceNotes, opportunities, proposals, orders] = await Promise.all([
+  const [activities, salesTasks, textNotes, voiceNotes, opportunities, proposals, orders] = await Promise.all([
     database.activity.findMany({
       where: { leadCustomerId },
       orderBy: { createdAt: "desc" },
@@ -256,6 +281,21 @@ export async function getCustomer360Timeline(
         occurredAt: true,
         dueAt: true,
         createdAt: true,
+        owner: { select: { id: true, name: true } }
+      }
+    }),
+    database.salesTask.findMany({
+      where: { leadCustomerId },
+      orderBy: [{ dueAt: "asc" }, { updatedAt: "desc" }],
+      take: 50,
+      select: {
+        id: true,
+        title: true,
+        type: true,
+        priority: true,
+        status: true,
+        dueAt: true,
+        updatedAt: true,
         owner: { select: { id: true, name: true } }
       }
     }),
@@ -285,6 +325,7 @@ export async function getCustomer360Timeline(
       select: {
         id: true,
         title: true,
+        nextFollowUpAt: true,
         updatedAt: true,
         stage: { select: { name: true } },
         owner: { select: { id: true, name: true } }
@@ -320,6 +361,19 @@ export async function getCustomer360Timeline(
   ]);
 
   const items: CustomerTimelineItem[] = [
+    ...activities
+      .filter((activity) => activity.status === "OPEN" && activity.dueAt)
+      .map((activity) =>
+        timelineItem({
+          id: activity.id,
+          kind: "follow_up",
+          title: `Follow up: ${activity.subject}`,
+          detail: `${activity.type} | ${activity.status}`,
+          occurredAt: activity.dueAt ?? activity.createdAt,
+          actor: activity.owner.name,
+          href: `/leads/${leadCustomerId}`
+        })
+      ),
     ...activities.map((activity) =>
       timelineItem({
         id: activity.id,
@@ -328,6 +382,17 @@ export async function getCustomer360Timeline(
         detail: `${activity.type} | ${activity.status}`,
         occurredAt: activity.occurredAt ?? activity.dueAt ?? activity.createdAt,
         actor: activity.owner.name
+      })
+    ),
+    ...salesTasks.map((task) =>
+      timelineItem({
+        id: task.id,
+        kind: "task",
+        title: task.title,
+        detail: `${task.type} | ${task.priority} | ${task.status}`,
+        occurredAt: task.dueAt ?? task.updatedAt,
+        actor: task.owner.name,
+        href: "/my-day"
       })
     ),
     ...textNotes.map((note) =>
@@ -361,6 +426,19 @@ export async function getCustomer360Timeline(
         href: `/opportunities/${opportunity.id}`
       })
     ),
+    ...opportunities
+      .filter((opportunity) => opportunity.nextFollowUpAt)
+      .map((opportunity) =>
+        timelineItem({
+          id: opportunity.id,
+          kind: "follow_up",
+          title: `Follow up: ${opportunity.title}`,
+          detail: `Opportunity follow-up | Stage: ${opportunity.stage.name}`,
+          occurredAt: opportunity.nextFollowUpAt ?? opportunity.updatedAt,
+          actor: opportunity.owner.name,
+          href: `/opportunities/${opportunity.id}`
+        })
+      ),
     ...proposals.map((proposal) =>
       timelineItem({
         id: proposal.id,

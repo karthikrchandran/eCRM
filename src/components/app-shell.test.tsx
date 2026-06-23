@@ -36,4 +36,22 @@ describe("AppShell", () => {
 
     expect(screen.queryByRole("link", { name: "Production config" })).not.toBeInTheDocument();
   });
+
+  it("shows Customer 360 as a launchable workspace for sales and admin users", () => {
+    const { rerender } = render(
+      <AppShell user={{ name: "Kavya Iyer", email: "admin@example.com", role: "ADMIN" }}>
+        <p>Dashboard content</p>
+      </AppShell>
+    );
+
+    expect(screen.getByRole("link", { name: "Customer 360" })).toHaveAttribute("href", "/customer-360");
+
+    rerender(
+      <AppShell user={{ name: "Priya Menon", email: "sales@example.com", role: "SALES" }}>
+        <p>Dashboard content</p>
+      </AppShell>
+    );
+
+    expect(screen.getByRole("link", { name: "Customer 360" })).toHaveAttribute("href", "/customer-360");
+  });
 });

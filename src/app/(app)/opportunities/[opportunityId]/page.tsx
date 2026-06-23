@@ -64,6 +64,9 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
           <Link className="rounded-md border border-[var(--border)] px-3 py-2 text-sm font-semibold" href="/opportunities">
             Back
           </Link>
+          <Link className="crm-button crm-button-secondary text-sm" href={`/customer-360/${opportunity.leadCustomer.id}`}>
+            Customer 360
+          </Link>
           <Link className="crm-button crm-button-primary text-sm" href={`/opportunities/${opportunity.id}/edit`}>
             Edit
           </Link>

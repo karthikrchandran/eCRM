@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { MetricStrip, PageHeader, StatusBadge } from "@/components/ui/sales-primitives";
 
 type Filters = {
   q?: string;
@@ -31,7 +32,7 @@ type OpportunityRow = {
   probability: number | null;
   nextFollowUpAt: Date | null;
   updatedAt: Date;
-  leadCustomer: { name: string; state: "LEAD" | "CUSTOMER" | "DORMANT" };
+  leadCustomer: { id: string; name: string; state: "LEAD" | "CUSTOMER" | "DORMANT" };
   branch: { name: string } | null;
   stage: { name: string; kind: "OPEN" | "WON" | "LOST" | "DORMANT" };
   owner: Owner;
@@ -47,13 +48,9 @@ type OpportunityListProps = {
 };
 
 function formatAmount(value: unknown) {
-  if (value === null || value === undefined) {
-    return "Not set";
-  }
+  const amount = amountNumber(value);
 
-  const amount = Number(value.toString());
-
-  if (!Number.isFinite(amount)) {
+  if (amount === null) {
     return "Not set";
   }
 
@@ -61,6 +58,20 @@ function formatAmount(value: unknown) {
     maximumFractionDigits: 2,
     minimumFractionDigits: 2
   }).format(amount)}`;
+}
+
+function amountNumber(value: unknown) {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  const amount = Number(value.toString());
+
+  if (!Number.isFinite(amount)) {
+    return null;
+  }
+
+  return amount;
 }
 
 function formatDate(date: Date | null) {
@@ -95,33 +106,71 @@ function splitLabel(splits: OpportunityRow["splits"]) {
   return splits.map((split) => `${split.user.name} ${split.percent}%`).join(", ");
 }
 
+function followUpLabel(date: Date | null) {
+  if (!date) {
+    return { label: "No follow-up", tone: "neutral" as const };
+  }
+
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startOfTomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+
+  if (date < startOfToday) {
+    return { label: "Overdue", tone: "danger" as const };
+  }
+
+  if (date < startOfTomorrow) {
+    return { label: "Due today", tone: "warning" as const };
+  }
+
+  return { label: "Follow-up due", tone: "info" as const };
+}
+
 export function OpportunityList({ children, filters, owners, records, stages }: OpportunityListProps) {
+  const openRecords = records.filter((record) => record.stage.kind === "OPEN");
+  const pipelineValue = openRecords.reduce((total, record) => total + (amountNumber(record.estimatedValueInr) ?? 0), 0);
+  const weightedValue = openRecords.reduce(
+    (total, record) => total + (amountNumber(record.estimatedValueInr) ?? 0) * ((record.probability ?? 0) / 100),
+    0
+  );
+  const scheduledFollowUps = records.filter((record) => record.nextFollowUpAt).length;
+
   return (
     <div className="space-y-6">
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold">Opportunities</h1>
-          <p className="mt-1 text-sm text-[var(--muted)]">Pipeline records across company leads and customers.</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Link className="rounded-md border border-[var(--border)] px-3 py-2 text-sm font-semibold" href="/opportunities/stages">
+      <PageHeader
+        actions={
+          <>
+          <Link className="crm-button crm-button-secondary text-sm" href="/opportunities/stages">
             Stages
           </Link>
-          <Link className="rounded-md border border-[var(--border)] px-3 py-2 text-sm font-semibold" href="/opportunities/targets">
+          <Link className="crm-button crm-button-secondary text-sm" href="/opportunities/targets">
             Targets
           </Link>
           <Link className="crm-button crm-button-primary text-sm" href="/opportunities/new">
             New opportunity
           </Link>
-        </div>
-      </header>
+          </>
+        }
+        description="Prioritized pipeline records with next follow-ups, owner context, customer access, and value health."
+        eyebrow="Sales pipeline"
+        title="Opportunities"
+      />
+
+      <MetricStrip
+        metrics={[
+          { label: "Open pipeline", value: formatAmount(pipelineValue), detail: `${openRecords.length} active opportunities` },
+          { label: "Weighted pipeline", value: formatAmount(weightedValue), detail: "Value adjusted by probability" },
+          { label: "Follow-ups scheduled", value: scheduledFollowUps.toString(), detail: "Records with a next action date" },
+          { label: "Visible records", value: records.length.toString(), detail: "After current filters" }
+        ]}
+      />
 
       <form action="/opportunities" className="surface grid gap-4 p-4 md:grid-cols-6" method="get">
         <input name="view" type="hidden" value={filters.view ?? "list"} />
         <label className="flex flex-col gap-1 text-sm font-medium md:col-span-2">
           Search
           <input
-            className="rounded-md border border-[var(--border)] px-3 py-2"
+            className="crm-control"
             defaultValue={filters.q ?? ""}
             name="q"
             placeholder="Title, customer, product, notes"
@@ -131,7 +180,7 @@ export function OpportunityList({ children, filters, owners, records, stages }: 
 
         <label className="flex flex-col gap-1 text-sm font-medium">
           Owner
-          <select className="rounded-md border border-[var(--border)] px-3 py-2" defaultValue={filters.ownerId ?? ""} name="ownerId">
+          <select className="crm-control" defaultValue={filters.ownerId ?? ""} name="ownerId">
             <option value="">All owners</option>
             {owners.map((owner) => (
               <option key={owner.id} value={owner.id}>
@@ -143,7 +192,7 @@ export function OpportunityList({ children, filters, owners, records, stages }: 
 
         <label className="flex flex-col gap-1 text-sm font-medium">
           Stage
-          <select className="rounded-md border border-[var(--border)] px-3 py-2" defaultValue={filters.stageId ?? ""} name="stageId">
+          <select className="crm-control" defaultValue={filters.stageId ?? ""} name="stageId">
             <option value="">All stages</option>
             {stages.map((stage) => (
               <option key={stage.id} value={stage.id}>
@@ -155,7 +204,7 @@ export function OpportunityList({ children, filters, owners, records, stages }: 
 
         <label className="flex flex-col gap-1 text-sm font-medium">
           Follow-up
-          <select className="rounded-md border border-[var(--border)] px-3 py-2" defaultValue={filters.followUp ?? ""} name="followUp">
+          <select className="crm-control" defaultValue={filters.followUp ?? ""} name="followUp">
             <option value="">Any follow-up</option>
             <option value="overdue">overdue</option>
             <option value="today">today</option>
@@ -164,9 +213,12 @@ export function OpportunityList({ children, filters, owners, records, stages }: 
         </label>
 
         <div className="flex flex-wrap items-end gap-2">
-          <button className="rounded-md border border-[var(--border)] px-4 py-2 text-sm font-semibold" type="submit">
+          <button className="crm-button crm-button-primary text-sm" type="submit">
             Apply filters
           </button>
+          <Link className="crm-button crm-button-secondary text-sm" href="/opportunities">
+            Reset
+          </Link>
         </div>
       </form>
 
@@ -202,10 +254,14 @@ export function OpportunityList({ children, filters, owners, records, stages }: 
                 <th className="px-4 py-3 font-semibold">Value</th>
                 <th className="px-4 py-3 font-semibold">Follow-up</th>
                 <th className="px-4 py-3 font-semibold">Splits</th>
+                <th className="px-4 py-3 font-semibold">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {records.map((record) => (
+              {records.map((record) => {
+                const followUp = followUpLabel(record.nextFollowUpAt);
+
+                return (
                 <tr className="border-t border-[var(--border)]" key={record.id}>
                   <td className="px-4 py-4 align-top">
                     <Link className="font-semibold text-[var(--accent-strong)] hover:underline" href={`/opportunities/${record.id}`}>
@@ -231,12 +287,21 @@ export function OpportunityList({ children, filters, owners, records, stages }: 
                     <p className="text-xs text-[var(--muted)]">{record.probability !== null ? `${record.probability}%` : "No probability"}</p>
                   </td>
                   <td className="px-4 py-4 align-top">
-                    <p>{formatDate(record.nextFollowUpAt)}</p>
+                    <div className="space-y-2">
+                      <StatusBadge tone={followUp.tone}>{followUp.label}</StatusBadge>
+                      <p>{formatDate(record.nextFollowUpAt)}</p>
+                    </div>
                     <p className="text-xs text-[var(--muted)]">Updated {formatDate(record.updatedAt)}</p>
                   </td>
                   <td className="px-4 py-4 align-top text-[var(--muted)]">{splitLabel(record.splits)}</td>
+                  <td className="px-4 py-4 align-top">
+                    <Link className="font-semibold text-[var(--accent-strong)] hover:underline" href={`/customer-360/${record.leadCustomer.id}`}>
+                      Customer 360
+                    </Link>
+                  </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>

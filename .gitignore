@@ -1,5 +1,6 @@
 .superpowers/
 .worktrees/
+.local-storage/
 node_modules/
 *.tsbuildinfo
 next-env.d.ts

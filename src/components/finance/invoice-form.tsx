@@ -5,6 +5,10 @@ import type { ActionState } from "@/server/finance/types";
 
 const initialState: ActionState = { ok: false };
 
+function formatInputAmount(value: number) {
+  return (value / 100).toFixed(2);
+}
+
 function FieldError({ errors }: { errors?: string[] }) {
   return errors?.length ? (
     <p className="text-sm font-medium text-red-700" role="alert">
@@ -27,11 +31,14 @@ export function InvoiceForm({
   orderId: string;
 }) {
   const [state, formAction, pending] = useActionState(action, initialState);
-  const minorUnit = currency === "USD" ? "cents" : "paise";
+  const taxLabel = currency === "USD" ? "Manual tax amount" : "GST";
 
   return (
     <form action={formAction} className="grid gap-3">
       <input name="orderId" type="hidden" value={orderId} />
+      <p className="rounded-md border border-sky-100 bg-sky-50 px-3 py-2 text-xs text-sky-800">
+        Enter invoice values in {currency}. The system stores exact minor units after save.
+      </p>
       <div className="grid gap-3 md:grid-cols-2">
         <label className="flex flex-col gap-1 text-sm font-medium">
           Invoice number
@@ -46,12 +53,12 @@ export function InvoiceForm({
           <input className="crm-control" name="dueDate" type="date" />
         </label>
         <label className="flex flex-col gap-1 text-sm font-medium">
-          Invoice subtotal ({minorUnit})
-          <input className="crm-control" defaultValue={defaultSubtotalPaisa} min={1} name="subtotalPaisa" type="number" />
+          Invoice subtotal ({currency})
+          <input className="crm-control" defaultValue={formatInputAmount(defaultSubtotalPaisa)} min={0.01} name="subtotalAmount" step="0.01" type="number" />
         </label>
         <label className="flex flex-col gap-1 text-sm font-medium">
-          Tax ({minorUnit})
-          <input className="crm-control" defaultValue={defaultGstPaisa} min={0} name="gstPaisa" type="number" />
+          {taxLabel} ({currency})
+          <input className="crm-control" defaultValue={formatInputAmount(defaultGstPaisa)} min={0} name="taxAmount" step="0.01" type="number" />
         </label>
         <label className="flex flex-col gap-1 text-sm font-medium">
           Notes

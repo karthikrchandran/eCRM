@@ -51,6 +51,9 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ lea
           <Link className={detailActionClass} href={`/leads/${lead.id}/edit`}>
             Edit
           </Link>
+          <Link className={detailActionClass} href={`/customer-360/${lead.id}`}>
+            Customer 360
+          </Link>
           <Link className={detailActionClass} href={`/leads/${lead.id}/branches/new`}>
             Add branch
           </Link>

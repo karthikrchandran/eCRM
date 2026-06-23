@@ -23,12 +23,14 @@ function formatAmount(amount: NonNullable<CustomerTimelineItem["amount"]>) {
 const kindLabels: Record<CustomerTimelineItem["kind"], string> = {
   activity: "Activity",
   cost: "Cost",
+  follow_up: "Follow-up",
   invoice: "Invoice",
   opportunity: "Opportunity",
   order: "Order",
   payment: "Payment",
   production: "Production",
   proposal: "Proposal",
+  task: "Task",
   text_note: "Typed note",
   voice_note: "Voice note"
 };
@@ -45,7 +47,7 @@ export function CustomerTimeline({ items }: { items: CustomerTimelineItem[] }) {
         {items.map((item) => (
           <article className="surface grid gap-3 p-4 sm:grid-cols-[150px_1fr]" key={`${item.kind}:${item.id}`}>
             <div className="space-y-2">
-              <StatusBadge tone={item.kind === "payment" ? "success" : item.kind === "cost" ? "warning" : "info"}>
+              <StatusBadge tone={item.kind === "payment" ? "success" : item.kind === "cost" || item.kind === "follow_up" ? "warning" : "info"}>
                 {kindLabels[item.kind]}
               </StatusBadge>
               <p className="text-xs text-[var(--muted)]">{formatDate(item.occurredAt)}</p>

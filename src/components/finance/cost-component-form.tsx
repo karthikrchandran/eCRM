@@ -17,11 +17,13 @@ export function CostComponentForm({
   orderLineItems: Array<{ id: string; productNameSnapshot: string }>;
 }) {
   const [state, formAction, pending] = useActionState(action, initialState);
-  const minorUnit = currency === "USD" ? "cents" : "paise";
 
   return (
     <form action={formAction} className="grid gap-3">
       <input name="orderId" type="hidden" value={orderId} />
+      <p className="rounded-md border border-amber-100 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+        Enter real order costs in {currency}; approved costs reduce gross margin and incentive readiness.
+      </p>
       <div className="grid gap-3 md:grid-cols-2">
         <label className="flex flex-col gap-1 text-sm font-medium">
           Cost category
@@ -39,8 +41,8 @@ export function CostComponentForm({
           </select>
         </label>
         <label className="flex flex-col gap-1 text-sm font-medium">
-          Cost amount ({minorUnit})
-          <input className="crm-control" min={0} name="amountPaisa" type="number" />
+          Cost amount ({currency})
+          <input className="crm-control" min={0} name="amount" step="0.01" type="number" />
         </label>
         <label className="flex flex-col gap-1 text-sm font-medium">
           Description

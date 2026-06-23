@@ -12,9 +12,12 @@ import { CostComponentForm } from "./cost-component-form";
 import { IncentiveApprovalForm } from "./incentive-panel";
 import { InvoiceForm } from "./invoice-form";
 import { PaymentForm } from "./payment-form";
+import { StatusBadge } from "@/components/ui/sales-primitives";
 
 function formatPaisa(value: number, currency: string) {
-  return `${currency} ${new Intl.NumberFormat("en-IN", {
+  const locale = currency === "USD" ? "en-US" : "en-IN";
+
+  return `${currency} ${new Intl.NumberFormat(locale, {
     maximumFractionDigits: 2,
     minimumFractionDigits: 2
   }).format(value / 100)}`;
@@ -22,6 +25,10 @@ function formatPaisa(value: number, currency: string) {
 
 function formatDate(date: Date | null) {
   return date ? new Intl.DateTimeFormat("en-IN", { day: "2-digit", month: "short", year: "numeric" }).format(date) : "Not set";
+}
+
+function formatPercent(value: number) {
+  return `${new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 }).format(value)}%`;
 }
 
 export function OrderFinanceSummary({
@@ -40,13 +47,40 @@ export function OrderFinanceSummary({
   const paymentSummary = calculateOrderPaymentSummary(order.totalPaisa, invoices, payments);
   const approvedCostTotalPaisa = calculateApprovedCostTotal(costs);
   const grossMarginPaisa = order.subtotalPaisa - approvedCostTotalPaisa;
+  const paymentCoverage = paymentSummary.invoiceTotalPaisa
+    ? Math.min(100, (paymentSummary.collectedPaisa / paymentSummary.invoiceTotalPaisa) * 100)
+    : 0;
+  const receivableStatus = paymentSummary.pendingReceivablePaisa > 0 ? "Collection pending" : "Clear";
   const approveAction = incentive ? approveIncentiveAction.bind(null, incentive.id) : null;
 
   return (
     <section className="surface space-y-5 p-4">
-      <div>
-        <h2 className="text-lg font-semibold">Finance</h2>
-        <p className="mt-1 text-sm text-[var(--muted)]">Invoices, payments, approved costs, margin, and incentive readiness.</p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 className="text-lg font-semibold">Finance command center</h2>
+          <p className="mt-1 text-sm text-[var(--muted)]">Invoices, payments, approved costs, margin, and incentive readiness.</p>
+        </div>
+        <StatusBadge tone={paymentSummary.pendingReceivablePaisa > 0 ? "warning" : "success"}>{receivableStatus}</StatusBadge>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-3">
+        <article className="rounded-md border border-[var(--border)] bg-slate-50 p-4">
+          <p className="text-xs uppercase text-[var(--muted)]">Receivable status</p>
+          <p className="mt-2 text-lg font-semibold">{receivableStatus}</p>
+          <p className="mt-1 text-sm text-[var(--muted)]">{formatPaisa(paymentSummary.pendingReceivablePaisa, order.currency)} still open</p>
+        </article>
+        <article className="rounded-md border border-[var(--border)] bg-slate-50 p-4">
+          <p className="text-xs uppercase text-[var(--muted)]">Payment coverage</p>
+          <p className="mt-2 text-lg font-semibold">{formatPercent(paymentCoverage)}</p>
+          <p className="mt-1 text-sm text-[var(--muted)]">
+            {formatPaisa(paymentSummary.collectedPaisa, order.currency)} collected against invoices
+          </p>
+        </article>
+        <article className="rounded-md border border-[var(--border)] bg-slate-50 p-4">
+          <p className="text-xs uppercase text-[var(--muted)]">Gross margin</p>
+          <p className="mt-2 text-lg font-semibold">{formatPaisa(grossMarginPaisa, order.currency)}</p>
+          <p className="mt-1 text-sm text-[var(--muted)]">{formatPaisa(approvedCostTotalPaisa, order.currency)} approved costs</p>
+        </article>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

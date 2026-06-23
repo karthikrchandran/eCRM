@@ -15,6 +15,7 @@ type AppShellProps = {
 const baseNavItems = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/my-day", label: "My Day" },
+  { href: "/customer-360", label: "Customer 360" },
   { href: "/leads", label: "Leads" },
   { href: "/opportunities", label: "Opportunities" },
   { href: "/orders", label: "Orders" },

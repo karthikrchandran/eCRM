@@ -16,7 +16,7 @@ const opportunity = {
   estimatedValueInr: { toString: () => "125000.50" },
   probability: 60,
   lastReachAt: new Date("2026-06-14T10:00:00.000Z"),
-  nextFollowUpAt: new Date("2026-06-20T10:00:00.000Z"),
+  nextFollowUpAt: new Date("2026-07-20T10:00:00.000Z"),
   notes: "Needs proposal",
   createdById: "user_admin",
   updatedById: "user_admin",
@@ -43,13 +43,19 @@ describe("OpportunityList", () => {
     expect(screen.getByRole("heading", { name: "Opportunities" })).toBeVisible();
     expect(screen.getByRole("link", { name: "Board" })).toHaveAttribute("href", expect.stringContaining("view=board"));
     expect(screen.getByRole("link", { name: "New opportunity" })).toHaveAttribute("href", "/opportunities/new");
+    expect(screen.getByRole("link", { name: "Reset" })).toHaveAttribute("href", "/opportunities");
+    expect(screen.getByText("Open pipeline")).toBeVisible();
+    expect(screen.getByText("Weighted pipeline")).toBeVisible();
+    expect(screen.getByText("Follow-ups scheduled")).toBeVisible();
     expect(screen.getByRole("link", { name: "Acme LMS rollout" })).toHaveAttribute("href", "/opportunities/opp_1");
+    expect(screen.getByRole("link", { name: "Customer 360" })).toHaveAttribute("href", "/customer-360/lead_1");
     expect(screen.getByText("Acme Learning Pvt Ltd")).toBeVisible();
     expect(screen.getByText("Bengaluru Branch")).toBeVisible();
     expect(screen.getAllByText("Qualified")).toHaveLength(2);
-    expect(screen.getByText("INR 1,25,000.50")).toBeVisible();
+    expect(screen.getAllByText("INR 1,25,000.50")).toHaveLength(2);
     expect(screen.getByText("60%")).toBeVisible();
     expect(screen.getByText("Custom LMS")).toBeVisible();
+    expect(screen.getByText("Follow-up due")).toBeVisible();
   });
 });
 

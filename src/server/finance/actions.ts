@@ -31,15 +31,49 @@ function parseAllocations(value: FormDataEntryValue | null) {
   }
 }
 
+function parseMoneyToMinorUnits(value: FormDataEntryValue | null) {
+  if (value === null || value === undefined || value.toString().trim() === "") {
+    return undefined;
+  }
+
+  const amount = Number(value.toString());
+  if (!Number.isFinite(amount)) {
+    return value;
+  }
+
+  return Math.round(amount * 100).toString();
+}
+
+function moneyField(formData: FormData, majorName: string, minorName: string) {
+  return parseMoneyToMinorUnits(formData.get(majorName)) ?? formData.get(minorName);
+}
+
+function normalizeAllocation(allocation: unknown) {
+  if (!allocation || typeof allocation !== "object") {
+    return allocation;
+  }
+
+  const record = allocation as Record<string, unknown>;
+  if (record.amountPaisa !== undefined) {
+    return allocation;
+  }
+
+  if (record.amount !== undefined) {
+    return { ...record, amountPaisa: parseMoneyToMinorUnits(record.amount as FormDataEntryValue) };
+  }
+
+  return allocation;
+}
+
 function parsePaymentAllocations(formData: FormData) {
   const parsedAllocations = parseAllocations(formData.get("allocations"));
 
   if (Array.isArray(parsedAllocations) && parsedAllocations.length > 0) {
-    return parsedAllocations;
+    return parsedAllocations.map(normalizeAllocation);
   }
 
   const invoiceId = formData.get("invoiceId")?.toString();
-  const amountPaisa = Number(formData.get("amountPaisa"));
+  const amountPaisa = Number(moneyField(formData, "amount", "amountPaisa"));
 
   if (invoiceId) {
     return [{ invoiceId, amountPaisa }];
@@ -51,12 +85,12 @@ function parsePaymentAllocations(formData: FormData) {
 export function parseInvoiceFormForTest(formData: FormData): ParseResult<InvoiceInput & { totalPaisa: number }> {
   const result = invoiceInputSchema.safeParse({
     dueDate: formData.get("dueDate"),
-    gstPaisa: formData.get("gstPaisa"),
+    gstPaisa: moneyField(formData, "taxAmount", "gstPaisa"),
     invoiceDate: formData.get("invoiceDate"),
     invoiceNumber: formData.get("invoiceNumber"),
     notes: formData.get("notes"),
     orderId: formData.get("orderId"),
-    subtotalPaisa: formData.get("subtotalPaisa")
+    subtotalPaisa: moneyField(formData, "subtotalAmount", "subtotalPaisa")
   });
 
   if (!result.success) {
@@ -69,7 +103,7 @@ export function parseInvoiceFormForTest(formData: FormData): ParseResult<Invoice
 export function parsePaymentFormForTest(formData: FormData): ParseResult<PaymentInput> {
   const result = paymentInputSchema.safeParse({
     allocations: parsePaymentAllocations(formData),
-    amountPaisa: formData.get("amountPaisa"),
+    amountPaisa: moneyField(formData, "amount", "amountPaisa"),
     mode: formData.get("mode"),
     notes: formData.get("notes"),
     orderId: formData.get("orderId"),
@@ -87,7 +121,7 @@ export function parsePaymentFormForTest(formData: FormData): ParseResult<Payment
 
 export function parseCostComponentFormForTest(formData: FormData): ParseResult<CostComponentInput> {
   const result = costComponentInputSchema.safeParse({
-    amountPaisa: formData.get("amountPaisa"),
+    amountPaisa: moneyField(formData, "amount", "amountPaisa"),
     category: formData.get("category"),
     description: formData.get("description"),
     orderId: formData.get("orderId"),

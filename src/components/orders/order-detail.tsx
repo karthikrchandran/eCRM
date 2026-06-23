@@ -37,6 +37,9 @@ export function OrderDetail({ canManageFinance, finance, instantiateProductionAc
           <Link className="crm-button crm-button-secondary" href="/orders">
             Back to orders
           </Link>
+          <Link className="crm-button crm-button-secondary" href={`/customer-360/${order.leadCustomer.id}`}>
+            Customer 360
+          </Link>
           <Link className="crm-button crm-button-secondary" href="/production">
             Production
           </Link>

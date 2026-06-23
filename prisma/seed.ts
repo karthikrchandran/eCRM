@@ -1,5 +1,6 @@
 import bcrypt from "bcryptjs";
-import { PipelineStageKind, PrismaClient, ProposalStatus, UserRole } from "@prisma/client";
+import { OrderStatus, PipelineStageKind, PrismaClient, ProposalStatus, UserRole } from "@prisma/client";
+import { demoProductionWorkItems, demoProposalLineItems, demoProposalTotals } from "./seed-fixtures";
 
 if (process.env.NODE_ENV === "production") {
   throw new Error("Refusing to run the local seed script in production.");
@@ -449,10 +450,10 @@ async function main() {
       internalNotes: "Accepted scope is ready for order booking and production kickoff.",
       paymentTerms: "50 percent advance and 50 percent on delivery.",
       status: ProposalStatus.ACCEPTED,
-      subtotalPaisa: 500000,
-      gstPaisa: 90000,
+      subtotalPaisa: demoProposalTotals.subtotalPaisa,
+      gstPaisa: demoProposalTotals.gstPaisa,
       title: "Northstar LMS modernization proposal",
-      totalPaisa: 590000,
+      totalPaisa: demoProposalTotals.totalPaisa,
       updatedById: admin.id,
       validUntil: new Date("2026-07-31T00:00:00.000Z"),
       versionLabel: "Seed accepted"
@@ -470,10 +471,10 @@ async function main() {
       paymentTerms: "50 percent advance and 50 percent on delivery.",
       sequenceNumber: 9001,
       status: ProposalStatus.ACCEPTED,
-      subtotalPaisa: 500000,
-      gstPaisa: 90000,
+      subtotalPaisa: demoProposalTotals.subtotalPaisa,
+      gstPaisa: demoProposalTotals.gstPaisa,
       title: "Northstar LMS modernization proposal",
-      totalPaisa: 590000,
+      totalPaisa: demoProposalTotals.totalPaisa,
       createdById: admin.id,
       updatedById: admin.id,
       validUntil: new Date("2026-07-31T00:00:00.000Z"),
@@ -481,37 +482,39 @@ async function main() {
     }
   });
 
-  await prisma.proposalLineItem.upsert({
-    where: { id: "seed_proposal_line_acme_lms_elearning" },
-    update: {
-      description: "Five interactive onboarding modules.",
-      gstRateBps: 1800,
-      lineGstPaisa: 90000,
-      lineSubtotalPaisa: 500000,
-      lineTotalPaisa: 590000,
-      productCategorySnapshot: "eLearning",
-      productNameSnapshot: "eLearning",
-      productServiceId: "seed_product_elearning",
-      quantity: 5,
-      sortOrder: 0,
-      unitPricePaisa: 100000
-    },
-    create: {
-      id: "seed_proposal_line_acme_lms_elearning",
-      description: "Five interactive onboarding modules.",
-      gstRateBps: 1800,
-      lineGstPaisa: 90000,
-      lineSubtotalPaisa: 500000,
-      lineTotalPaisa: 590000,
-      productCategorySnapshot: "eLearning",
-      productNameSnapshot: "eLearning",
-      productServiceId: "seed_product_elearning",
-      proposalId: acceptedProposal.id,
-      quantity: 5,
-      sortOrder: 0,
-      unitPricePaisa: 100000
-    }
-  });
+  for (const lineItem of demoProposalLineItems) {
+    await prisma.proposalLineItem.upsert({
+      where: { id: lineItem.id },
+      update: {
+        description: lineItem.description,
+        gstRateBps: lineItem.gstRateBps,
+        lineGstPaisa: lineItem.lineGstPaisa,
+        lineSubtotalPaisa: lineItem.lineSubtotalPaisa,
+        lineTotalPaisa: lineItem.lineTotalPaisa,
+        productCategorySnapshot: lineItem.productCategorySnapshot,
+        productNameSnapshot: lineItem.productNameSnapshot,
+        productServiceId: lineItem.productServiceId,
+        quantity: lineItem.quantity,
+        sortOrder: lineItem.sortOrder,
+        unitPricePaisa: lineItem.unitPricePaisa
+      },
+      create: {
+        id: lineItem.id,
+        description: lineItem.description,
+        gstRateBps: lineItem.gstRateBps,
+        lineGstPaisa: lineItem.lineGstPaisa,
+        lineSubtotalPaisa: lineItem.lineSubtotalPaisa,
+        lineTotalPaisa: lineItem.lineTotalPaisa,
+        productCategorySnapshot: lineItem.productCategorySnapshot,
+        productNameSnapshot: lineItem.productNameSnapshot,
+        productServiceId: lineItem.productServiceId,
+        proposalId: acceptedProposal.id,
+        quantity: lineItem.quantity,
+        sortOrder: lineItem.sortOrder,
+        unitPricePaisa: lineItem.unitPricePaisa
+      }
+    });
+  }
 
   await prisma.proposalPdfAttachment.upsert({
     where: { id: "seed_proposal_pdf_acme_lms_accepted" },
@@ -542,6 +545,189 @@ async function main() {
       uploadedById: admin.id
     }
   });
+
+  const demoOrder = await prisma.order.upsert({
+    where: { proposalId: acceptedProposal.id },
+    update: {
+      branchId: "seed_branch_acme_bengaluru",
+      bookedAt: new Date("2026-06-17T09:00:00.000Z"),
+      currency: "INR",
+      deliveryDueAt: new Date("2026-07-18T00:00:00.000Z"),
+      gstPaisa: demoProposalTotals.gstPaisa,
+      leadCustomerId: sampleLead.id,
+      orderNumber: "ORD-2026-SEED-0001",
+      ownerId: sales.id,
+      status: OrderStatus.IN_PRODUCTION,
+      subtotalPaisa: demoProposalTotals.subtotalPaisa,
+      totalPaisa: demoProposalTotals.totalPaisa,
+      updatedById: admin.id
+    },
+    create: {
+      id: "seed_order_northstar_multi_service",
+      branchId: "seed_branch_acme_bengaluru",
+      bookedAt: new Date("2026-06-17T09:00:00.000Z"),
+      createdById: admin.id,
+      currency: "INR",
+      deliveryDueAt: new Date("2026-07-18T00:00:00.000Z"),
+      gstPaisa: demoProposalTotals.gstPaisa,
+      leadCustomerId: sampleLead.id,
+      opportunityId: opportunity.id,
+      orderNumber: "ORD-2026-SEED-0001",
+      ownerId: sales.id,
+      proposalId: acceptedProposal.id,
+      status: OrderStatus.IN_PRODUCTION,
+      subtotalPaisa: demoProposalTotals.subtotalPaisa,
+      totalPaisa: demoProposalTotals.totalPaisa,
+      updatedById: admin.id
+    }
+  });
+
+  await prisma.orderOwnerSplitSnapshot.upsert({
+    where: {
+      orderId_userId: {
+        orderId: demoOrder.id,
+        userId: sales.id
+      }
+    },
+    update: { percent: 100 },
+    create: {
+      orderId: demoOrder.id,
+      percent: 100,
+      userId: sales.id
+    }
+  });
+
+  const orderLineItemsByProposalLineId = new Map<string, string>();
+  for (const workItem of demoProductionWorkItems) {
+    const lineItem = demoProposalLineItems.find((item) => item.id === workItem.proposalLineItemId);
+
+    if (!lineItem) {
+      throw new Error(`Missing proposal line item fixture for ${workItem.proposalLineItemId}.`);
+    }
+
+    const orderLineItem = await prisma.orderLineItem.upsert({
+      where: { proposalLineItemId: lineItem.id },
+      update: {
+        description: lineItem.description,
+        gstRateBps: lineItem.gstRateBps,
+        lineGstPaisa: lineItem.lineGstPaisa,
+        lineSubtotalPaisa: lineItem.lineSubtotalPaisa,
+        lineTotalPaisa: lineItem.lineTotalPaisa,
+        orderId: demoOrder.id,
+        productCategorySnapshot: lineItem.productCategorySnapshot,
+        productNameSnapshot: lineItem.productNameSnapshot,
+        productServiceId: lineItem.productServiceId,
+        productionTemplateKeySnapshot: workItem.productionTemplateKey,
+        quantity: lineItem.quantity,
+        sortOrder: lineItem.sortOrder,
+        unitPricePaisa: lineItem.unitPricePaisa
+      },
+      create: {
+        id: workItem.orderLineItemId,
+        description: lineItem.description,
+        gstRateBps: lineItem.gstRateBps,
+        lineGstPaisa: lineItem.lineGstPaisa,
+        lineSubtotalPaisa: lineItem.lineSubtotalPaisa,
+        lineTotalPaisa: lineItem.lineTotalPaisa,
+        orderId: demoOrder.id,
+        productCategorySnapshot: lineItem.productCategorySnapshot,
+        productNameSnapshot: lineItem.productNameSnapshot,
+        productServiceId: lineItem.productServiceId,
+        productionTemplateKeySnapshot: workItem.productionTemplateKey,
+        proposalLineItemId: lineItem.id,
+        quantity: lineItem.quantity,
+        sortOrder: lineItem.sortOrder,
+        unitPricePaisa: lineItem.unitPricePaisa
+      }
+    });
+    orderLineItemsByProposalLineId.set(lineItem.id, orderLineItem.id);
+  }
+
+  for (const workItem of demoProductionWorkItems) {
+    const orderLineItemId = orderLineItemsByProposalLineId.get(workItem.proposalLineItemId);
+    const template = defaultProductionTemplates.find((item) => item.key === workItem.productionTemplateKey);
+    const startedAt = "startedAt" in workItem ? workItem.startedAt : null;
+    const completedAt = "completedAt" in workItem ? workItem.completedAt : null;
+
+    if (!orderLineItemId) {
+      throw new Error(`Missing order line item for ${workItem.proposalLineItemId}.`);
+    }
+
+    if (!template) {
+      throw new Error(`Missing production template fixture for ${workItem.productionTemplateKey}.`);
+    }
+
+    await prisma.productionWorkItem.upsert({
+      where: { id: workItem.id },
+      update: {
+        assignedToId: sales.id,
+        completedAt,
+        dueAt: workItem.dueAt,
+        orderLineItemId,
+        productCategorySnapshot: workItem.productCategorySnapshot,
+        productNameSnapshot: workItem.productNameSnapshot,
+        productionTemplateId: workItem.productionTemplateId,
+        startedAt,
+        status: workItem.status,
+        title: workItem.title,
+        updatedById: admin.id
+      },
+      create: {
+        id: workItem.id,
+        assignedToId: sales.id,
+        completedAt,
+        createdById: admin.id,
+        dueAt: workItem.dueAt,
+        orderLineItemId,
+        productCategorySnapshot: workItem.productCategorySnapshot,
+        productNameSnapshot: workItem.productNameSnapshot,
+        productionTemplateId: workItem.productionTemplateId,
+        startedAt,
+        status: workItem.status,
+        title: workItem.title,
+        updatedById: admin.id
+      }
+    });
+
+    const stageStatusByKey = workItem.stageStatusByKey as Record<string, "NOT_STARTED" | "IN_PROGRESS" | "BLOCKED" | "DONE" | "SKIPPED">;
+    for (const templateStage of template.stages) {
+      const stageStatus = stageStatusByKey[templateStage.key] ?? "NOT_STARTED";
+      const stageStartedAt = stageStatus === "NOT_STARTED" ? null : startedAt;
+      const stageCompletedAt = stageStatus === "DONE" || stageStatus === "SKIPPED" ? completedAt ?? new Date("2026-06-21T17:00:00.000Z") : null;
+
+      await prisma.productionStageInstance.upsert({
+        where: { id: `${workItem.id}_${templateStage.key}` },
+        update: {
+          assignedToId: sales.id,
+          completedAt: stageCompletedAt,
+          completedById: stageCompletedAt ? admin.id : null,
+          description: null,
+          dueAt: workItem.dueAt,
+          name: templateStage.name,
+          required: true,
+          sortOrder: templateStage.sortOrder,
+          startedAt: stageStartedAt,
+          status: stageStatus,
+          templateStageId: templateStage.id
+        },
+        create: {
+          id: `${workItem.id}_${templateStage.key}`,
+          assignedToId: sales.id,
+          completedAt: stageCompletedAt,
+          completedById: stageCompletedAt ? admin.id : null,
+          description: null,
+          dueAt: workItem.dueAt,
+          name: templateStage.name,
+          required: true,
+          sortOrder: templateStage.sortOrder,
+          startedAt: stageStartedAt,
+          status: stageStatus,
+          templateStageId: templateStage.id,
+          workItemId: workItem.id
+        }
+      });
+    }
+  }
 }
 
 main()

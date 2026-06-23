@@ -84,6 +84,20 @@ describe("crm queries", () => {
           }
         ])
       },
+      salesTask: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            id: "task_1",
+            title: "Send revised proposal",
+            type: "FOLLOW_UP",
+            priority: "HIGH",
+            status: "OPEN",
+            dueAt: new Date("2026-06-21T09:00:00.000Z"),
+            updatedAt: new Date("2026-06-20T12:00:00.000Z"),
+            owner: { id: "sales_1", name: "Sales User" }
+          }
+        ])
+      },
       salesTextNote: {
         findMany: vi.fn().mockResolvedValue([
           {
@@ -111,6 +125,7 @@ describe("crm queries", () => {
           {
             id: "opp_1",
             title: "Enterprise rollout",
+            nextFollowUpAt: new Date("2026-06-21T10:00:00.000Z"),
             updatedAt: new Date("2026-06-18T10:00:00.000Z"),
             stage: { name: "Proposal Sent" },
             owner: { id: "sales_1", name: "Sales User" }
@@ -148,6 +163,8 @@ describe("crm queries", () => {
     });
 
     expect(result.map((item) => item.kind)).toEqual([
+      "follow_up",
+      "task",
       "cost",
       "payment",
       "invoice",
@@ -160,8 +177,17 @@ describe("crm queries", () => {
       "activity"
     ]);
     expect(result[0]).toMatchObject({
-      title: "Cost approved: Voiceover vendor",
-      amount: { currency: "USD", minorUnits: 10000 }
+      kind: "follow_up",
+      title: "Follow up: Enterprise rollout",
+      href: "/opportunities/opp_1"
+    });
+    expect(result[1]).toMatchObject({
+      kind: "task",
+      title: "Send revised proposal",
+      detail: "FOLLOW_UP | HIGH | OPEN"
+    });
+    expect(result[0]).toMatchObject({
+      actor: "Sales User"
     });
   });
 });

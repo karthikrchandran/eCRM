@@ -5,6 +5,14 @@ import type { ActionState } from "@/server/finance/types";
 
 const initialState: ActionState = { ok: false };
 
+function formatAmount(value: number, currency: string) {
+  const locale = currency === "USD" ? "en-US" : "en-IN";
+  return `${currency} ${new Intl.NumberFormat(locale, {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2
+  }).format(value / 100)}`;
+}
+
 export function PaymentForm({
   action,
   currency,
@@ -17,18 +25,20 @@ export function PaymentForm({
   orderId: string;
 }) {
   const [state, formAction, pending] = useActionState(action, initialState);
-  const minorUnit = currency === "USD" ? "cents" : "paise";
 
   return (
     <form action={formAction} className="grid gap-3">
       <input name="orderId" type="hidden" value={orderId} />
+      <p className="rounded-md border border-sky-100 bg-sky-50 px-3 py-2 text-xs text-sky-800">
+        Allocate the payment to one invoice for now. Enter the amount in {currency}.
+      </p>
       <div className="grid gap-3 md:grid-cols-2">
         <label className="flex flex-col gap-1 text-sm font-medium">
           Invoice
           <select className="crm-control" name="invoiceId">
             {invoices.map((invoice) => (
               <option key={invoice.id} value={invoice.id}>
-                {invoice.invoiceNumber}
+                {invoice.invoiceNumber} - {formatAmount(invoice.totalPaisa, currency)}
               </option>
             ))}
           </select>
@@ -38,8 +48,8 @@ export function PaymentForm({
           <input className="crm-control" name="paymentDate" type="date" />
         </label>
         <label className="flex flex-col gap-1 text-sm font-medium">
-          Payment amount ({minorUnit})
-          <input className="crm-control" min={1} name="amountPaisa" type="number" />
+          Payment amount ({currency})
+          <input className="crm-control" min={0.01} name="amount" step="0.01" type="number" />
         </label>
         <label className="flex flex-col gap-1 text-sm font-medium">
           Mode
