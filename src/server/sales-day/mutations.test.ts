@@ -1,5 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
-import { acceptSuggestedAction, completeSalesTask, reopenSalesTask, saveEndOfDayReview } from "./mutations";
+import {
+  acceptSuggestedAction,
+  completeSalesTask,
+  createSalesTextNote,
+  deleteSalesTextNote,
+  reopenSalesTask,
+  saveEndOfDayReview,
+  updateSalesTextNote
+} from "./mutations";
 import type { SalesDayUser } from "./permissions";
 
 const salesUser: SalesDayUser = { id: "sales_1", role: "SALES" };
@@ -185,5 +193,66 @@ describe("sales-day mutations", () => {
       "You can only update your own My Day tasks."
     );
     expect(database.salesTask.update).not.toHaveBeenCalled();
+  });
+
+  it("creates a typed My Day note linked to CRM records", async () => {
+    const database = {
+      salesTextNote: {
+        create: vi.fn().mockResolvedValue({ id: "text_note_1" })
+      }
+    };
+
+    await createSalesTextNote(
+      salesUser,
+      {
+        body: "Client prefers USD pricing with tax entered manually.",
+        leadCustomerId: "lead_1",
+        opportunityId: "opp_1"
+      },
+      database
+    );
+
+    expect(database.salesTextNote.create).toHaveBeenCalledWith({
+      data: {
+        body: "Client prefers USD pricing with tax entered manually.",
+        ownerId: "sales_1",
+        leadCustomerId: "lead_1",
+        opportunityId: "opp_1",
+        proposalId: null,
+        orderId: null,
+        taskId: null
+      },
+      select: { id: true }
+    });
+  });
+
+  it("updates and deletes only notes owned by the signed-in salesperson", async () => {
+    const database = {
+      salesTextNote: {
+        findUnique: vi.fn().mockResolvedValue({ id: "text_note_1", ownerId: "sales_1" }),
+        update: vi.fn().mockResolvedValue({ id: "text_note_1" }),
+        delete: vi.fn().mockResolvedValue({ id: "text_note_1" })
+      }
+    };
+
+    await updateSalesTextNote(salesUser, "text_note_1", { body: "Updated note", orderId: "order_1" }, database);
+    await deleteSalesTextNote(salesUser, "text_note_1", database);
+
+    expect(database.salesTextNote.update).toHaveBeenCalledWith({
+      where: { id: "text_note_1" },
+      data: {
+        body: "Updated note",
+        leadCustomerId: null,
+        opportunityId: null,
+        proposalId: null,
+        orderId: "order_1",
+        taskId: null
+      },
+      select: { id: true }
+    });
+    expect(database.salesTextNote.delete).toHaveBeenCalledWith({
+      where: { id: "text_note_1" },
+      select: { id: true }
+    });
   });
 });

@@ -91,6 +91,7 @@ export function OrderFinanceSummary({
             <div className="mt-3">
               <InvoiceForm
                 action={createInvoiceAction}
+                currency={order.currency}
                 defaultGstPaisa={order.gstPaisa}
                 defaultSubtotalPaisa={order.subtotalPaisa}
                 orderId={order.id}
@@ -100,13 +101,18 @@ export function OrderFinanceSummary({
           <div>
             <h3 className="text-base font-semibold">Payment</h3>
             <div className="mt-3">
-              <PaymentForm action={recordPaymentAction} invoices={invoices} orderId={order.id} />
+              <PaymentForm action={recordPaymentAction} currency={order.currency} invoices={invoices} orderId={order.id} />
             </div>
           </div>
           <div>
             <h3 className="text-base font-semibold">Cost</h3>
             <div className="mt-3">
-              <CostComponentForm action={createCostComponentAction} orderId={order.id} orderLineItems={order.lineItems} />
+              <CostComponentForm
+                action={createCostComponentAction}
+                currency={order.currency}
+                orderId={order.id}
+                orderLineItems={order.lineItems}
+              />
             </div>
           </div>
         </div>

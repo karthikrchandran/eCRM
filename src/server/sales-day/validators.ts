@@ -81,6 +81,15 @@ export const salesVoiceNoteUploadMetadataSchema = z.object({
   durationSeconds: optionalPositiveInteger
 });
 
+export const salesTextNoteInputSchema = z.object({
+  body: requiredTrimmedString("Enter a note."),
+  taskId: optionalTrimmedString,
+  leadCustomerId: optionalTrimmedString,
+  opportunityId: optionalTrimmedString,
+  proposalId: optionalTrimmedString,
+  orderId: optionalTrimmedString
+});
+
 export const acceptSuggestedActionSchema = z.object({
   actionId: requiredTrimmedString("Choose a suggested action.")
 });
@@ -103,5 +112,13 @@ export const salesDayReviewSchema = z.object({
 
 export type SalesTaskInput = z.infer<typeof salesTaskInputSchema>;
 export type SalesTaskUpdateInput = z.infer<typeof salesTaskUpdateSchema>;
+export type SalesTextNoteInput = {
+  body: string;
+  taskId?: string;
+  leadCustomerId?: string;
+  opportunityId?: string;
+  proposalId?: string;
+  orderId?: string;
+};
 export type SalesVoiceNoteUploadMetadata = z.infer<typeof salesVoiceNoteUploadMetadataSchema>;
 export type SalesDayReviewInput = z.infer<typeof salesDayReviewSchema>;

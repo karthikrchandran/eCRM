@@ -1,4 +1,4 @@
-import { canViewCompanyRecords } from "@/server/auth/permissions";
+import { canManageAdminSettings, canViewCompanyRecords } from "@/server/auth/permissions";
 import type { ProductionUser } from "./types";
 
 export function assertCanViewProductionRecords(user: ProductionUser) {
@@ -10,5 +10,11 @@ export function assertCanViewProductionRecords(user: ProductionUser) {
 export function assertCanWriteProductionRecords(user: ProductionUser) {
   if (!canViewCompanyRecords(user.role)) {
     throw new Error("You do not have permission to manage production records.");
+  }
+}
+
+export function assertCanManageProductionConfig(user: ProductionUser) {
+  if (!canManageAdminSettings(user.role)) {
+    throw new Error("You do not have permission to manage production configuration.");
   }
 }

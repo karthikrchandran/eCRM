@@ -62,6 +62,7 @@ export const proposalLineInputSchema = z
     quantity: positiveInt("Enter a quantity of 1 or greater."),
     unitPricePaisa: nonNegativeInt("Enter a unit price of 0 or greater."),
     gstRateBps: nonNegativeInt("Enter GST basis points from 0 to 2800.").max(2800, "Enter GST basis points from 0 to 2800."),
+    manualTaxPaisa: nonNegativeInt("Enter a manual tax amount of 0 or greater.").optional(),
     gstOverrideReason: optionalTrimmedString
   })
   .superRefine((value, context) => {

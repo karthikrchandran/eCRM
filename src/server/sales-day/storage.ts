@@ -6,6 +6,7 @@ export const MAX_VOICE_NOTE_BYTES = 25 * 1024 * 1024;
 const mimeToExtension = {
   "audio/webm": "webm",
   "audio/mp4": "mp4",
+  "audio/x-m4a": "m4a",
   "audio/mpeg": "mp3",
   "audio/wav": "wav",
   "audio/x-wav": "wav"
@@ -46,8 +47,25 @@ function monthSegment(date: Date) {
   return `${date.getUTCFullYear()}-${month}`;
 }
 
+function normalizeAudioMimeType(mimeType: string) {
+  const normalized = mimeType.split(";")[0]?.trim().toLowerCase();
+  if (normalized === "audio/x-m4a" || normalized === "audio/m4a") {
+    return "audio/mp4";
+  }
+  return normalized;
+}
+
+function extensionForAudio(input: SaveVoiceNoteAudioInput, mimeType: string) {
+  const originalExtension = path.extname(input.originalFileName).replace(".", "").toLowerCase();
+  if (mimeType === "audio/mp4" && originalExtension === "m4a") {
+    return "m4a";
+  }
+  return mimeToExtension[mimeType as SupportedAudioMimeType];
+}
+
 export function assertSupportedAudio(mimeType: string, sizeBytes: number) {
-  if (!(mimeType in mimeToExtension)) {
+  const normalized = normalizeAudioMimeType(mimeType);
+  if (!normalized || !(normalized in mimeToExtension)) {
     throw new Error("Unsupported audio format.");
   }
 
@@ -59,7 +77,8 @@ export function assertSupportedAudio(mimeType: string, sizeBytes: number) {
 export async function saveVoiceNoteAudio(input: SaveVoiceNoteAudioInput) {
   assertSupportedAudio(input.mimeType, input.buffer.byteLength);
   const createdAt = input.now ?? new Date();
-  const extension = mimeToExtension[input.mimeType as SupportedAudioMimeType];
+  const mimeType = normalizeAudioMimeType(input.mimeType) as SupportedAudioMimeType;
+  const extension = extensionForAudio(input, mimeType);
   const storageKey = path
     .join(safePathSegment(input.ownerId), monthSegment(createdAt), `${safePathSegment(input.voiceNoteId)}.${extension}`)
     .replace(/\\/g, "/");
@@ -70,7 +89,7 @@ export async function saveVoiceNoteAudio(input: SaveVoiceNoteAudioInput) {
 
   return {
     storageKey,
-    mimeType: input.mimeType as SupportedAudioMimeType,
+    mimeType,
     fileSizeBytes: input.buffer.byteLength,
     originalFileName: input.originalFileName
   };

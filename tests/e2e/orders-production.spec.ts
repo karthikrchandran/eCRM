@@ -95,5 +95,5 @@ test("admin books an accepted proposal and completes production stages", async (
   await expect(page.getByText("DONE", { exact: true }).first()).toBeVisible();
   await page.getByRole("link", { name: "Back to production" }).click();
   await expect(page.getByRole("heading", { name: "Production" })).toBeVisible();
-  await expect(page.getByText("DONE")).toBeVisible();
+  await expect(page.getByText(`${stageCount}/${stageCount} complete`).first()).toBeVisible();
 });

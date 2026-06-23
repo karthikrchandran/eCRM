@@ -7,14 +7,17 @@ const initialState: ActionState = { ok: false };
 
 export function CostComponentForm({
   action,
+  currency,
   orderId,
   orderLineItems
 }: {
   action: (state: ActionState, formData: FormData) => Promise<ActionState>;
+  currency: string;
   orderId: string;
   orderLineItems: Array<{ id: string; productNameSnapshot: string }>;
 }) {
   const [state, formAction, pending] = useActionState(action, initialState);
+  const minorUnit = currency === "USD" ? "cents" : "paise";
 
   return (
     <form action={formAction} className="grid gap-3">
@@ -36,7 +39,7 @@ export function CostComponentForm({
           </select>
         </label>
         <label className="flex flex-col gap-1 text-sm font-medium">
-          Cost amount paise
+          Cost amount ({minorUnit})
           <input className="crm-control" min={0} name="amountPaisa" type="number" />
         </label>
         <label className="flex flex-col gap-1 text-sm font-medium">

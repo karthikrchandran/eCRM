@@ -1,0 +1,191 @@
+<!doctype html><html><head><meta charset="utf-8"><title>eCRM User Guide</title><style>
+  @page { size: A4; margin: 12mm; }
+  
+  :root {
+    --blue-950: #08275d;
+    --blue-850: #123f7b;
+    --blue-700: #1d66d8;
+    --blue-100: #eaf3ff;
+    --gray-950: #111827;
+    --gray-700: #374151;
+    --gray-500: #6b7280;
+    --gray-300: #d1d5db;
+    --gray-100: #f3f6fa;
+    --white: #ffffff;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Roboto", "Segoe UI", Arial, sans-serif;
+    color: var(--gray-950);
+    background: var(--gray-100);
+  }
+  h1, h2, h3, p { margin: 0; }
+  p { line-height: 1.5; }
+  .eyebrow {
+    color: var(--blue-700);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0;
+    text-transform: uppercase;
+  }
+  .muted { color: var(--gray-500); }
+  .small { font-size: 11px; }
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid #b6c7df;
+    border-radius: 999px;
+    padding: 5px 10px;
+    color: var(--blue-950);
+    background: #f8fbff;
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .card {
+    border: 1px solid #cdd8e8;
+    border-radius: 8px;
+    background: var(--white);
+    box-shadow: 0 12px 28px rgb(8 39 93 / 0.08);
+  }
+  .screen {
+    width: 100%;
+    border: 1px solid #bfccdc;
+    border-radius: 8px;
+    box-shadow: 0 16px 34px rgb(8 39 93 / 0.16);
+    object-fit: cover;
+    background: white;
+  }
+  .bars { display: grid; gap: 11px; }
+  .bar { display: grid; grid-template-columns: 150px 1fr 48px; gap: 10px; align-items: center; font-size: 12px; }
+  .track { height: 12px; border-radius: 999px; background: #dbe5f2; overflow: hidden; }
+  .fill { height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--blue-950), var(--blue-700)); }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { color: var(--blue-950); text-align: left; background: #eaf1f9; }
+  th, td { border-bottom: 1px solid #d8e1ee; padding: 9px 10px; vertical-align: top; }
+  .flow {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 9px;
+  }
+  .step {
+    min-height: 72px;
+    border-radius: 8px;
+    padding: 12px;
+    background: white;
+    border: 1px solid #cdd8e8;
+  }
+  .step b { display: block; color: var(--blue-950); margin-bottom: 6px; }
+  .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .kpi { padding: 16px; }
+  .kpi strong { display: block; margin-top: 8px; color: var(--blue-950); font-size: 26px; }
+
+  body { background: white; font-size: 12px; }
+  .cover {
+    min-height: 270mm;
+    padding: 18mm 10mm;
+    background: linear-gradient(145deg, #08275d 0%, #123f7b 56%, #68778a 100%);
+    color: white;
+    page-break-after: always;
+  }
+  .cover h1 { margin-top: 18mm; color: white; font-size: 42px; line-height: 1.08; max-width: 150mm; }
+  .cover p { margin-top: 7mm; font-size: 16px; max-width: 150mm; color: #e8f2ff; }
+  .guide-page { page-break-after: always; }
+  h1 { color: var(--blue-950); font-size: 28px; margin-bottom: 10px; }
+  h2 { color: var(--blue-950); font-size: 21px; margin: 18px 0 8px; }
+  h3 { color: var(--blue-950); font-size: 15px; margin: 14px 0 6px; }
+  ol, ul { margin-top: 6px; padding-left: 20px; }
+  li { margin: 5px 0; line-height: 1.45; }
+  .guide-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .howto { padding: 12px; }
+  .howto h3 { margin-top: 0; }
+  .shot { margin: 9px 0 13px; max-height: 330px; object-fit: contain; }
+  .wide-shot { max-height: 520px; object-fit: contain; }
+  .note { border-left: 4px solid var(--blue-700); background: #eef5ff; padding: 10px 12px; color: var(--gray-700); }
+</style></head><body>
+    <section class="cover">
+      <p class="eyebrow" style="color:#c9dcff">User guide</p>
+      <h1>eCRM Lead-to-Cash Workspace</h1>
+      <p>Practical guide for Admin and Sales users covering sign-in, daily planning, leads, opportunities, proposals, orders, production, finance visibility, reports, and configuration.</p>
+    </section>
+    <section class="guide-page">
+      <h1>1. Getting Started</h1>
+      <p>eCRM is a single-company CRM. Admin and Sales users both see company-wide operating data. Ownership is used for responsibility, filtering, targets, and incentives; it is not used to hide records from other sales users.</p>
+      <div class="note" style="margin-top:10px">Local seeded users: Admin is admin@example.com / Admin@12345. Sales is sales@example.com / Sales@12345.</div>
+      <img class="screen shot wide-shot" src="assets/screenshots/login.png" />
+      <h2>Main navigation</h2>
+      <div class="guide-grid">
+        <div class="howto card"><h3>Sales routes</h3><ul><li>Dashboard</li><li>My Day</li><li>Leads</li><li>Opportunities</li><li>Orders</li><li>Production</li><li>Reports</li></ul></div>
+        <div class="howto card"><h3>Admin routes</h3><ul><li>Products</li><li>Production config</li><li>All Sales routes</li></ul></div>
+      </div>
+    </section>
+    <section class="guide-page">
+      <h1>2. Dashboard And Reports</h1>
+      <p>The dashboard is the fastest way to see company-wide sales, billing, collection, production, and follow-up metrics.</p>
+      <img class="screen shot wide-shot" src="assets/screenshots/dashboard.png" />
+      <h2>Use the reports page</h2>
+      <ol><li>Open <b>Reports</b> from the top navigation.</li><li>Review dashboard metrics at the top.</li><li>Scan top clients, products/services, top billings, collections, recent orders, open pipeline, production pending, and upcoming follow-ups.</li></ol>
+      <img class="screen shot wide-shot" src="assets/screenshots/reports.png" />
+    </section>
+    <section class="guide-page">
+      <h1>3. Plan Sales Work In My Day</h1>
+      <p>My Day is a personal workspace for planning sales work without automatically changing CRM records.</p>
+      <img class="screen shot wide-shot" src="assets/screenshots/my-day.png" />
+      <div class="guide-grid">
+        <div class="howto card"><h3>Create a task</h3><ol><li>Open <b>My Day</b>.</li><li>Select Today.</li><li>Use the task composer to enter the task, type, priority, due date, and optional linked record.</li><li>Save the task.</li></ol></div>
+        <div class="howto card"><h3>Capture a voice note</h3><ol><li>Open My Day.</li><li>Use <b>Record voice note</b>.</li><li>Attach it to a task if needed.</li><li>Review playback, transcript, and suggested follow-up actions when available.</li></ol></div>
+      </div>
+      <h2>Use insights and end-of-day review</h2>
+      <p>Insights suggest tomorrow planning, accounts needing attention, voice-note summaries, and unfinished work. End-of-day review helps move or close work intentionally.</p>
+      <img class="screen shot wide-shot" src="assets/screenshots/my-day-insights.png" />
+    </section>
+    <section class="guide-page">
+      <h1>4. Manage Leads And Customer Context</h1>
+      <p>Leads and customers represent company-level account records. They can include branches, contacts, activities, notes, owner history, and reassignment.</p>
+      <img class="screen shot wide-shot" src="assets/screenshots/leads.png" />
+      <div class="guide-grid">
+        <div class="howto card"><h3>Add one lead</h3><ol><li>Open <b>Leads</b>.</li><li>Choose <b>Add one lead</b>.</li><li>Enter account details, state, owner, source, industry, and notes.</li><li>Save the record.</li></ol></div>
+        <div class="howto card"><h3>Import leads</h3><ol><li>Open <b>Leads</b>.</li><li>Choose <b>Import leads from CSV</b>.</li><li>Download or follow the fixed template.</li><li>Upload, review row-level errors, and import valid rows.</li></ol></div>
+      </div>
+      <img class="screen shot wide-shot" src="assets/screenshots/lead-detail.png" />
+    </section>
+    <section class="guide-page">
+      <h1>5. Opportunities And Proposals</h1>
+      <p>Opportunities track separate sales pursuits under a lead/customer. Proposals belong to opportunities and hold the commercial record.</p>
+      <img class="screen shot wide-shot" src="assets/screenshots/opportunities.png" />
+      <h2>Create and manage a proposal</h2>
+      <ol><li>Open an opportunity.</li><li>Use the proposal area to create a new proposal.</li><li>Add commercial summary, assumptions, inclusions, exclusions, payment terms, delivery timeline, and line items.</li><li>Use product/service catalog items so GST defaults and snapshots are stored consistently.</li><li>Add proposal document links for external PDFs and optional Canva designs.</li><li>Move the proposal through status actions such as sent, accepted, rejected, expired, or withdrawn.</li></ol>
+      <img class="screen shot wide-shot" src="assets/screenshots/proposal-detail.png" />
+    </section>
+    <section class="guide-page">
+      <h1>6. Orders And Production</h1>
+      <p>Orders are created from accepted proposals. The order stores source proposal context, customer, branch, owner, line items, GST totals, PO metadata, and production summaries.</p>
+      <img class="screen shot wide-shot" src="assets/screenshots/orders.png" />
+      <h2>Book an order from an accepted proposal</h2>
+      <ol><li>Open the accepted proposal.</li><li>Choose <b>Book order</b> or open an existing order link if one has already been created.</li><li>Enter PO metadata and due dates as needed.</li><li>Confirm the order detail shows preserved commercial snapshots.</li></ol>
+      <img class="screen shot wide-shot" src="assets/screenshots/order-detail.png" />
+      <h2>Update production stages</h2>
+      <ol><li>Open <b>Production</b>.</li><li>Open the inline stage controls or a production work item detail page.</li><li>Update stage status, owner, due date, notes, completion, or skipped reason.</li><li>Use the board to scan overall progress by customer and order.</li></ol>
+      <img class="screen shot wide-shot" src="assets/screenshots/production-detail.png" />
+    </section>
+    <section class="guide-page">
+      <h1>7. Products, Production Templates, And Finance Visibility</h1>
+      <h2>Product and service catalog</h2>
+      <p>Admin users manage the product/service catalog. Sales users use active catalog rows when creating proposal line items.</p>
+      <img class="screen shot wide-shot" src="assets/screenshots/products.png" />
+      <h2>Production configuration</h2>
+      <p>Admin users can manage production templates, template stages, durations, required flags, active status, and product/service mappings.</p>
+      <img class="screen shot wide-shot" src="assets/screenshots/production-config.png" />
+      <h2>Finance visibility</h2>
+      <p>Finance data is attached to orders. The model supports invoice records, payments, payment allocations, cost components, gross margin, incentives, split recipients, approval status, overrides, rejection, voiding, and payout metadata. Invoice PDF generation and external accounting sync are not part of the current MVP.</p>
+    </section>
+    <section class="guide-page">
+      <h1>8. Roles, Rules, And Current Boundaries</h1>
+      <div class="guide-grid">
+        <div class="howto card"><h3>Admin can</h3><ul><li>View and edit company data.</li><li>Manage products and services.</li><li>Manage production templates and mappings.</li><li>Enter finance records and approve or override incentives.</li><li>Use reports and all operational routes.</li></ul></div>
+        <div class="howto card"><h3>Sales can</h3><ul><li>View company-wide CRM, pipeline, proposal, order, payment, production, and report data.</li><li>Create and update normal sales records.</li><li>Plan My Day tasks and voice notes.</li><li>Create proposals and add document links where permitted.</li></ul></div>
+      </div>
+      <h2>Current MVP boundaries</h2>
+      <ul><li>The app is single-company, not multi-tenant.</li><li>Proposal documents are external links or uploaded metadata; the CRM does not replace Canva.</li><li>Invoice PDF generation is out of scope.</li><li>Native mobile apps, Microsoft/Google login, email sync, and accounting integrations are out of scope.</li><li>Finance and Operations are workflow modules in the MVP, not separate user roles.</li></ul>
+    </section>
+  </body></html>

@@ -2,6 +2,7 @@ type ProposalLineCalculationInput = {
   quantity: number;
   unitPricePaisa: number;
   gstRateBps: number;
+  manualTaxPaisa?: number;
 };
 
 type ProposalLineCalculation = ProposalLineCalculationInput & {
@@ -13,7 +14,7 @@ type ProposalLineCalculation = ProposalLineCalculationInput & {
 export function calculateProposalTotals(lines: ProposalLineCalculationInput[]) {
   const calculatedLines: ProposalLineCalculation[] = lines.map((line) => {
     const lineSubtotalPaisa = line.quantity * line.unitPricePaisa;
-    const lineGstPaisa = Math.round((lineSubtotalPaisa * line.gstRateBps) / 10_000);
+    const lineGstPaisa = line.manualTaxPaisa ?? Math.round((lineSubtotalPaisa * line.gstRateBps) / 10_000);
     const lineTotalPaisa = lineSubtotalPaisa + lineGstPaisa;
 
     return {

@@ -15,16 +15,19 @@ function FieldError({ errors }: { errors?: string[] }) {
 
 export function InvoiceForm({
   action,
+  currency,
   defaultGstPaisa,
   defaultSubtotalPaisa,
   orderId
 }: {
   action: (state: ActionState, formData: FormData) => Promise<ActionState>;
+  currency: string;
   defaultGstPaisa: number;
   defaultSubtotalPaisa: number;
   orderId: string;
 }) {
   const [state, formAction, pending] = useActionState(action, initialState);
+  const minorUnit = currency === "USD" ? "cents" : "paise";
 
   return (
     <form action={formAction} className="grid gap-3">
@@ -43,11 +46,11 @@ export function InvoiceForm({
           <input className="crm-control" name="dueDate" type="date" />
         </label>
         <label className="flex flex-col gap-1 text-sm font-medium">
-          Invoice subtotal paise
+          Invoice subtotal ({minorUnit})
           <input className="crm-control" defaultValue={defaultSubtotalPaisa} min={1} name="subtotalPaisa" type="number" />
         </label>
         <label className="flex flex-col gap-1 text-sm font-medium">
-          GST paise
+          Tax ({minorUnit})
           <input className="crm-control" defaultValue={defaultGstPaisa} min={0} name="gstPaisa" type="number" />
         </label>
         <label className="flex flex-col gap-1 text-sm font-medium">

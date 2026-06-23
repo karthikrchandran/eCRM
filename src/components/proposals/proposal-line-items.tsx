@@ -1,6 +1,7 @@
 import type { ProductServiceRecord } from "@/server/products/queries";
 
 type ProposalLineItemsProps = {
+  currency: "INR" | "USD";
   products: ProductServiceRecord[];
 };
 
@@ -8,14 +9,19 @@ function formatGst(rateBps: number) {
   return `${rateBps / 100}%`;
 }
 
-export function ProposalLineItems({ products }: ProposalLineItemsProps) {
+export function ProposalLineItems({ currency, products }: ProposalLineItemsProps) {
   const defaultProduct = products[0];
+  const minorUnitLabel = currency === "USD" ? "cents" : "paise";
 
   return (
     <section className="grid gap-3">
       <div>
         <h2 className="text-lg font-semibold">Commercial line items</h2>
-        <p className="mt-1 text-sm text-[var(--muted)]">Choose a product/service and price the line in paise for exact GST calculations.</p>
+        <p className="mt-1 text-sm text-[var(--muted)]">
+          {currency === "USD"
+            ? "Choose a product/service, price the line in cents, and enter tax manually."
+            : "Choose a product/service and price the line in paise for exact GST calculations."}
+        </p>
       </div>
       <fieldset className="grid gap-4 rounded-md border border-[var(--border)] p-4">
         <legend className="px-1 text-sm font-semibold">Line 1</legend>
@@ -26,7 +32,8 @@ export function ProposalLineItems({ products }: ProposalLineItemsProps) {
               <option value="">Choose product/service</option>
               {products.map((product) => (
                 <option key={product.id} value={product.id}>
-                  {product.name} - {product.category} - GST {formatGst(product.defaultGstRateBps)}
+                  {product.name} - {product.category}
+                  {currency === "INR" ? ` - GST ${formatGst(product.defaultGstRateBps)}` : ""}
                 </option>
               ))}
             </select>
@@ -48,7 +55,7 @@ export function ProposalLineItems({ products }: ProposalLineItemsProps) {
           </label>
 
           <label className="flex flex-col gap-1 text-sm font-medium">
-            Unit price (paise)
+            Unit price ({minorUnitLabel})
             <input
               className="crm-control"
               defaultValue={0}
@@ -59,29 +66,40 @@ export function ProposalLineItems({ products }: ProposalLineItemsProps) {
             />
           </label>
 
-          <label className="flex flex-col gap-1 text-sm font-medium">
-            GST basis points
-            <input
-              className="crm-control"
-              defaultValue={defaultProduct?.defaultGstRateBps ?? 1800}
-              max={2800}
-              min={0}
-              name="gstRateBps"
-              required
-              type="number"
-            />
-          </label>
+          {currency === "USD" ? (
+            <label className="flex flex-col gap-1 text-sm font-medium">
+              Manual tax amount ({minorUnitLabel})
+              <input className="crm-control" defaultValue={0} min={0} name="manualTaxPaisa" required type="number" />
+              <input name="gstRateBps" type="hidden" value={0} />
+              <input name="gstOverrideReason" type="hidden" value="Manual USD tax" />
+            </label>
+          ) : (
+            <label className="flex flex-col gap-1 text-sm font-medium">
+              GST basis points
+              <input
+                className="crm-control"
+                defaultValue={defaultProduct?.defaultGstRateBps ?? 1800}
+                max={2800}
+                min={0}
+                name="gstRateBps"
+                required
+                type="number"
+              />
+            </label>
+          )}
         </div>
 
-        <label className="flex flex-col gap-1 text-sm font-medium">
-          GST override reason
-          <input
-            className="crm-control"
-            name="gstOverrideReason"
-            placeholder="Required when GST differs from the product default"
-            type="text"
-          />
-        </label>
+        {currency === "INR" ? (
+          <label className="flex flex-col gap-1 text-sm font-medium">
+            GST override reason
+            <input
+              className="crm-control"
+              name="gstOverrideReason"
+              placeholder="Required when GST differs from the product default"
+              type="text"
+            />
+          </label>
+        ) : null}
       </fieldset>
     </section>
   );

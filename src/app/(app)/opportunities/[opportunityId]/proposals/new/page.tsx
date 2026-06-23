@@ -5,11 +5,16 @@ import { requireUser } from "@/server/auth/current-user";
 import { getOpportunityDetail } from "@/server/opportunities/queries";
 import { createProposalAction } from "@/server/proposals/actions";
 import { listActiveProductServices } from "@/server/products/queries";
+import { getBusinessSettings } from "@/server/settings/settings";
 
 export default async function NewProposalPage({ params }: { params: Promise<{ opportunityId: string }> }) {
   const user = await requireUser();
   const { opportunityId } = await params;
-  const [opportunity, products] = await Promise.all([getOpportunityDetail(user, opportunityId), listActiveProductServices(user)]);
+  const [opportunity, products, settings] = await Promise.all([
+    getOpportunityDetail(user, opportunityId),
+    listActiveProductServices(user),
+    getBusinessSettings(user)
+  ]);
 
   if (!opportunity) {
     notFound();
@@ -33,7 +38,13 @@ export default async function NewProposalPage({ params }: { params: Promise<{ op
         <section className="surface p-4 text-sm text-[var(--muted)]">No active products or services are available for proposal lines.</section>
       ) : null}
 
-      <ProposalForm action={createProposalAction} opportunityId={opportunity.id} products={products} submitLabel="Create proposal" />
+      <ProposalForm
+        action={createProposalAction}
+        currency={settings.defaultCurrency}
+        opportunityId={opportunity.id}
+        products={products}
+        submitLabel="Create proposal"
+      />
     </div>
   );
 }

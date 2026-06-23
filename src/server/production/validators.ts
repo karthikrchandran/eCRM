@@ -14,6 +14,13 @@ const emptyToUndefined = (value: unknown) => {
 };
 
 const optionalTrimmedString = z.preprocess(emptyToUndefined, z.string().trim().optional());
+const requiredTrimmedString = z.preprocess(emptyToUndefined, z.string().trim().min(1));
+const checkboxBoolean = z.preprocess((value) => value === true || value === "true" || value === "on", z.boolean());
+const integerWithDefaultZero = z.preprocess((value) => emptyToUndefined(value) ?? 0, z.coerce.number().int().min(0));
+const optionalPositiveInteger = z.preprocess(
+  emptyToUndefined,
+  z.coerce.number().int().min(1).optional()
+);
 
 const optionalDate = z.preprocess(
   (value) => {
@@ -53,4 +60,24 @@ export const productionFiltersSchema = z.object({
   status: z.preprocess(emptyToUndefined, productionStageStatusSchema.optional()),
   assignedToId: optionalTrimmedString,
   q: optionalTrimmedString
+});
+
+export const productionTemplateInputSchema = z.object({
+  id: optionalTrimmedString,
+  key: requiredTrimmedString.pipe(z.string().regex(/^[a-z0-9_-]+$/, "Use lowercase letters, numbers, hyphens, or underscores.")),
+  name: requiredTrimmedString,
+  description: optionalTrimmedString,
+  active: checkboxBoolean,
+  sortOrder: integerWithDefaultZero
+});
+
+export const productionTemplateStageInputSchema = z.object({
+  templateId: requiredTrimmedString,
+  stageId: optionalTrimmedString,
+  key: requiredTrimmedString.pipe(z.string().regex(/^[a-z0-9_-]+$/, "Use lowercase letters, numbers, hyphens, or underscores.")),
+  name: requiredTrimmedString,
+  description: optionalTrimmedString,
+  required: checkboxBoolean,
+  defaultDurationDays: optionalPositiveInteger,
+  sortOrder: integerWithDefaultZero
 });

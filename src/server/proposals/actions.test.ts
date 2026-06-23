@@ -34,6 +34,29 @@ describe("proposal actions", () => {
     ]);
   });
 
+  it("parses manually entered USD tax from line item rows", () => {
+    const formData = new FormData();
+    formData.append("productServiceId", "product_1");
+    formData.append("lineDescription", " Custom module ");
+    formData.append("quantity", "2");
+    formData.append("unitPricePaisa", "100000");
+    formData.append("gstRateBps", "0");
+    formData.append("manualTaxPaisa", "8875");
+    formData.append("gstOverrideReason", "Manual USD tax");
+
+    expect(parseProposalLinesFormForTest(formData)).toEqual([
+      {
+        productServiceId: "product_1",
+        description: "Custom module",
+        quantity: 2,
+        unitPricePaisa: 100000,
+        gstRateBps: 0,
+        manualTaxPaisa: 8875,
+        gstOverrideReason: "Manual USD tax"
+      }
+    ]);
+  });
+
   it("returns proposal validation errors", () => {
     const formData = new FormData();
     formData.set("opportunityId", "");

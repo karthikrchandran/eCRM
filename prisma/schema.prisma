@@ -151,6 +151,18 @@ enum IncentiveStatus {
   VOID
 }
 
+enum CurrencyCode {
+  INR
+  USD
+}
+
+model BusinessSettings {
+  id              String       @id @default("default")
+  defaultCurrency CurrencyCode @default(INR)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+}
+
 model User {
   id           String   @id @default(cuid())
   name         String
@@ -206,6 +218,7 @@ model User {
   paidIncentives              Incentive[]               @relation("IncentivePaidBy")
   incentiveSplits             IncentiveSplit[]
   salesTasks                  SalesTask[]               @relation("SalesTaskOwner")
+  salesTextNotes              SalesTextNote[]           @relation("SalesTextNoteOwner")
   salesVoiceNotes             SalesVoiceNote[]          @relation("SalesVoiceNoteOwner")
   salesDayReviews             SalesDayReview[]          @relation("SalesDayReviewOwner")
 }
@@ -233,6 +246,7 @@ model LeadCustomer {
   opportunities    Opportunity[]
   orders           Order[]
   salesTasks       SalesTask[]
+  salesTextNotes   SalesTextNote[]
   salesVoiceNotes  SalesVoiceNote[]
 
   @@index([ownerId])
@@ -349,11 +363,39 @@ model SalesTask {
   proposal         Proposal?              @relation(fields: [proposalId], references: [id], onDelete: SetNull)
   order            Order?                 @relation(fields: [orderId], references: [id], onDelete: SetNull)
   voiceNotes       SalesVoiceNote[]
+  textNotes        SalesTextNote[]
   suggestedActions SalesVoiceNoteAction[] @relation("CreatedSalesTaskFromAction")
   reviewItems      SalesDayReviewItem[]
 
   @@index([ownerId, dueAt])
   @@index([ownerId, status])
+  @@index([leadCustomerId])
+  @@index([opportunityId])
+  @@index([proposalId])
+  @@index([orderId])
+}
+
+model SalesTextNote {
+  id             String   @id @default(cuid())
+  ownerId        String
+  taskId         String?
+  leadCustomerId String?
+  opportunityId  String?
+  proposalId     String?
+  orderId        String?
+  body           String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  owner        User          @relation("SalesTextNoteOwner", fields: [ownerId], references: [id])
+  task         SalesTask?    @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  leadCustomer LeadCustomer? @relation(fields: [leadCustomerId], references: [id], onDelete: SetNull)
+  opportunity  Opportunity?  @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  proposal     Proposal?     @relation(fields: [proposalId], references: [id], onDelete: SetNull)
+  order        Order?        @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@index([ownerId, createdAt])
+  @@index([taskId])
   @@index([leadCustomerId])
   @@index([opportunityId])
   @@index([proposalId])
@@ -510,6 +552,7 @@ model Opportunity {
   proposals       Proposal[]
   orders          Order[]
   salesTasks      SalesTask[]
+  salesTextNotes  SalesTextNote[]
   salesVoiceNotes SalesVoiceNote[]
 
   @@index([leadCustomerId])
@@ -605,6 +648,7 @@ model Proposal {
   pdfAttachments  ProposalPdfAttachment[]
   order           Order?
   salesTasks      SalesTask[]
+  salesTextNotes  SalesTextNote[]
   salesVoiceNotes SalesVoiceNote[]
 
   @@unique([opportunityId, sequenceNumber])
@@ -701,6 +745,7 @@ model Order {
   costComponents  CostComponent[]
   incentive       Incentive?
   salesTasks      SalesTask[]
+  salesTextNotes  SalesTextNote[]
   salesVoiceNotes SalesVoiceNote[]
 
   @@index([status])

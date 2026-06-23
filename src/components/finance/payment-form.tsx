@@ -7,14 +7,17 @@ const initialState: ActionState = { ok: false };
 
 export function PaymentForm({
   action,
+  currency,
   invoices,
   orderId
 }: {
   action: (state: ActionState, formData: FormData) => Promise<ActionState>;
+  currency: string;
   invoices: Array<{ id: string; invoiceNumber: string; totalPaisa: number }>;
   orderId: string;
 }) {
   const [state, formAction, pending] = useActionState(action, initialState);
+  const minorUnit = currency === "USD" ? "cents" : "paise";
 
   return (
     <form action={formAction} className="grid gap-3">
@@ -35,7 +38,7 @@ export function PaymentForm({
           <input className="crm-control" name="paymentDate" type="date" />
         </label>
         <label className="flex flex-col gap-1 text-sm font-medium">
-          Payment amount paise
+          Payment amount ({minorUnit})
           <input className="crm-control" min={1} name="amountPaisa" type="number" />
         </label>
         <label className="flex flex-col gap-1 text-sm font-medium">

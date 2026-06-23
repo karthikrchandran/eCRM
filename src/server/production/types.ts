@@ -15,6 +15,26 @@ export type ProductionStageStatusInput = {
   skippedReason?: string;
 };
 
+export type ProductionTemplateInput = {
+  id?: string;
+  key: string;
+  name: string;
+  description?: string;
+  active: boolean;
+  sortOrder: number;
+};
+
+export type ProductionTemplateStageInput = {
+  templateId: string;
+  stageId?: string;
+  key: string;
+  name: string;
+  description?: string;
+  required: boolean;
+  defaultDurationDays?: number;
+  sortOrder: number;
+};
+
 export type ProductionFilters = {
   status?: ProductionStatusValue;
   assignedToId?: string;

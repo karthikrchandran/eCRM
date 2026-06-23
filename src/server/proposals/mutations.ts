@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { isSafeExternalUrl } from "@/lib/safe-external-url";
 import { db } from "@/server/db";
+import type { SupportedCurrency } from "@/server/settings/settings";
 import { calculateProposalTotals } from "./calculations";
 import { assertCanWriteProposals } from "./permissions";
 import { assertProposalStatusTransition } from "./validators";
@@ -15,6 +16,9 @@ type ProductSnapshot = {
 };
 
 type ProposalCreateDb = {
+  businessSettings?: {
+    findUnique: (args: Prisma.BusinessSettingsFindUniqueArgs) => Promise<{ defaultCurrency: SupportedCurrency } | null>;
+  };
   opportunity: {
     findUnique: (args: Prisma.OpportunityFindUniqueArgs) => Promise<{ id: string; stage: { kind: string; name: string } } | null>;
   };
@@ -70,7 +74,16 @@ async function assertOpenOpportunity(database: ProposalCreateDb, opportunityId: 
   }
 }
 
-async function loadProductSnapshots(database: ProposalCreateDb, lines: ProposalLineInput[]) {
+async function loadDefaultCurrency(database: ProposalCreateDb): Promise<SupportedCurrency> {
+  const settings = await database.businessSettings?.findUnique({
+    where: { id: "default" },
+    select: { defaultCurrency: true }
+  });
+
+  return settings?.defaultCurrency ?? "INR";
+}
+
+async function loadProductSnapshots(database: ProposalCreateDb, lines: ProposalLineInput[], currency: SupportedCurrency) {
   const productIds = [...new Set(lines.map((line) => line.productServiceId))];
   const products = await database.productService.findMany({
     where: { id: { in: productIds } },
@@ -85,7 +98,11 @@ async function loadProductSnapshots(database: ProposalCreateDb, lines: ProposalL
       throw new Error("Choose an active product or service.");
     }
 
-    if (line.gstRateBps !== product.defaultGstRateBps && !line.gstOverrideReason) {
+    if (currency === "USD" && line.manualTaxPaisa === undefined) {
+      throw new Error("Enter manual tax for USD proposal lines.");
+    }
+
+    if (currency === "INR" && line.gstRateBps !== product.defaultGstRateBps && !line.gstOverrideReason) {
       throw new Error("Enter a GST override reason.");
     }
   }
@@ -106,7 +123,8 @@ export async function createProposal(
   }
 
   await assertOpenOpportunity(database, input.opportunityId);
-  const productsById = await loadProductSnapshots(database, lines);
+  const currency = await loadDefaultCurrency(database);
+  const productsById = await loadProductSnapshots(database, lines, currency);
   const sequenceNumber = (await database.proposal.count({ where: { opportunityId: input.opportunityId } })) + 1;
   const totals = calculateProposalTotals(lines);
 
@@ -115,7 +133,7 @@ export async function createProposal(
       ...input,
       sequenceNumber,
       status: "DRAFT",
-      currency: "INR",
+      currency,
       subtotalPaisa: totals.subtotalPaisa,
       gstPaisa: totals.gstPaisa,
       totalPaisa: totals.totalPaisa,

@@ -50,6 +50,28 @@ const leadDetailInclude = {
 export type CrmOwner = Pick<User, "id" | "name" | "email" | "role">;
 export type LeadCustomerListRecord = Prisma.LeadCustomerGetPayload<{ include: typeof leadListInclude }>;
 export type LeadCustomerDetail = Prisma.LeadCustomerGetPayload<{ include: typeof leadDetailInclude }>;
+export type CustomerTimelineKind =
+  | "activity"
+  | "text_note"
+  | "voice_note"
+  | "opportunity"
+  | "proposal"
+  | "order"
+  | "production"
+  | "invoice"
+  | "payment"
+  | "cost";
+
+export type CustomerTimelineItem = {
+  id: string;
+  kind: CustomerTimelineKind;
+  title: string;
+  detail?: string;
+  occurredAt: Date;
+  actor?: string;
+  href?: string;
+  amount?: { currency: string; minorUnits: number };
+};
 
 type QueryDb = {
   leadCustomer: {
@@ -58,6 +80,67 @@ type QueryDb = {
   };
   user: {
     findMany: (args: Prisma.UserFindManyArgs) => Promise<CrmOwner[]>;
+  };
+};
+
+type CustomerTimelineDb = {
+  activity: {
+    findMany: (args: Prisma.ActivityFindManyArgs) => Promise<
+      Array<{
+        id: string;
+        subject: string;
+        type: string;
+        status: string;
+        occurredAt: Date | null;
+        dueAt: Date | null;
+        createdAt: Date;
+        owner: { id: string; name: string };
+      }>
+    >;
+  };
+  salesTextNote: {
+    findMany: (args: Prisma.SalesTextNoteFindManyArgs) => Promise<
+      Array<{ id: string; body: string; createdAt: Date; owner: { id: string; name: string } }>
+    >;
+  };
+  salesVoiceNote: {
+    findMany: (args: Prisma.SalesVoiceNoteFindManyArgs) => Promise<
+      Array<{
+        id: string;
+        summary: string | null;
+        transcript: string | null;
+        status: string;
+        createdAt: Date;
+        owner: { id: string; name: string };
+      }>
+    >;
+  };
+  opportunity: {
+    findMany: (args: Prisma.OpportunityFindManyArgs) => Promise<
+      Array<{ id: string; title: string; updatedAt: Date; stage: { name: string }; owner: { id: string; name: string } }>
+    >;
+  };
+  proposal: {
+    findMany: (args: Prisma.ProposalFindManyArgs) => Promise<
+      Array<{ id: string; title: string; status: string; totalPaisa: number; currency: string; updatedAt: Date }>
+    >;
+  };
+  order: {
+    findMany: (args: Prisma.OrderFindManyArgs) => Promise<
+      Array<{
+        id: string;
+        orderNumber: string;
+        status: string;
+        totalPaisa: number;
+        currency: string;
+        bookedAt: Date;
+        productionWorkItems?: Array<{ id: string; status: string; title: string; updatedAt?: Date }>;
+        lineItems?: Array<{ productionWorkItems: Array<{ id: string; status: string; title: string; updatedAt?: Date }> }>;
+        invoices: Array<{ id: string; invoiceNumber: string; totalPaisa: number; status: string; invoiceDate: Date }>;
+        payments: Array<{ id: string; amountPaisa: number; paymentDate: Date }>;
+        costComponents: Array<{ id: string; description: string; amountPaisa: number; status: string; createdAt: Date }>;
+      }>
+    >;
   };
 };
 
@@ -133,6 +216,230 @@ export async function getLeadCustomerDetail(user: CrmUser, leadCustomerId: strin
   return db.leadCustomer.findUnique({
     where: { id: leadCustomerId },
     include: leadDetailInclude
+  });
+}
+
+function timelineItem(item: CustomerTimelineItem): CustomerTimelineItem {
+  return item;
+}
+
+const timelineKindRank: Record<CustomerTimelineKind, number> = {
+  cost: 0,
+  payment: 1,
+  invoice: 2,
+  production: 3,
+  order: 4,
+  proposal: 5,
+  opportunity: 6,
+  voice_note: 7,
+  text_note: 8,
+  activity: 9
+};
+
+export async function getCustomer360Timeline(
+  user: CrmUser,
+  leadCustomerId: string,
+  database: CustomerTimelineDb = db as unknown as CustomerTimelineDb
+): Promise<CustomerTimelineItem[]> {
+  assertCanViewCrmRecords(user);
+
+  const [activities, textNotes, voiceNotes, opportunities, proposals, orders] = await Promise.all([
+    database.activity.findMany({
+      where: { leadCustomerId },
+      orderBy: { createdAt: "desc" },
+      take: 50,
+      select: {
+        id: true,
+        subject: true,
+        type: true,
+        status: true,
+        occurredAt: true,
+        dueAt: true,
+        createdAt: true,
+        owner: { select: { id: true, name: true } }
+      }
+    }),
+    database.salesTextNote.findMany({
+      where: { leadCustomerId },
+      orderBy: { createdAt: "desc" },
+      take: 50,
+      select: { id: true, body: true, createdAt: true, owner: { select: { id: true, name: true } } }
+    }),
+    database.salesVoiceNote.findMany({
+      where: { leadCustomerId },
+      orderBy: { createdAt: "desc" },
+      take: 50,
+      select: {
+        id: true,
+        summary: true,
+        transcript: true,
+        status: true,
+        createdAt: true,
+        owner: { select: { id: true, name: true } }
+      }
+    }),
+    database.opportunity.findMany({
+      where: { leadCustomerId },
+      orderBy: { updatedAt: "desc" },
+      take: 50,
+      select: {
+        id: true,
+        title: true,
+        updatedAt: true,
+        stage: { select: { name: true } },
+        owner: { select: { id: true, name: true } }
+      }
+    }),
+    database.proposal.findMany({
+      where: { opportunity: { leadCustomerId } },
+      orderBy: { updatedAt: "desc" },
+      take: 50,
+      select: { id: true, title: true, status: true, totalPaisa: true, currency: true, updatedAt: true }
+    }),
+    database.order.findMany({
+      where: { leadCustomerId },
+      orderBy: { bookedAt: "desc" },
+      take: 50,
+      select: {
+        id: true,
+        orderNumber: true,
+        status: true,
+        totalPaisa: true,
+        currency: true,
+        bookedAt: true,
+        lineItems: {
+          select: {
+            productionWorkItems: { select: { id: true, status: true, title: true, updatedAt: true } }
+          }
+        },
+        invoices: { select: { id: true, invoiceNumber: true, totalPaisa: true, status: true, invoiceDate: true } },
+        payments: { select: { id: true, amountPaisa: true, paymentDate: true } },
+        costComponents: { select: { id: true, description: true, amountPaisa: true, status: true, createdAt: true } }
+      }
+    })
+  ]);
+
+  const items: CustomerTimelineItem[] = [
+    ...activities.map((activity) =>
+      timelineItem({
+        id: activity.id,
+        kind: "activity",
+        title: activity.subject,
+        detail: `${activity.type} | ${activity.status}`,
+        occurredAt: activity.occurredAt ?? activity.dueAt ?? activity.createdAt,
+        actor: activity.owner.name
+      })
+    ),
+    ...textNotes.map((note) =>
+      timelineItem({
+        id: note.id,
+        kind: "text_note",
+        title: "Typed note",
+        detail: note.body,
+        occurredAt: note.createdAt,
+        actor: note.owner.name
+      })
+    ),
+    ...voiceNotes.map((note) =>
+      timelineItem({
+        id: note.id,
+        kind: "voice_note",
+        title: note.summary ?? "Voice note",
+        detail: note.transcript ?? note.status,
+        occurredAt: note.createdAt,
+        actor: note.owner.name
+      })
+    ),
+    ...opportunities.map((opportunity) =>
+      timelineItem({
+        id: opportunity.id,
+        kind: "opportunity",
+        title: opportunity.title,
+        detail: `Stage: ${opportunity.stage.name}`,
+        occurredAt: opportunity.updatedAt,
+        actor: opportunity.owner.name,
+        href: `/opportunities/${opportunity.id}`
+      })
+    ),
+    ...proposals.map((proposal) =>
+      timelineItem({
+        id: proposal.id,
+        kind: "proposal",
+        title: `Proposal ${proposal.status}: ${proposal.title}`,
+        occurredAt: proposal.updatedAt,
+        amount: { currency: proposal.currency, minorUnits: proposal.totalPaisa }
+      })
+    )
+  ];
+
+  for (const order of orders) {
+    items.push(
+      timelineItem({
+        id: order.id,
+        kind: "order",
+        title: `Order ${order.status}: ${order.orderNumber}`,
+        occurredAt: order.bookedAt,
+        href: `/orders/${order.id}`,
+        amount: { currency: order.currency, minorUnits: order.totalPaisa }
+      })
+    );
+
+    const workItems = order.lineItems?.flatMap((line) => line.productionWorkItems) ?? order.productionWorkItems ?? [];
+    for (const workItem of workItems) {
+      items.push(
+        timelineItem({
+          id: workItem.id,
+          kind: "production",
+          title: `Production ${workItem.status}: ${workItem.title}`,
+          occurredAt: workItem.updatedAt ?? order.bookedAt,
+          href: `/production`
+        })
+      );
+    }
+
+    for (const invoice of order.invoices) {
+      items.push(
+        timelineItem({
+          id: invoice.id,
+          kind: "invoice",
+          title: `Invoice ${invoice.status}: ${invoice.invoiceNumber}`,
+          occurredAt: invoice.invoiceDate,
+          href: `/orders/${order.id}`,
+          amount: { currency: order.currency, minorUnits: invoice.totalPaisa }
+        })
+      );
+    }
+
+    for (const payment of order.payments) {
+      items.push(
+        timelineItem({
+          id: payment.id,
+          kind: "payment",
+          title: "Payment received",
+          occurredAt: payment.paymentDate,
+          href: `/orders/${order.id}`,
+          amount: { currency: order.currency, minorUnits: payment.amountPaisa }
+        })
+      );
+    }
+
+    for (const cost of order.costComponents) {
+      items.push(
+        timelineItem({
+          id: cost.id,
+          kind: "cost",
+          title: `Cost ${cost.status.toLowerCase()}: ${cost.description}`,
+          occurredAt: cost.createdAt,
+          href: `/orders/${order.id}`,
+          amount: { currency: order.currency, minorUnits: cost.amountPaisa }
+        })
+      );
+    }
+  }
+
+  return items.sort((left, right) => {
+    const dateDiff = right.occurredAt.getTime() - left.occurredAt.getTime();
+    return dateDiff !== 0 ? dateDiff : timelineKindRank[left.kind] - timelineKindRank[right.kind];
   });
 }
 

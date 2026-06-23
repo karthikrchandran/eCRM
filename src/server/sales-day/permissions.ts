@@ -29,3 +29,10 @@ export function assertOwnsSalesVoiceNote(user: SalesDayUser, note: OwnedSalesDay
     throw new Error("You can only update your own voice notes.");
   }
 }
+
+export function assertOwnsSalesTextNote(user: SalesDayUser, note: OwnedSalesDayRecord) {
+  assertCanUseSalesWorkspace(user);
+  if (user.role !== "ADMIN" && note.ownerId !== user.id) {
+    throw new Error("You can only update your own typed notes.");
+  }
+}

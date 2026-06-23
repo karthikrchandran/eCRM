@@ -32,4 +32,25 @@ describe("proposal calculations", () => {
       totalPaisa: 288_500
     });
   });
+
+  it("uses manually entered tax for USD lines", () => {
+    expect(
+      calculateProposalTotals([{ quantity: 2, unitPricePaisa: 50_000, gstRateBps: 0, manualTaxPaisa: 8_875 }])
+    ).toEqual({
+      lines: [
+        {
+          quantity: 2,
+          unitPricePaisa: 50_000,
+          gstRateBps: 0,
+          manualTaxPaisa: 8_875,
+          lineSubtotalPaisa: 100_000,
+          lineGstPaisa: 8_875,
+          lineTotalPaisa: 108_875
+        }
+      ],
+      subtotalPaisa: 100_000,
+      gstPaisa: 8_875,
+      totalPaisa: 108_875
+    });
+  });
 });

@@ -2,11 +2,12 @@ import type { Prisma, SalesDayReviewItemStatus, SalesTaskType } from "@prisma/cl
 import { db } from "@/server/db";
 import {
   assertCanUseSalesWorkspace,
+  assertOwnsSalesTextNote,
   assertOwnsSalesTask,
   assertOwnsSalesVoiceNote,
   type SalesDayUser
 } from "./permissions";
-import type { SalesDayReviewInput, SalesTaskInput, SalesTaskUpdateInput } from "./validators";
+import type { SalesDayReviewInput, SalesTaskInput, SalesTaskUpdateInput, SalesTextNoteInput } from "./validators";
 
 type IdResult = { id: string };
 type OwnedRecord = { id: string; ownerId: string };
@@ -35,6 +36,20 @@ type CreateTaskDb = {
 };
 
 type UpdateTaskDb = TaskLifecycleDb;
+
+type CreateTextNoteDb = {
+  salesTextNote: {
+    create: (args: Prisma.SalesTextNoteCreateArgs) => Promise<IdResult>;
+  };
+};
+
+type TextNoteDb = {
+  salesTextNote: {
+    findUnique: (args: Prisma.SalesTextNoteFindUniqueArgs) => Promise<OwnedRecord | null>;
+    update: (args: Prisma.SalesTextNoteUpdateArgs) => Promise<IdResult>;
+    delete: (args: Prisma.SalesTextNoteDeleteArgs) => Promise<IdResult>;
+  };
+};
 
 type VoiceNoteInput = {
   id?: string;
@@ -190,6 +205,79 @@ export async function updateSalesTask(
       proposalId: input.proposalId,
       orderId: input.orderId
     },
+    select: { id: true }
+  });
+}
+
+async function assertOwnedTextNote(database: TextNoteDb, user: SalesDayUser, noteId: string) {
+  const note = await database.salesTextNote.findUnique({
+    where: { id: noteId },
+    select: { id: true, ownerId: true }
+  });
+
+  if (!note) {
+    throw new Error("Typed note was not found.");
+  }
+
+  assertOwnsSalesTextNote(user, note);
+}
+
+function textNoteData(user: SalesDayUser, input: SalesTextNoteInput) {
+  return {
+    body: input.body,
+    ownerId: user.id,
+    leadCustomerId: input.leadCustomerId ?? null,
+    opportunityId: input.opportunityId ?? null,
+    proposalId: input.proposalId ?? null,
+    orderId: input.orderId ?? null,
+    taskId: input.taskId ?? null
+  };
+}
+
+export async function createSalesTextNote(
+  user: SalesDayUser,
+  input: SalesTextNoteInput,
+  database: CreateTextNoteDb = db as unknown as CreateTextNoteDb
+) {
+  assertCanUseSalesWorkspace(user);
+
+  return database.salesTextNote.create({
+    data: textNoteData(user, input),
+    select: { id: true }
+  });
+}
+
+export async function updateSalesTextNote(
+  user: SalesDayUser,
+  noteId: string,
+  input: SalesTextNoteInput,
+  database: TextNoteDb = db as unknown as TextNoteDb
+) {
+  await assertOwnedTextNote(database, user, noteId);
+
+  return database.salesTextNote.update({
+    where: { id: noteId },
+    data: {
+      body: input.body,
+      leadCustomerId: input.leadCustomerId ?? null,
+      opportunityId: input.opportunityId ?? null,
+      proposalId: input.proposalId ?? null,
+      orderId: input.orderId ?? null,
+      taskId: input.taskId ?? null
+    },
+    select: { id: true }
+  });
+}
+
+export async function deleteSalesTextNote(
+  user: SalesDayUser,
+  noteId: string,
+  database: TextNoteDb = db as unknown as TextNoteDb
+) {
+  await assertOwnedTextNote(database, user, noteId);
+
+  return database.salesTextNote.delete({
+    where: { id: noteId },
     select: { id: true }
   });
 }

@@ -79,6 +79,61 @@ describe("proposal mutations", () => {
     });
   });
 
+  it("creates USD proposals with manually entered tax when business settings use USD", async () => {
+    const proposalCreate = vi.fn().mockResolvedValue({ id: "proposal_1" });
+
+    await createProposal(
+      actor,
+      proposalInput,
+      [{ ...proposalLines[0], gstRateBps: 0, manualTaxPaisa: 8_875, gstOverrideReason: "Manual USD tax" }],
+      {
+        businessSettings: {
+          findUnique: vi.fn().mockResolvedValue({ defaultCurrency: "USD" })
+        },
+        opportunity: {
+          findUnique: vi.fn().mockResolvedValue({
+            id: "opp_1",
+            stage: { kind: "OPEN", name: "Qualified" }
+          })
+        },
+        proposal: {
+          count: vi.fn().mockResolvedValue(0),
+          create: proposalCreate
+        },
+        productService: {
+          findMany: vi.fn().mockResolvedValue([
+            {
+              id: "product_1",
+              name: "eLearning",
+              category: "eLearning",
+              defaultGstRateBps: 1800,
+              active: true
+            }
+          ])
+        }
+      }
+    );
+
+    expect(proposalCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        currency: "USD",
+        subtotalPaisa: 200_000,
+        gstPaisa: 8_875,
+        totalPaisa: 208_875,
+        lineItems: {
+          create: [
+            expect.objectContaining({
+              gstRateBps: 0,
+              gstOverrideReason: "Manual USD tax",
+              lineGstPaisa: 8_875,
+              lineTotalPaisa: 208_875
+            })
+          ]
+        }
+      })
+    });
+  });
+
   it("rejects new proposals for non-open opportunities", async () => {
     await expect(
       createProposal(actor, proposalInput, proposalLines, {

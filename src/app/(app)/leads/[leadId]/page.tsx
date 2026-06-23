@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { CustomerTimeline } from "@/components/crm/customer-timeline";
 import { ReassignOwnerForm } from "@/components/crm/reassign-owner-form";
 import { requireUser } from "@/server/auth/current-user";
 import { completeActivityAction, reassignLeadOwnerAction } from "@/server/crm/actions";
-import { getLeadCustomerDetail, listCrmOwners } from "@/server/crm/queries";
+import { getCustomer360Timeline, getLeadCustomerDetail, listCrmOwners } from "@/server/crm/queries";
 
 function formatDate(date: Date | null) {
   if (!date) {
@@ -24,7 +25,11 @@ const detailActionClass = "crm-button crm-button-secondary w-full text-sm sm:w-a
 export default async function LeadDetailPage({ params }: { params: Promise<{ leadId: string }> }) {
   const user = await requireUser();
   const { leadId } = await params;
-  const [lead, owners] = await Promise.all([getLeadCustomerDetail(user, leadId), listCrmOwners()]);
+  const [lead, owners, timeline] = await Promise.all([
+    getLeadCustomerDetail(user, leadId),
+    listCrmOwners(),
+    getCustomer360Timeline(user, leadId)
+  ]);
 
   if (!lead) {
     notFound();
@@ -77,6 +82,8 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ lea
         </div>
         {lead.notes ? <p className="whitespace-pre-wrap break-words text-sm sm:col-span-2 lg:col-span-4">{lead.notes}</p> : null}
       </section>
+
+      <CustomerTimeline items={timeline} />
 
       <section className="space-y-3">
         <h2 className="text-lg font-semibold">Branches</h2>

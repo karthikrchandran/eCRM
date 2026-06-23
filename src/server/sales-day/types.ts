@@ -43,6 +43,18 @@ export type MyDayVoiceNoteRecord = {
   actions: MyDaySuggestedActionRecord[];
 };
 
+export type MyDayTextNoteRecord = {
+  id: string;
+  body: string;
+  createdAt: Date;
+  updatedAt: Date;
+  leadCustomer?: MyDayLinkedRecord | null;
+  opportunity?: MyDayLinkedRecord | null;
+  proposal?: MyDayLinkedRecord | null;
+  order?: MyDayLinkedRecord | null;
+  task?: MyDayLinkedRecord | null;
+};
+
 export type MyDayTaskRecord = {
   id: string;
   title: string;
@@ -66,6 +78,7 @@ export type MyDayViewModel = {
   overdueTasks: MyDayTaskRecord[];
   completedTasks: MyDayTaskRecord[];
   cancelledTasks: MyDayTaskRecord[];
+  textNotes: MyDayTextNoteRecord[];
   voiceNotes: MyDayVoiceNoteRecord[];
 };
 

@@ -29,13 +29,18 @@ export async function POST(request: Request) {
 
   const voiceNoteId = randomUUID();
   const buffer = Buffer.from(await audio.arrayBuffer());
-  const saved = await saveVoiceNoteAudio({
-    ownerId: user.id,
-    voiceNoteId,
-    originalFileName: audio.name || "sales-voice-note.webm",
-    mimeType: audio.type || "audio/webm",
-    buffer
-  });
+  let saved;
+  try {
+    saved = await saveVoiceNoteAudio({
+      ownerId: user.id,
+      voiceNoteId,
+      originalFileName: audio.name || "sales-voice-note.webm",
+      mimeType: audio.type || "audio/webm",
+      buffer
+    });
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Voice note upload failed." }, { status: 400 });
+  }
   const retainedUntil = new Date();
   retainedUntil.setDate(retainedUntil.getDate() + 30);
 

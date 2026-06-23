@@ -1,8 +1,24 @@
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/server/auth/current-user";
-import { instantiateProductionForOrderLineItem, updateProductionStageStatus } from "./mutations";
-import type { ActionState, ProductionFilters, ProductionStageStatusInput } from "./types";
-import { productionFiltersSchema, productionStageStatusInputSchema } from "./validators";
+import {
+  instantiateProductionForOrderLineItem,
+  saveProductionTemplate,
+  saveProductionTemplateStage,
+  updateProductionStageStatus
+} from "./mutations";
+import type {
+  ActionState,
+  ProductionFilters,
+  ProductionStageStatusInput,
+  ProductionTemplateInput,
+  ProductionTemplateStageInput
+} from "./types";
+import {
+  productionFiltersSchema,
+  productionStageStatusInputSchema,
+  productionTemplateInputSchema,
+  productionTemplateStageInputSchema
+} from "./validators";
 
 type FieldErrorSource = {
   flatten: () => { fieldErrors: Record<string, string[] | undefined> };
@@ -44,6 +60,42 @@ export function parseProductionFiltersForTest(input: Record<string, unknown>): P
   return { ok: true, data: result.data };
 }
 
+export function parseProductionTemplateFormForTest(formData: FormData): ParseResult<ProductionTemplateInput> {
+  const result = productionTemplateInputSchema.safeParse({
+    id: formData.get("id"),
+    key: formData.get("key"),
+    name: formData.get("name"),
+    description: formData.get("description"),
+    active: formData.get("active"),
+    sortOrder: formData.get("sortOrder")
+  });
+
+  if (!result.success) {
+    return fieldErrorState(result.error) as ParseResult<ProductionTemplateInput>;
+  }
+
+  return { ok: true, data: result.data };
+}
+
+export function parseProductionTemplateStageFormForTest(formData: FormData): ParseResult<ProductionTemplateStageInput> {
+  const result = productionTemplateStageInputSchema.safeParse({
+    templateId: formData.get("templateId"),
+    stageId: formData.get("stageId"),
+    key: formData.get("key"),
+    name: formData.get("name"),
+    description: formData.get("description"),
+    required: formData.get("required"),
+    defaultDurationDays: formData.get("defaultDurationDays"),
+    sortOrder: formData.get("sortOrder")
+  });
+
+  if (!result.success) {
+    return fieldErrorState(result.error) as ParseResult<ProductionTemplateStageInput>;
+  }
+
+  return { ok: true, data: result.data };
+}
+
 export async function instantiateProductionForOrderLineItemAction(orderId: string, orderLineItemId: string) {
   "use server";
 
@@ -74,4 +126,35 @@ export async function updateProductionStageStatusAction(
   revalidatePath(`/production/${workItemId}`);
   revalidatePath("/orders");
   return { ok: true, message: "Production stage updated." };
+}
+
+export async function saveProductionTemplateAction(formData: FormData) {
+  "use server";
+
+  const user = await requireUser();
+  const parsed = parseProductionTemplateFormForTest(formData);
+
+  if (!parsed.ok) {
+    throw new Error("Production template form is invalid.");
+  }
+
+  await saveProductionTemplate(user, parsed.data);
+  revalidatePath("/admin/production-config");
+  revalidatePath("/production");
+  revalidatePath("/admin/products");
+}
+
+export async function saveProductionTemplateStageAction(formData: FormData) {
+  "use server";
+
+  const user = await requireUser();
+  const parsed = parseProductionTemplateStageFormForTest(formData);
+
+  if (!parsed.ok) {
+    throw new Error("Production stage form is invalid.");
+  }
+
+  await saveProductionTemplateStage(user, parsed.data);
+  revalidatePath("/admin/production-config");
+  revalidatePath("/production");
 }

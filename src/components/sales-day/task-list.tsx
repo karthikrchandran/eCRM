@@ -1,4 +1,5 @@
 import type { MyDayTaskRecord } from "@/server/sales-day/types";
+import type { MyDayLookups } from "@/server/sales-day/queries";
 import { EmptyState } from "@/components/ui/sales-primitives";
 import { TaskRow } from "./task-row";
 
@@ -6,14 +7,17 @@ type TaskListProps = {
   overdueTasks: MyDayTaskRecord[];
   openTasks: MyDayTaskRecord[];
   completedTasks: MyDayTaskRecord[];
+  lookups: MyDayLookups;
 };
 
 function TaskSection({
   emptyText,
+  lookups,
   tasks,
   title
 }: {
   emptyText: string;
+  lookups: MyDayLookups;
   tasks: MyDayTaskRecord[];
   title: string;
 }) {
@@ -25,7 +29,7 @@ function TaskSection({
       {tasks.length ? (
         <div>
           {tasks.map((task) => (
-            <TaskRow key={task.id} task={task} />
+            <TaskRow key={task.id} lookups={lookups} task={task} />
           ))}
         </div>
       ) : (
@@ -35,7 +39,7 @@ function TaskSection({
   );
 }
 
-export function TaskList({ completedTasks, openTasks, overdueTasks }: TaskListProps) {
+export function TaskList({ completedTasks, lookups, openTasks, overdueTasks }: TaskListProps) {
   if (!completedTasks.length && !openTasks.length && !overdueTasks.length) {
     return (
       <EmptyState
@@ -47,9 +51,9 @@ export function TaskList({ completedTasks, openTasks, overdueTasks }: TaskListPr
 
   return (
     <div className="space-y-4">
-      <TaskSection emptyText="No overdue work." tasks={overdueTasks} title="Overdue" />
-      <TaskSection emptyText="No open tasks for this day." tasks={openTasks} title="Focus list" />
-      <TaskSection emptyText="Nothing completed yet." tasks={completedTasks} title="Completed today" />
+      <TaskSection emptyText="No overdue work." lookups={lookups} tasks={overdueTasks} title="Overdue" />
+      <TaskSection emptyText="No open tasks for this day." lookups={lookups} tasks={openTasks} title="Focus list" />
+      <TaskSection emptyText="Nothing completed yet." lookups={lookups} tasks={completedTasks} title="Completed today" />
     </div>
   );
 }

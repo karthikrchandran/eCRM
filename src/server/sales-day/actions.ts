@@ -7,13 +7,22 @@ import {
   cancelSalesTask,
   completeSalesTask,
   createSalesTask,
+  createSalesTextNote,
+  deleteSalesTextNote,
   rejectSuggestedAction,
   reopenSalesTask,
   saveEndOfDayReview,
-  updateSalesTask
+  updateSalesTask,
+  updateSalesTextNote
 } from "./mutations";
 import type { SalesDayActionState } from "./types";
-import { acceptSuggestedActionSchema, salesDayReviewSchema, salesTaskInputSchema, salesTaskUpdateSchema } from "./validators";
+import {
+  acceptSuggestedActionSchema,
+  salesDayReviewSchema,
+  salesTaskInputSchema,
+  salesTaskUpdateSchema,
+  salesTextNoteInputSchema
+} from "./validators";
 
 type FieldErrorSource = {
   flatten: () => { fieldErrors: Record<string, string[] | undefined> };
@@ -90,6 +99,64 @@ export async function updateSalesTaskAction(
   } catch (error) {
     return errorState(error);
   }
+}
+
+function parseTextNoteForm(formData: FormData) {
+  return salesTextNoteInputSchema.safeParse({
+    body: formData.get("body"),
+    taskId: formData.get("taskId"),
+    leadCustomerId: formData.get("leadCustomerId"),
+    opportunityId: formData.get("opportunityId"),
+    proposalId: formData.get("proposalId"),
+    orderId: formData.get("orderId")
+  });
+}
+
+export async function createSalesTextNoteAction(
+  _previousState: SalesDayActionState,
+  formData: FormData
+): Promise<SalesDayActionState> {
+  const user = await requireUser();
+  const result = parseTextNoteForm(formData);
+
+  if (!result.success) {
+    return fieldErrorState(result.error);
+  }
+
+  try {
+    await createSalesTextNote(user, result.data);
+    revalidatePath("/my-day");
+    return { ok: true, message: "Note saved." };
+  } catch (error) {
+    return errorState(error);
+  }
+}
+
+export async function updateSalesTextNoteAction(
+  noteId: string,
+  _previousState: SalesDayActionState,
+  formData: FormData
+): Promise<SalesDayActionState> {
+  const user = await requireUser();
+  const result = parseTextNoteForm(formData);
+
+  if (!result.success) {
+    return fieldErrorState(result.error);
+  }
+
+  try {
+    await updateSalesTextNote(user, noteId, result.data);
+    revalidatePath("/my-day");
+    return { ok: true, message: "Note updated." };
+  } catch (error) {
+    return errorState(error);
+  }
+}
+
+export async function deleteSalesTextNoteAction(noteId: string) {
+  const user = await requireUser();
+  await deleteSalesTextNote(user, noteId);
+  revalidatePath("/my-day");
 }
 
 export async function completeSalesTaskAction(taskId: string) {

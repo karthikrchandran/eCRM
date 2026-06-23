@@ -13,6 +13,7 @@ type ActionState = {
 
 type ProposalFormProps = {
   action: (state: ActionState, formData: FormData) => Promise<ActionState>;
+  currency: "INR" | "USD";
   opportunityId: string;
   products: ProductServiceRecord[];
   submitLabel: string;
@@ -28,7 +29,7 @@ function FieldError({ errors }: { errors?: string[] }) {
   ) : null;
 }
 
-export function ProposalForm({ action, opportunityId, products, submitLabel }: ProposalFormProps) {
+export function ProposalForm({ action, currency, opportunityId, products, submitLabel }: ProposalFormProps) {
   const [state, formAction, pending] = useActionState(action, initialState);
 
   return (
@@ -37,7 +38,7 @@ export function ProposalForm({ action, opportunityId, products, submitLabel }: P
       <PageHeader
         eyebrow="Commercial proposal"
         title="Create proposal"
-        description="Capture commercial terms, line items, and delivery assumptions before sending a proposal document link."
+        description={`Capture commercial terms, line items, and delivery assumptions before sending a proposal document link. Currency: ${currency}.`}
       />
       <section className="surface grid gap-4 p-4 sm:p-6">
         <div className="grid gap-4 md:grid-cols-[1fr_180px_180px]">
@@ -95,7 +96,7 @@ export function ProposalForm({ action, opportunityId, products, submitLabel }: P
         </div>
       </section>
 
-      <ProposalLineItems products={products} />
+      <ProposalLineItems currency={currency} products={products} />
       <FieldError errors={state.fieldErrors?.opportunityId} />
 
       {state.message ? <p className="text-sm text-[var(--muted)]">{state.message}</p> : null}

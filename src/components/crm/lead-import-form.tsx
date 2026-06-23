@@ -16,6 +16,14 @@ export function LeadImportForm({ action }: LeadImportFormProps) {
   return (
     <div className="space-y-6">
       <form action={formAction} className="surface grid max-w-4xl gap-4 p-6">
+        <div className="rounded-md border border-sky-200 bg-sky-50 p-4 text-sm text-sky-950">
+          <p className="font-semibold">Download the template first.</p>
+          <p className="mt-1">
+            Fill the fixed columns from the template, then upload that CSV here. Use Preview CSV to check row errors before
+            Import CSV writes records.
+          </p>
+        </div>
+
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <label className="flex flex-1 flex-col gap-1 text-sm font-medium">
             Lead CSV file
@@ -28,7 +36,7 @@ export function LeadImportForm({ action }: LeadImportFormProps) {
             />
           </label>
           <Link className="rounded-md border border-[var(--border)] px-4 py-2 text-center text-sm font-semibold" href="/leads/import/template">
-            Download template
+            Download lead CSV template
           </Link>
         </div>
 

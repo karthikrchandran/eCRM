@@ -25,6 +25,7 @@ export type ProposalLineInput = {
   quantity: number;
   unitPricePaisa: number;
   gstRateBps: number;
+  manualTaxPaisa?: number;
   gstOverrideReason?: string;
 };
 

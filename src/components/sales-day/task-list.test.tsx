@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { TaskList } from "./task-list";
 import type { MyDayTaskRecord } from "@/server/sales-day/types";
@@ -6,8 +6,16 @@ import type { MyDayTaskRecord } from "@/server/sales-day/types";
 vi.mock("@/server/sales-day/actions", () => ({
   cancelSalesTaskAction: vi.fn(),
   completeSalesTaskAction: vi.fn(),
-  reopenSalesTaskAction: vi.fn()
+  reopenSalesTaskAction: vi.fn(),
+  updateSalesTaskAction: vi.fn()
 }));
+
+const lookups = {
+  leadCustomers: [{ id: "lead_1", label: "Acme Learning" }],
+  opportunities: [],
+  proposals: [],
+  orders: []
+};
 
 function task(overrides: Partial<MyDayTaskRecord>): MyDayTaskRecord {
   return {
@@ -34,6 +42,7 @@ describe("TaskList", () => {
     render(
       <TaskList
         completedTasks={[task({ id: "done", title: "Send proposal", status: "COMPLETED", completedAt: new Date() })]}
+        lookups={lookups}
         openTasks={[]}
         overdueTasks={[]}
       />
@@ -48,11 +57,21 @@ describe("TaskList", () => {
   });
 
   it("renders open task action controls", () => {
-    render(<TaskList completedTasks={[]} openTasks={[task({ id: "open_task" })]} overdueTasks={[]} />);
+    render(<TaskList completedTasks={[]} lookups={lookups} openTasks={[task({ id: "open_task" })]} overdueTasks={[]} />);
 
     const row = screen.getByTestId("sales-task-row-open_task");
     expect(within(row).getByRole("button", { name: "Complete" })).toBeVisible();
     expect(within(row).getByRole("button", { name: "Cancel" })).toBeVisible();
     expect(row).not.toHaveClass("opacity-60");
+  });
+
+  it("keeps edit controls inline with the task row", () => {
+    render(<TaskList completedTasks={[]} lookups={lookups} openTasks={[task({ id: "open_task" })]} overdueTasks={[]} />);
+
+    const row = screen.getByTestId("sales-task-row-open_task");
+    fireEvent.click(within(row).getByRole("button", { name: "Edit task" }));
+
+    expect(within(row).getByLabelText("Edit task title")).toHaveValue("Call Acme Learning");
+    expect(within(row).getByRole("button", { name: "Save changes" })).toBeVisible();
   });
 });

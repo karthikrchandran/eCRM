@@ -53,6 +53,7 @@ export function parseProposalLinesFormForTest(formData: FormData): ProposalLineI
   const quantities = formData.getAll("quantity");
   const unitPrices = formData.getAll("unitPricePaisa");
   const gstRates = formData.getAll("gstRateBps");
+  const manualTaxes = formData.getAll("manualTaxPaisa");
   const gstReasons = formData.getAll("gstOverrideReason");
   const lines: ProposalLineInput[] = [];
 
@@ -69,6 +70,7 @@ export function parseProposalLinesFormForTest(formData: FormData): ProposalLineI
       quantity: quantities[index],
       unitPricePaisa: unitPrices[index],
       gstRateBps: gstRates[index],
+      manualTaxPaisa: manualTaxes[index],
       gstOverrideReason: gstReasons[index]
     });
 

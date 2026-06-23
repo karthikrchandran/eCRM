@@ -23,7 +23,15 @@ const baseNavItems = [
 ];
 
 export function AppShell({ user, children }: AppShellProps) {
-  const navItems = user.role === "ADMIN" ? [...baseNavItems, { href: "/admin/products", label: "Products" }] : baseNavItems;
+  const navItems =
+    user.role === "ADMIN"
+      ? [
+          ...baseNavItems,
+          { href: "/admin/products", label: "Products" },
+          { href: "/admin/production-config", label: "Production config" },
+          { href: "/admin/settings", label: "Settings" }
+        ]
+      : baseNavItems;
 
   return (
     <div className="min-h-screen">

@@ -6,6 +6,8 @@ import { EndOfDayReview } from "./end-of-day-review";
 import { InsightsPanel } from "./insights-panel";
 import { TaskComposer } from "./task-composer";
 import { TaskList } from "./task-list";
+import { TextNoteComposer } from "./text-note-composer";
+import { TextNotePanel } from "./text-note-panel";
 import { VoiceNotePanel } from "./voice-note-panel";
 import { VoiceNoteRecorder } from "./voice-note-recorder";
 
@@ -78,13 +80,40 @@ export function MyDayPage({ activeView, insights, lookups, myDay }: MyDayPagePro
       </div>
 
       {activeView === "today" ? (
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_24rem]">
-          <TaskList completedTasks={myDay.completedTasks} openTasks={myDay.openTasks} overdueTasks={myDay.overdueTasks} />
-          <div className="space-y-4">
+        <div className="space-y-6">
+          <section className="space-y-4">
             <TaskComposer lookups={lookups} />
-            <VoiceNoteRecorder tasks={allTasks} />
+            <TaskList
+              completedTasks={myDay.completedTasks}
+              lookups={lookups}
+              openTasks={myDay.openTasks}
+              overdueTasks={myDay.overdueTasks}
+            />
+          </section>
+
+          <section className="space-y-4">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-950">Typed notes</h2>
+              <p className="text-sm text-[var(--muted)]">
+                Save quick written notes for this day and optionally link them to sales records.
+              </p>
+            </div>
+            <TextNoteComposer lookups={lookups} tasks={allTasks} />
+            <TextNotePanel lookups={lookups} notes={myDay.textNotes} tasks={allTasks} />
+          </section>
+
+          <section className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold text-slate-950">Voice notes</h2>
+                <p className="text-sm text-[var(--muted)]">
+                  Capture call notes in a focused dialog, then review replay, transcript, and draft follow-up actions here.
+                </p>
+              </div>
+              <VoiceNoteRecorder tasks={allTasks} />
+            </div>
             <VoiceNotePanel notes={voiceNotes} />
-          </div>
+          </section>
         </div>
       ) : activeView === "insights" ? (
         <InsightsPanel insights={insights} />

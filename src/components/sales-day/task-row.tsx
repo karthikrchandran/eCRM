@@ -1,7 +1,9 @@
 import { clsx } from "clsx";
 import { cancelSalesTaskAction, completeSalesTaskAction, reopenSalesTaskAction } from "@/server/sales-day/actions";
+import type { MyDayLookups } from "@/server/sales-day/queries";
 import type { MyDayTaskRecord } from "@/server/sales-day/types";
 import { StatusBadge } from "@/components/ui/sales-primitives";
+import { TaskEditForm } from "./task-edit-form";
 
 const completedClassName = "opacity-60 saturate-50 [filter:blur(0.2px)]";
 
@@ -27,7 +29,7 @@ function linkedContext(task: MyDayTaskRecord) {
   return [task.leadCustomer, task.opportunity, task.proposal, task.order].filter(Boolean).map((item) => item?.label);
 }
 
-export function TaskRow({ task }: { task: MyDayTaskRecord }) {
+export function TaskRow({ lookups, task }: { lookups: MyDayLookups; task: MyDayTaskRecord }) {
   const completed = task.status === "COMPLETED";
   const links = linkedContext(task);
 
@@ -53,6 +55,14 @@ export function TaskRow({ task }: { task: MyDayTaskRecord }) {
       </div>
 
       <div className="flex flex-wrap items-start gap-2 md:justify-end">
+        <details className="w-full md:w-auto">
+          <summary className="crm-button crm-button-secondary cursor-pointer list-none text-sm" role="button">
+            Edit task
+          </summary>
+          <div className="md:absolute md:right-6 md:z-10 md:w-[min(52rem,calc(100vw-4rem))]">
+            <TaskEditForm lookups={lookups} task={task} />
+          </div>
+        </details>
         {completed ? (
           <form action={reopenSalesTaskAction.bind(null, task.id)}>
             <button className="crm-button crm-button-secondary text-sm" type="submit">

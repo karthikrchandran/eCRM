@@ -124,6 +124,56 @@ describe("sales-day queries", () => {
     ]);
   });
 
+  it("loads typed notes created by the signed-in salesperson on the selected day", async () => {
+    const database = {
+      salesTask: {
+        findMany: vi.fn().mockResolvedValue([])
+      },
+      salesVoiceNote: {
+        findMany: vi.fn().mockResolvedValue([])
+      },
+      salesTextNote: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            id: "text_note_1",
+            body: "Client wants a USD quote with manual tax.",
+            createdAt: new Date("2026-06-17T11:30:00.000Z"),
+            updatedAt: new Date("2026-06-17T11:45:00.000Z"),
+            leadCustomer: { id: "lead_1", name: "Acme Learning" },
+            opportunity: null,
+            proposal: null,
+            order: null,
+            task: null
+          }
+        ])
+      }
+    };
+
+    const result = await loadMyDay(salesUser, selectedDate, database);
+
+    expect(database.salesTextNote.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          ownerId: "sales_1",
+          createdAt: expect.objectContaining({ gte: expect.any(Date), lt: expect.any(Date) })
+        })
+      })
+    );
+    expect(result.textNotes).toEqual([
+      {
+        id: "text_note_1",
+        body: "Client wants a USD quote with manual tax.",
+        createdAt: new Date("2026-06-17T11:30:00.000Z"),
+        updatedAt: new Date("2026-06-17T11:45:00.000Z"),
+        leadCustomer: { id: "lead_1", label: "Acme Learning" },
+        opportunity: null,
+        proposal: null,
+        order: null,
+        task: null
+      }
+    ]);
+  });
+
   it("includes opportunity follow-up reminders in accounts needing attention", async () => {
     const database = {
       salesTask: {

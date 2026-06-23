@@ -1,0 +1,169 @@
+<!doctype html><html><head><meta charset="utf-8"><title>eCRM Two-Page Brochure</title><style>
+  @page { size: A4; margin: 0; }
+  
+  :root {
+    --blue-950: #08275d;
+    --blue-850: #123f7b;
+    --blue-700: #1d66d8;
+    --blue-100: #eaf3ff;
+    --gray-950: #111827;
+    --gray-700: #374151;
+    --gray-500: #6b7280;
+    --gray-300: #d1d5db;
+    --gray-100: #f3f6fa;
+    --white: #ffffff;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Roboto", "Segoe UI", Arial, sans-serif;
+    color: var(--gray-950);
+    background: var(--gray-100);
+  }
+  h1, h2, h3, p { margin: 0; }
+  p { line-height: 1.5; }
+  .eyebrow {
+    color: var(--blue-700);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0;
+    text-transform: uppercase;
+  }
+  .muted { color: var(--gray-500); }
+  .small { font-size: 11px; }
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid #b6c7df;
+    border-radius: 999px;
+    padding: 5px 10px;
+    color: var(--blue-950);
+    background: #f8fbff;
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .card {
+    border: 1px solid #cdd8e8;
+    border-radius: 8px;
+    background: var(--white);
+    box-shadow: 0 12px 28px rgb(8 39 93 / 0.08);
+  }
+  .screen {
+    width: 100%;
+    border: 1px solid #bfccdc;
+    border-radius: 8px;
+    box-shadow: 0 16px 34px rgb(8 39 93 / 0.16);
+    object-fit: cover;
+    background: white;
+  }
+  .bars { display: grid; gap: 11px; }
+  .bar { display: grid; grid-template-columns: 150px 1fr 48px; gap: 10px; align-items: center; font-size: 12px; }
+  .track { height: 12px; border-radius: 999px; background: #dbe5f2; overflow: hidden; }
+  .fill { height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--blue-950), var(--blue-700)); }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { color: var(--blue-950); text-align: left; background: #eaf1f9; }
+  th, td { border-bottom: 1px solid #d8e1ee; padding: 9px 10px; vertical-align: top; }
+  .flow {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 9px;
+  }
+  .step {
+    min-height: 72px;
+    border-radius: 8px;
+    padding: 12px;
+    background: white;
+    border: 1px solid #cdd8e8;
+  }
+  .step b { display: block; color: var(--blue-950); margin-bottom: 6px; }
+  .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .kpi { padding: 16px; }
+  .kpi strong { display: block; margin-top: 8px; color: var(--blue-950); font-size: 26px; }
+
+  body { background: white; }
+  .page {
+    width: 210mm;
+    height: 297mm;
+    overflow: hidden;
+    padding: 12mm 15mm;
+    page-break-after: always;
+    background: linear-gradient(180deg, #f7fbff 0%, #ffffff 60%);
+  }
+  .page:last-child { page-break-after: auto; }
+  .hero { display: grid; grid-template-columns: 1fr 78mm; gap: 11mm; align-items: center; }
+  h1 { margin-top: 4mm; color: var(--blue-950); font-size: 30px; line-height: 1.08; }
+  h2 { color: var(--blue-950); font-size: 19px; margin-bottom: 6px; }
+  h3 { color: var(--blue-950); font-size: 13px; margin-bottom: 4px; }
+  .lead2 { margin-top: 4mm; color: var(--gray-700); font-size: 12.5px; }
+  .module-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; margin-top: 7mm; }
+  .module { padding: 9px; min-height: 62px; }
+  .module p { font-size: 10px; color: var(--gray-700); line-height: 1.35; }
+  .section { margin-top: 7mm; }
+  .benefits { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; margin-top: 6px; }
+  .benefit { padding: 9px; min-height: 66px; }
+  .benefit b { color: var(--blue-950); }
+  .benefit p { margin-top: 4px; font-size: 10px; line-height: 1.35; }
+  .fineprint { margin-top: 5mm; color: var(--gray-500); font-size: 9px; }
+  .page table { font-size: 10px; }
+  .page th, .page td { padding: 6px 7px; }
+</style></head><body>
+    <section class="page">
+      <div class="hero">
+        <div>
+          <p class="eyebrow">ARA Global eCRM</p>
+          <h1>Lead-to-cash CRM for a focused sales and delivery team.</h1>
+          <p class="lead2">eCRM connects sales intake, opportunity tracking, commercial proposals, order booking, production status, finance visibility, and management reporting in one professional workspace.</p>
+          <div style="display:flex;gap:6px;margin-top:8mm;flex-wrap:wrap">
+            <span class="tag">Single-company CRM</span><span class="tag">Admin and Sales roles</span><span class="tag">INR and GST-ready</span><span class="tag">Laptop-first, web responsive</span>
+          </div>
+        </div>
+        <img class="screen" style="height:80mm;object-fit:cover;object-position:top" src="assets/screenshots/dashboard.png" />
+      </div>
+      <div class="section">
+        <h2>What the application covers</h2>
+        <div class="module-grid">
+          <div class="module card"><h3>CRM core</h3><p>Leads/customers, branches, contacts, activities, ownership, reassignment, and CSV import.</p></div><div class="module card"><h3>My Day</h3><p>Daily sales planning, completed-work visibility, voice notes, transcripts, suggested actions, insights, and end-of-day review.</p></div><div class="module card"><h3>Pipeline</h3><p>Configurable opportunity stages, owner splits, target tracking, and follow-up driven pipeline views.</p></div><div class="module card"><h3>Proposals</h3><p>Product-backed commercial summaries, GST line totals, proposal statuses, and external document or Canva links.</p></div><div class="module card"><h3>Orders</h3><p>Accepted proposal to booked order conversion with PO metadata and preserved commercial snapshots.</p></div><div class="module card"><h3>Production</h3><p>Order-line work items, editable production templates, stage status updates, notes, owners, and due dates.</p></div><div class="module card"><h3>Finance</h3><p>Invoice, payment, cost, gross margin, incentive, split, and approval data model with order-level summaries.</p></div><div class="module card"><h3>Reports</h3><p>Read-only dashboard and reports for billings, pipeline, collections, production, clients, and products.</p></div>
+        </div>
+      </div>
+      <div class="section">
+        <h2>Business benefits</h2>
+        <div class="benefits">
+          <div class="benefit card"><b>Cleaner sales execution</b><p>Separate manual lead entry, CSV import, opportunity management, proposal tracking, and daily planning keep work organized.</p></div>
+          <div class="benefit card"><b>Less handoff ambiguity</b><p>Accepted proposals become booked orders with commercial snapshots before production work starts.</p></div>
+          <div class="benefit card"><b>Better management visibility</b><p>Dashboards and reports summarize pipeline, billings, collections, top clients, products, and production progress.</p></div>
+        </div>
+      </div>
+      <p class="fineprint">Generated from the local eCRM checkout, docs, Prisma schema, and runtime screenshots. Sample records shown are local seed/demo data.</p>
+    </section>
+    <section class="page">
+      <h2>Workflow proof points</h2>
+      <div class="flow" style="grid-template-columns:repeat(3,1fr);margin-top:5mm">
+        <div class="step"><b>1. Capture demand</b><span class="small muted">Leads, branches, contacts, activities, owners, and CSV import.</span></div>
+        <div class="step"><b>2. Manage pursuit</b><span class="small muted">Opportunity stage, value, product interest, owner splits, targets, and follow-ups.</span></div>
+        <div class="step"><b>3. Propose</b><span class="small muted">Commercial summary, product/service lines, GST totals, status, and document links.</span></div>
+        <div class="step"><b>4. Book order</b><span class="small muted">Accepted proposal to order with preserved totals and PO context.</span></div>
+        <div class="step"><b>5. Deliver</b><span class="small muted">Production templates, work items, stages, notes, assignments, and due dates.</span></div>
+        <div class="step"><b>6. Report</b><span class="small muted">Billings, collections, pipeline, top clients/products, production, and follow-ups.</span></div>
+      </div>
+      <div class="section" style="display:grid;grid-template-columns:1fr 1fr;gap:10mm">
+        <div>
+          <h2>Included catalog defaults</h2>
+          <table><thead><tr><th>Product/service</th><th>GST</th><th>Template</th><th>Default workflow</th></tr></thead><tbody><tr><td>eLearning</td><td>18%</td><td>eLearning production</td><td>Script, storyboard, development, voiceover, review, final delivery</td></tr><tr><td>Video shoot</td><td>18%</td><td>Video shoot production</td><td>Script, pre-production, shoot, edit, review, final delivery</td></tr><tr><td>VR/AR</td><td>18%</td><td>VR/AR production</td><td>Discovery, experience design, development, testing, review, final delivery</td></tr><tr><td>Animation</td><td>18%</td><td>Animation production</td><td>Script, storyboard, modeling and animation, voiceover, review, final delivery</td></tr><tr><td>Other service</td><td>18%</td><td>No default template</td><td>Flexible service category for unmapped work</td></tr></tbody></table>
+        </div>
+        <div>
+          <h2>Screen evidence</h2>
+          <img class="screen" style="height:58mm;object-fit:cover;object-position:top;margin-bottom:5mm" src="assets/screenshots/proposal-detail.png" />
+          <img class="screen" style="height:58mm;object-fit:cover;object-position:top" src="assets/screenshots/production.png" />
+        </div>
+      </div>
+      <div class="section">
+        <h2>Good fit for</h2>
+        <div class="benefits">
+          <div class="benefit card"><b>Small B2B sales teams</b><p>Company-wide visibility and simple ownership without heavy territory permissions.</p></div>
+          <div class="benefit card"><b>Service delivery businesses</b><p>Products/services map to delivery templates, making order handoff more predictable.</p></div>
+          <div class="benefit card"><b>Founder-led operations</b><p>Admin users get catalog, production configuration, finance visibility, and reports in one place.</p></div>
+        </div>
+      </div>
+      <p class="fineprint">Current MVP boundaries: proposals link to external documents; invoice PDF generation, native mobile apps, multi-tenant signup, and external accounting integrations are outside the current scope.</p>
+    </section>
+  </body></html>

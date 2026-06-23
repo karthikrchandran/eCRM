@@ -6,6 +6,7 @@ import type { ActionState } from "@/server/production/types";
 
 type ProductionStageActionsProps = {
   action: (state: ActionState, formData: FormData) => Promise<ActionState>;
+  compact?: boolean;
   owners: Array<{ id: string; name: string; email: string }>;
   status: ProductionStageStatus;
 };
@@ -19,12 +20,12 @@ const statuses: Array<{ label: string; value: ProductionStageStatus }> = [
   { label: "Skipped", value: "SKIPPED" }
 ];
 
-export function ProductionStageActions({ action, owners, status }: ProductionStageActionsProps) {
+export function ProductionStageActions({ action, compact = false, owners, status }: ProductionStageActionsProps) {
   const [state, formAction, pending] = useActionState(action, initialState);
 
   return (
-    <form action={formAction} className="mt-3 grid gap-2">
-      <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+    <form action={formAction} className={compact ? "grid gap-2" : "mt-3 grid gap-2"}>
+      <div className={compact ? "grid gap-2 md:grid-cols-[minmax(10rem,1fr)_auto] md:items-end" : "grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end"}>
         <label className="flex flex-col gap-1 text-sm font-medium">
           Change status
           <select className="crm-control" defaultValue={status} name="status">
@@ -43,7 +44,7 @@ export function ProductionStageActions({ action, owners, status }: ProductionSta
         Note
         <input className="crm-control" name="noteBody" type="text" />
       </label>
-      <div className="grid gap-2 sm:grid-cols-2">
+      <div className={compact ? "grid gap-2 lg:grid-cols-2" : "grid gap-2 sm:grid-cols-2"}>
         <label className="flex flex-col gap-1 text-sm font-medium">
           Assignee
           <select className="crm-control" name="assignedToId">

@@ -20,7 +20,15 @@ const products = [
 
 describe("ProposalForm", () => {
   it("renders proposal header fields and a product-backed line item row", () => {
-    render(<ProposalForm action={async () => ({ ok: false })} opportunityId="opp_1" products={products} submitLabel="Create proposal" />);
+    render(
+      <ProposalForm
+        action={async () => ({ ok: false })}
+        currency="INR"
+        opportunityId="opp_1"
+        products={products}
+        submitLabel="Create proposal"
+      />
+    );
 
     expect(screen.getByLabelText("Proposal title")).toHaveAttribute("name", "title");
     expect(screen.getByLabelText("Version label")).toHaveAttribute("name", "versionLabel");
@@ -43,5 +51,21 @@ describe("ProposalForm", () => {
     expect(screen.getByLabelText("GST basis points")).toHaveAttribute("name", "gstRateBps");
     expect(screen.getByLabelText("GST override reason")).toHaveAttribute("name", "gstOverrideReason");
     expect(screen.getByRole("button", { name: "Create proposal" })).toBeEnabled();
+  });
+
+  it("renders manual tax entry when the configured currency is USD", () => {
+    render(
+      <ProposalForm
+        action={async () => ({ ok: false })}
+        currency="USD"
+        opportunityId="opp_1"
+        products={products}
+        submitLabel="Create proposal"
+      />
+    );
+
+    expect(screen.getByLabelText("Unit price (cents)")).toHaveAttribute("name", "unitPricePaisa");
+    expect(screen.getByLabelText("Manual tax amount (cents)")).toHaveAttribute("name", "manualTaxPaisa");
+    expect(screen.queryByLabelText("GST basis points")).not.toBeInTheDocument();
   });
 });

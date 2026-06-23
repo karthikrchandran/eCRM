@@ -1,6 +1,6 @@
 import type { Prisma, ProductionStageStatus, User } from "@prisma/client";
 import { db } from "@/server/db";
-import { assertCanViewProductionRecords } from "./permissions";
+import { assertCanManageProductionConfig, assertCanViewProductionRecords } from "./permissions";
 import type { ProductionFilters, ProductionUser } from "./types";
 
 const productionUserSelect = {
@@ -43,10 +43,26 @@ const productionWorkItemInclude = {
   }
 } satisfies Prisma.ProductionWorkItemInclude;
 
+const productionTemplateConfigInclude = {
+  stages: { orderBy: [{ sortOrder: "asc" }, { name: "asc" }] }
+} satisfies Prisma.ProductionTemplateInclude;
+
+const productionProductServiceSelect = {
+  id: true,
+  name: true,
+  code: true,
+  category: true,
+  defaultProductionTemplateKey: true,
+  active: true,
+  sortOrder: true
+} satisfies Prisma.ProductServiceSelect;
+
 export const productionBoardStatuses = ["BLOCKED", "IN_PROGRESS", "NOT_STARTED", "DONE"] as const;
 
 export type ProductionOwner = Pick<User, "id" | "name" | "email" | "role">;
 export type ProductionWorkItemRecord = Prisma.ProductionWorkItemGetPayload<{ include: typeof productionWorkItemInclude }>;
+export type ProductionTemplateConfigRecord = Prisma.ProductionTemplateGetPayload<{ include: typeof productionTemplateConfigInclude }>;
+export type ProductionProductServiceConfigRecord = Prisma.ProductServiceGetPayload<{ select: typeof productionProductServiceSelect }>;
 
 type ProductionQueryDb = {
   productionWorkItem: {
@@ -55,6 +71,12 @@ type ProductionQueryDb = {
   };
   user?: {
     findMany: (args: Prisma.UserFindManyArgs) => Promise<ProductionOwner[]>;
+  };
+  productionTemplate?: {
+    findMany: (args: Prisma.ProductionTemplateFindManyArgs) => Promise<ProductionTemplateConfigRecord[]>;
+  };
+  productService?: {
+    findMany: (args: Prisma.ProductServiceFindManyArgs) => Promise<ProductionProductServiceConfigRecord[]>;
   };
 };
 
@@ -152,4 +174,28 @@ export async function listProductionFormOptions(database: ProductionQueryDb = db
   });
 
   return { owners };
+}
+
+export async function listProductionTemplateConfig(
+  user: ProductionUser,
+  database: ProductionQueryDb = db as unknown as ProductionQueryDb
+) {
+  assertCanManageProductionConfig(user);
+
+  if (!database.productionTemplate || !database.productService) {
+    throw new Error("Production template configuration query is unavailable.");
+  }
+
+  const [templates, productServices] = await Promise.all([
+    database.productionTemplate.findMany({
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+      include: productionTemplateConfigInclude
+    }),
+    database.productService.findMany({
+      orderBy: [{ active: "desc" }, { sortOrder: "asc" }, { name: "asc" }],
+      select: productionProductServiceSelect
+    })
+  ]);
+
+  return { productServices, templates };
 }

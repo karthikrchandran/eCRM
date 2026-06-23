@@ -1,7 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { db } from "@/server/db";
 import { assertCanUseSalesWorkspace, type SalesDayUser } from "./permissions";
-import type { MyDayInsightsViewModel, MyDayLinkedRecord, MyDayTaskRecord, MyDayViewModel } from "./types";
+import type { MyDayInsightsViewModel, MyDayLinkedRecord, MyDayTaskRecord, MyDayTextNoteRecord, MyDayViewModel } from "./types";
 
 const priorityRank = {
   URGENT: 0,
@@ -28,6 +28,14 @@ const taskInclude = {
 
 type TaskRecord = Prisma.SalesTaskGetPayload<{ include: typeof taskInclude }>;
 type VoiceNoteRecord = NonNullable<TaskRecord["voiceNotes"][number]>;
+const textNoteInclude = {
+  leadCustomer: { select: { id: true, name: true } },
+  opportunity: { select: { id: true, title: true } },
+  proposal: { select: { id: true, title: true } },
+  order: { select: { id: true, orderNumber: true } },
+  task: { select: { id: true, title: true } }
+} satisfies Prisma.SalesTextNoteInclude;
+type TextNoteRecord = Prisma.SalesTextNoteGetPayload<{ include: typeof textNoteInclude }>;
 type InsightVoiceNoteRecord = {
   id: string;
   summary: string | null;
@@ -44,6 +52,9 @@ type QueryDb = {
   };
   salesVoiceNote?: {
     findMany: (args: Prisma.SalesVoiceNoteFindManyArgs) => Promise<Array<VoiceNoteRecord | InsightVoiceNoteRecord>>;
+  };
+  salesTextNote?: {
+    findMany: (args: Prisma.SalesTextNoteFindManyArgs) => Promise<TextNoteRecord[]>;
   };
   salesVoiceNoteAction?: {
     findMany: (args: Prisma.SalesVoiceNoteActionFindManyArgs) => Promise<
@@ -142,6 +153,20 @@ function mapTask(record: TaskRecord): MyDayTaskRecord {
   };
 }
 
+function mapTextNote(note: TextNoteRecord): MyDayTextNoteRecord {
+  return {
+    id: note.id,
+    body: note.body,
+    createdAt: note.createdAt,
+    updatedAt: note.updatedAt,
+    leadCustomer: linkedRecord(note.leadCustomer),
+    opportunity: linkedRecord(note.opportunity),
+    proposal: linkedRecord(note.proposal),
+    order: linkedRecord(note.order),
+    task: linkedRecord(note.task)
+  };
+}
+
 function sortTasks(left: MyDayTaskRecord, right: MyDayTaskRecord) {
   const priorityDiff = priorityRank[left.priority] - priorityRank[right.priority];
   if (priorityDiff !== 0) return priorityDiff;
@@ -169,7 +194,7 @@ export async function loadMyDay(
   const dayStart = startOfDay(date);
   const dayEnd = addDays(dayStart, 1);
 
-  const [records, standaloneVoiceNotes] = await Promise.all([
+  const [records, standaloneVoiceNotes, textNotes] = await Promise.all([
     database.salesTask.findMany({
       where: {
         ownerId: user.id,
@@ -195,6 +220,14 @@ export async function loadMyDay(
         }
       },
       orderBy: { createdAt: "desc" }
+    }) ?? Promise.resolve([]),
+    database.salesTextNote?.findMany({
+      where: {
+        ownerId: user.id,
+        createdAt: { gte: dayStart, lt: dayEnd }
+      },
+      include: textNoteInclude,
+      orderBy: { createdAt: "desc" }
     }) ?? Promise.resolve([])
   ]);
 
@@ -204,6 +237,7 @@ export async function loadMyDay(
     overdueTasks: [],
     completedTasks: [],
     cancelledTasks: [],
+    textNotes: textNotes.map(mapTextNote),
     voiceNotes: (standaloneVoiceNotes as VoiceNoteRecord[]).map(mapVoiceNote)
   };
 

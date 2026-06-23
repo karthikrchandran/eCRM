@@ -1,7 +1,7 @@
 import type { OrderStatus, Prisma, ProductionStageStatus } from "@prisma/client";
 import { db } from "@/server/db";
-import { assertCanWriteProductionRecords } from "./permissions";
-import type { ProductionStageStatusInput, ProductionUser } from "./types";
+import { assertCanManageProductionConfig, assertCanWriteProductionRecords } from "./permissions";
+import type { ProductionStageStatusInput, ProductionTemplateInput, ProductionTemplateStageInput, ProductionUser } from "./types";
 
 type ProductionMutationDb = {
   orderLineItem: {
@@ -100,6 +100,19 @@ type ProductionStageDb = {
   };
   $transaction: <T>(callback: (transaction: ProductionTransactionDb) => Promise<T>) => Promise<T>;
   now?: () => Date;
+};
+
+type ProductionConfigDb = {
+  productionTemplate: {
+    create: (args: Prisma.ProductionTemplateCreateArgs) => Promise<{ id: string }>;
+    update: (args: Prisma.ProductionTemplateUpdateArgs) => Promise<{ id: string }>;
+    upsert: (args: Prisma.ProductionTemplateUpsertArgs) => Promise<{ id: string }>;
+  };
+  productionTemplateStage: {
+    create: (args: Prisma.ProductionTemplateStageCreateArgs) => Promise<{ id: string }>;
+    update: (args: Prisma.ProductionTemplateStageUpdateArgs) => Promise<{ id: string }>;
+    upsert: (args: Prisma.ProductionTemplateStageUpsertArgs) => Promise<{ id: string }>;
+  };
 };
 
 function deriveWorkItemStatus(stages: Array<{ status: ProductionStageStatus | string }>): ProductionStageStatus {
@@ -341,5 +354,65 @@ export async function updateProductionStageStatus(
     });
 
     return updatedStage;
+  });
+}
+
+export async function saveProductionTemplate(
+  user: ProductionUser,
+  input: ProductionTemplateInput,
+  database: ProductionConfigDb = db as unknown as ProductionConfigDb
+) {
+  assertCanManageProductionConfig(user);
+
+  const data = {
+    active: input.active,
+    description: input.description ?? null,
+    key: input.key,
+    name: input.name,
+    sortOrder: input.sortOrder
+  };
+
+  if (input.id) {
+    return database.productionTemplate.update({
+      where: { id: input.id },
+      data
+    });
+  }
+
+  return database.productionTemplate.upsert({
+    where: { key: input.key },
+    create: data,
+    update: data
+  });
+}
+
+export async function saveProductionTemplateStage(
+  user: ProductionUser,
+  input: ProductionTemplateStageInput,
+  database: ProductionConfigDb = db as unknown as ProductionConfigDb
+) {
+  assertCanManageProductionConfig(user);
+
+  const data = {
+    defaultDurationDays: input.defaultDurationDays ?? null,
+    description: input.description ?? null,
+    key: input.key,
+    name: input.name,
+    required: input.required,
+    sortOrder: input.sortOrder,
+    templateId: input.templateId
+  };
+
+  if (input.stageId) {
+    return database.productionTemplateStage.update({
+      where: { id: input.stageId },
+      data
+    });
+  }
+
+  return database.productionTemplateStage.upsert({
+    where: { templateId_key: { key: input.key, templateId: input.templateId } },
+    create: data,
+    update: data
   });
 }
