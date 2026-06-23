@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireUser } from "@/server/auth/current-user";
 import { formatInrPaisa } from "@/components/reports/report-formatters";
 import { getReportsOverview } from "@/server/reports/queries";
@@ -11,7 +12,7 @@ export default async function DashboardPage() {
       <section>
         <h1 className="text-2xl font-semibold">Dashboard</h1>
         <p className="mt-1 text-sm text-[var(--muted)]">
-          Signed in as {user.name}. Live company-wide sales, billing, collection, production, and follow-up metrics.
+          Company-wide sales, billing, collection, production, and follow-up metrics from live CRM records.
         </p>
       </section>
 
@@ -23,6 +24,80 @@ export default async function DashboardPage() {
             <p className="mt-1 text-xs text-[var(--muted)]">{metric.detail}</p>
           </article>
         ))}
+      </section>
+
+      <section className="grid gap-5 lg:grid-cols-2">
+        <div>
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold">Pipeline by stage</h2>
+            <Link className="text-sm font-medium text-[var(--accent)]" href="/opportunities">
+              View pipeline
+            </Link>
+          </div>
+          <div className="surface overflow-hidden">
+            <table className="min-w-full text-left text-sm">
+              <thead className="bg-[var(--surface-muted)] text-xs uppercase text-[var(--muted)]">
+                <tr>
+                  <th className="px-4 py-3">Stage</th>
+                  <th className="px-4 py-3">Open</th>
+                  <th className="px-4 py-3">Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                {reports.pipelineByStage.slice(0, 4).map((stage) => (
+                  <tr className="border-t border-[var(--border)]" key={stage.stageId}>
+                    <td className="px-4 py-3 font-medium">{stage.stageName}</td>
+                    <td className="px-4 py-3">{stage.count}</td>
+                    <td className="px-4 py-3">{formatInrPaisa(stage.valuePaisa)}</td>
+                  </tr>
+                ))}
+                {reports.pipelineByStage.length === 0 ? (
+                  <tr>
+                    <td className="px-4 py-3 text-[var(--muted)]" colSpan={3}>
+                      No open pipeline yet.
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div>
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold">Upcoming follow-ups</h2>
+            <a className="text-sm font-medium text-[var(--accent)]" href="/reports">
+              View reports
+            </a>
+          </div>
+          <div className="surface overflow-hidden">
+            <table className="min-w-full text-left text-sm">
+              <thead className="bg-[var(--surface-muted)] text-xs uppercase text-[var(--muted)]">
+                <tr>
+                  <th className="px-4 py-3">Client</th>
+                  <th className="px-4 py-3">Owner</th>
+                  <th className="px-4 py-3">Follow-up</th>
+                </tr>
+              </thead>
+              <tbody>
+                {reports.upcomingFollowUps.slice(0, 4).map((followUp) => (
+                  <tr className="border-t border-[var(--border)]" key={followUp.activityId}>
+                    <td className="px-4 py-3 font-medium">{followUp.clientName}</td>
+                    <td className="px-4 py-3">{followUp.ownerName}</td>
+                    <td className="px-4 py-3">{followUp.subject}</td>
+                  </tr>
+                ))}
+                {reports.upcomingFollowUps.length === 0 ? (
+                  <tr>
+                    <td className="px-4 py-3 text-[var(--muted)]" colSpan={3}>
+                      No open follow-ups.
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </section>
 
       <section className="grid gap-5 lg:grid-cols-2">

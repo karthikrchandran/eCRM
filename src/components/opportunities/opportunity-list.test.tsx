@@ -40,7 +40,9 @@ describe("OpportunityList", () => {
       />
     );
 
-    expect(screen.getByRole("heading", { name: "Opportunities" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Pipeline" })).toBeVisible();
+    expect(screen.getByRole("link", { name: "All reps" })).toHaveAttribute("href", expect.stringContaining("/opportunities?"));
+    expect(screen.getByRole("link", { name: "Sales User" })).toHaveAttribute("href", expect.stringContaining(`ownerId=${owner.id}`));
     expect(screen.getByRole("link", { name: "Board" })).toHaveAttribute("href", expect.stringContaining("view=board"));
     expect(screen.getByRole("link", { name: "New opportunity" })).toHaveAttribute("href", "/opportunities/new");
     expect(screen.getByRole("link", { name: "Reset" })).toHaveAttribute("href", "/opportunities");

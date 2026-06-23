@@ -27,7 +27,7 @@ const leadDetailInclude = {
   branches: { orderBy: { name: "asc" } },
   contacts: {
     orderBy: [{ isPrimary: "desc" }, { name: "asc" }],
-    include: { branch: { select: { id: true, name: true, city: true } } }
+    include: { branch: { select: { id: true, name: true, city: true, region: true } } }
   },
   activities: {
     orderBy: [{ status: "asc" }, { dueAt: "asc" }, { createdAt: "desc" }],

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useActionState } from "react";
 import { createSalesTextNoteAction } from "@/server/sales-day/actions";
 import type { MyDayLookups } from "@/server/sales-day/queries";
@@ -21,87 +22,112 @@ function FieldError({ errors }: { errors?: string[] }) {
 
 export function TextNoteComposer({ lookups, tasks }: { lookups: MyDayLookups; tasks: MyDayTaskRecord[] }) {
   const [state, formAction, pending] = useActionState(createSalesTextNoteAction, initialState);
+  const [open, setOpen] = useState(false);
 
   return (
-    <form action={formAction} className="surface grid gap-4 p-4">
-      <label className="flex flex-col gap-1 text-sm font-medium">
-        Note
-        <textarea
-          className="crm-control min-h-28"
-          name="body"
-          placeholder="Capture meeting context, customer asks, pricing notes, or follow-up details"
-          required
-        />
-      </label>
-      <FieldError errors={state.fieldErrors?.body} />
+    <>
+      <button className="crm-button crm-button-primary text-sm" onClick={() => setOpen(true)} type="button">
+        Add written note
+      </button>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-        <label className="flex min-w-0 flex-col gap-1 text-sm font-medium">
-          Task
-          <select className="crm-control" defaultValue="" name="taskId">
-            <option value="">None</option>
-            {tasks.map((task) => (
-              <option key={task.id} value={task.id}>
-                {task.title}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="flex min-w-0 flex-col gap-1 text-sm font-medium">
-          Lead/customer
-          <select className="crm-control" defaultValue="" name="leadCustomerId">
-            <option value="">None</option>
-            {lookups.leadCustomers.map((record) => (
-              <option key={record.id} value={record.id}>
-                {record.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="flex min-w-0 flex-col gap-1 text-sm font-medium">
-          Opportunity
-          <select className="crm-control" defaultValue="" name="opportunityId">
-            <option value="">None</option>
-            {lookups.opportunities.map((record) => (
-              <option key={record.id} value={record.id}>
-                {record.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="flex min-w-0 flex-col gap-1 text-sm font-medium">
-          Proposal
-          <select className="crm-control" defaultValue="" name="proposalId">
-            <option value="">None</option>
-            {lookups.proposals.map((record) => (
-              <option key={record.id} value={record.id}>
-                {record.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="flex min-w-0 flex-col gap-1 text-sm font-medium">
-          Order
-          <select className="crm-control" defaultValue="" name="orderId">
-            <option value="">None</option>
-            {lookups.orders.map((record) => (
-              <option key={record.id} value={record.id}>
-                {record.label}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
+      {open ? (
+        <div aria-labelledby="written-note-dialog-title" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4" role="dialog">
+          <section className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-lg bg-white p-5 shadow-xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-950" id="written-note-dialog-title">
+                  Add written note
+                </h3>
+                <p className="mt-1 text-sm text-[var(--muted)]">Capture meeting context, customer asks, pricing notes, or follow-up details.</p>
+              </div>
+              <button aria-label="Close written note dialog" className="crm-button crm-button-secondary text-sm" onClick={() => setOpen(false)} type="button">
+                Close
+              </button>
+            </div>
 
-      {state.message ? (
-        <p className={`text-sm font-medium ${state.ok ? "text-[var(--status-positive-text)]" : "text-red-700"}`}>{state.message}</p>
+            <form action={formAction} className="mt-5 grid gap-4">
+              <label className="flex flex-col gap-1 text-sm font-medium">
+                Note
+                <textarea
+                  className="crm-control min-h-28"
+                  name="body"
+                  placeholder="Capture meeting context, customer asks, pricing notes, or follow-up details"
+                  required
+                />
+              </label>
+              <FieldError errors={state.fieldErrors?.body} />
+
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+                <label className="flex min-w-0 flex-col gap-1 text-sm font-medium">
+                  Task
+                  <select className="crm-control" defaultValue="" name="taskId">
+                    <option value="">None</option>
+                    {tasks.map((task) => (
+                      <option key={task.id} value={task.id}>
+                        {task.title}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="flex min-w-0 flex-col gap-1 text-sm font-medium">
+                  Lead/customer
+                  <select className="crm-control" defaultValue="" name="leadCustomerId">
+                    <option value="">None</option>
+                    {lookups.leadCustomers.map((record) => (
+                      <option key={record.id} value={record.id}>
+                        {record.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="flex min-w-0 flex-col gap-1 text-sm font-medium">
+                  Opportunity
+                  <select className="crm-control" defaultValue="" name="opportunityId">
+                    <option value="">None</option>
+                    {lookups.opportunities.map((record) => (
+                      <option key={record.id} value={record.id}>
+                        {record.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="flex min-w-0 flex-col gap-1 text-sm font-medium">
+                  Proposal
+                  <select className="crm-control" defaultValue="" name="proposalId">
+                    <option value="">None</option>
+                    {lookups.proposals.map((record) => (
+                      <option key={record.id} value={record.id}>
+                        {record.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="flex min-w-0 flex-col gap-1 text-sm font-medium">
+                  Order
+                  <select className="crm-control" defaultValue="" name="orderId">
+                    <option value="">None</option>
+                    {lookups.orders.map((record) => (
+                      <option key={record.id} value={record.id}>
+                        {record.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              {state.message ? (
+                <p className={`text-sm font-medium ${state.ok ? "text-[var(--status-positive-text)]" : "text-red-700"}`}>{state.message}</p>
+              ) : null}
+
+              <div className="crm-form-actions">
+                <button className="crm-button crm-button-primary text-sm" disabled={pending} type="submit">
+                  {pending ? "Saving..." : "Save note"}
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
       ) : null}
-
-      <div className="crm-form-actions">
-        <button className="crm-button crm-button-primary text-sm" disabled={pending} type="submit">
-          {pending ? "Saving..." : "Save note"}
-        </button>
-      </div>
-    </form>
+    </>
   );
 }

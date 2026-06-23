@@ -37,6 +37,19 @@ describe("AppShell", () => {
     expect(screen.queryByRole("link", { name: "Production config" })).not.toBeInTheDocument();
   });
 
+  it("uses an admin console frame without personal sales links", () => {
+    render(
+      <AppShell user={{ name: "Kavya Iyer", email: "admin@example.com", role: "ADMIN" }}>
+        <p>Dashboard content</p>
+      </AppShell>
+    );
+
+    expect(screen.getByRole("banner")).toHaveTextContent("Admin Console");
+    expect(screen.queryByRole("link", { name: "My Day" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Leads" })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Pipeline" })).toHaveAttribute("href", "/opportunities");
+  });
+
   it("shows Customer 360 as a launchable workspace for sales and admin users", () => {
     const { rerender } = render(
       <AppShell user={{ name: "Kavya Iyer", email: "admin@example.com", role: "ADMIN" }}>

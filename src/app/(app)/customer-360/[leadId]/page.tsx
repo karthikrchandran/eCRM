@@ -1,13 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { CustomerTimeline } from "@/components/crm/customer-timeline";
-import { MetricStrip, PageHeader, StatusBadge } from "@/components/ui/sales-primitives";
+import { Customer360Workspace } from "@/components/crm/customer-360-workspace";
+import { MetricStrip, PageHeader } from "@/components/ui/sales-primitives";
 import { requireUser } from "@/server/auth/current-user";
 import { getCustomer360Timeline, getLeadCustomerDetail } from "@/server/crm/queries";
-
-function formatDate(date: Date | null) {
-  return date ? new Intl.DateTimeFormat("en-IN", { day: "2-digit", month: "short", year: "numeric" }).format(date) : "Not set";
-}
 
 export default async function Customer360DetailPage({ params }: { params: Promise<{ leadId: string }> }) {
   const user = await requireUser();
@@ -48,47 +44,7 @@ export default async function Customer360DetailPage({ params }: { params: Promis
         ]}
       />
 
-      <section className="grid gap-4 lg:grid-cols-[1fr_360px]">
-        <div className="surface grid gap-4 p-4 sm:grid-cols-2">
-          <div>
-            <p className="text-xs uppercase text-[var(--muted)]">Industry</p>
-            <p className="font-medium">{lead.industry ?? "Not set"}</p>
-          </div>
-          <div>
-            <p className="text-xs uppercase text-[var(--muted)]">Source</p>
-            <p className="font-medium">{lead.source ?? "Not set"}</p>
-          </div>
-          <div>
-            <p className="text-xs uppercase text-[var(--muted)]">Primary contact</p>
-            <p className="font-medium">{primaryContact?.name ?? "Not set"}</p>
-            {primaryContact ? <p className="text-sm text-[var(--muted)]">{primaryContact.email ?? primaryContact.phone ?? "No email or phone"}</p> : null}
-          </div>
-          <div>
-            <p className="text-xs uppercase text-[var(--muted)]">Updated</p>
-            <p className="font-medium">{formatDate(lead.updatedAt)}</p>
-          </div>
-        </div>
-
-        <aside className="surface p-4">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="text-base font-semibold">Open follow-ups</h2>
-            <StatusBadge tone={openActivities.length ? "warning" : "success"}>{openActivities.length ? "Needs action" : "Clear"}</StatusBadge>
-          </div>
-          <div className="mt-3 space-y-3">
-            {openActivities.length === 0 ? <p className="text-sm text-[var(--muted)]">No open follow-ups.</p> : null}
-            {openActivities.slice(0, 4).map((activity) => (
-              <article className="rounded-md border border-[var(--border)] p-3 text-sm" key={activity.id}>
-                <p className="font-medium">{activity.subject}</p>
-                <p className="text-[var(--muted)]">
-                  {activity.type} due {formatDate(activity.dueAt)}
-                </p>
-              </article>
-            ))}
-          </div>
-        </aside>
-      </section>
-
-      <CustomerTimeline items={timeline} />
+      <Customer360Workspace lead={lead} timeline={timeline} />
     </div>
   );
 }

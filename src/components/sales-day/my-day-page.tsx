@@ -12,6 +12,7 @@ import { VoiceNotePanel } from "./voice-note-panel";
 import { VoiceNoteRecorder } from "./voice-note-recorder";
 
 type MyDayPageProps = {
+  activeNoteView: "written" | "voice";
   activeView: "today" | "insights" | "review";
   insights: MyDayInsightsViewModel;
   lookups: MyDayLookups;
@@ -40,7 +41,11 @@ function tabClassName(active: boolean) {
     : "rounded-md px-3 py-2 text-sm font-semibold text-[var(--brand-navy)] hover:bg-[var(--surface-muted)]";
 }
 
-export function MyDayPage({ activeView, insights, lookups, myDay }: MyDayPageProps) {
+function noteHref(date: string, note: "written" | "voice") {
+  return `/my-day?date=${date}&view=today&note=${note}`;
+}
+
+export function MyDayPage({ activeNoteView, activeView, insights, lookups, myDay }: MyDayPageProps) {
   const date = dateValue(myDay.date);
   const allTasks = [...myDay.overdueTasks, ...myDay.openTasks, ...myDay.completedTasks];
   const voiceNotes = [...myDay.voiceNotes, ...allTasks.flatMap((task) => task.voiceNotes)];
@@ -82,7 +87,13 @@ export function MyDayPage({ activeView, insights, lookups, myDay }: MyDayPagePro
       {activeView === "today" ? (
         <div className="space-y-6">
           <section className="space-y-4">
-            <TaskComposer lookups={lookups} />
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold text-slate-950">What is in store</h2>
+                <p className="text-sm text-[var(--muted)]">Overdue work, today&apos;s focus list, and completed items stay visible.</p>
+              </div>
+              <TaskComposer lookups={lookups} />
+            </div>
             <TaskList
               completedTasks={myDay.completedTasks}
               lookups={lookups}
@@ -91,28 +102,38 @@ export function MyDayPage({ activeView, insights, lookups, myDay }: MyDayPagePro
             />
           </section>
 
-          <section className="space-y-4">
-            <div>
-              <h2 className="text-lg font-semibold text-slate-950">Typed notes</h2>
-              <p className="text-sm text-[var(--muted)]">
-                Save quick written notes for this day and optionally link them to sales records.
-              </p>
-            </div>
-            <TextNoteComposer lookups={lookups} tasks={allTasks} />
-            <TextNotePanel lookups={lookups} notes={myDay.textNotes} tasks={allTasks} />
-          </section>
-
-          <section className="space-y-4">
+          <section className="space-y-4 border-t border-[var(--border)] pt-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h2 className="text-lg font-semibold text-slate-950">Voice notes</h2>
+                <h2 className="text-lg font-semibold text-slate-950">Daily notes</h2>
                 <p className="text-sm text-[var(--muted)]">
-                  Capture call notes in a focused dialog, then review replay, transcript, and draft follow-up actions here.
+                  Switch between written notes and voice notes without keeping both work areas open.
                 </p>
               </div>
-              <VoiceNoteRecorder tasks={allTasks} />
+              <nav aria-label="Note type" className="flex rounded-lg border border-[var(--border)] bg-white p-1">
+                <Link className={tabClassName(activeNoteView === "written")} href={noteHref(date, "written")}>
+                  Written
+                </Link>
+                <Link className={tabClassName(activeNoteView === "voice")} href={noteHref(date, "voice")}>
+                  Voice
+                </Link>
+              </nav>
             </div>
-            <VoiceNotePanel notes={voiceNotes} />
+            {activeNoteView === "written" ? (
+              <div className="space-y-4">
+                <div className="flex justify-end">
+                  <TextNoteComposer lookups={lookups} tasks={allTasks} />
+                </div>
+                <TextNotePanel lookups={lookups} notes={myDay.textNotes} tasks={allTasks} />
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex justify-end">
+                  <VoiceNoteRecorder tasks={allTasks} />
+                </div>
+                <VoiceNotePanel notes={voiceNotes} />
+              </div>
+            )}
           </section>
         </div>
       ) : activeView === "insights" ? (

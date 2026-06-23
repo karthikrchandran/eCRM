@@ -30,6 +30,8 @@ export function InsightsPanel({ insights }: { insights: MyDayInsightsViewModel }
     insights.accountsNeedingAttention.length ||
     insights.voiceNoteSummaries.length ||
     insights.carryForwardTasks.length;
+  const planningCount = insights.suggestedTomorrowTasks.length + insights.carryForwardTasks.length;
+  const attentionCount = insights.accountsNeedingAttention.length + insights.voiceNoteSummaries.length;
 
   if (!hasAny) {
     return (
@@ -41,7 +43,20 @@ export function InsightsPanel({ insights }: { insights: MyDayInsightsViewModel }
   }
 
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
+    <div className="space-y-4">
+      <section className="grid gap-3 sm:grid-cols-2">
+        <article className="surface p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Tomorrow planning queue</p>
+          <p className="mt-2 text-2xl font-semibold text-slate-950">{planningCount}</p>
+          <p className="mt-1 text-xs text-[var(--muted)]">Suggested tasks plus unfinished work that can move forward.</p>
+        </article>
+        <article className="surface p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Attention signals</p>
+          <p className="mt-2 text-2xl font-semibold text-slate-950">{attentionCount}</p>
+          <p className="mt-1 text-xs text-[var(--muted)]">Accounts and voice notes with follow-up context.</p>
+        </article>
+      </section>
+      <div className="grid gap-4 lg:grid-cols-2">
       <InsightList
         empty="No suggested tasks for tomorrow."
         items={insights.suggestedTomorrowTasks}
@@ -68,6 +83,7 @@ export function InsightsPanel({ insights }: { insights: MyDayInsightsViewModel }
           <p className="mt-3 text-sm text-[var(--muted)]">No unfinished work to carry forward.</p>
         )}
       </section>
+      </div>
     </div>
   );
 }

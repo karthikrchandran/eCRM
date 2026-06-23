@@ -17,10 +17,12 @@ test("salesperson plans, completes, reopens, reviews, and uploads a voice note",
   await page.getByRole("link", { name: "My Day" }).click();
   await expect(page.getByRole("heading", { name: "My Day", exact: true })).toBeVisible();
 
-  await page.getByLabel("Task title").fill(taskTitle);
-  await page.getByLabel("Type").selectOption("CALL");
-  await page.getByLabel("Priority").selectOption("HIGH");
-  await page.getByRole("button", { name: "Add task" }).click();
+  await page.getByRole("button", { name: "Add new task" }).click();
+  const addTaskDialog = page.getByRole("dialog", { name: "Add new task" });
+  await addTaskDialog.getByLabel("Task title").fill(taskTitle);
+  await addTaskDialog.getByLabel("Type").selectOption("CALL");
+  await addTaskDialog.getByLabel("Priority").selectOption("HIGH");
+  await addTaskDialog.getByRole("button", { name: "Add task" }).click();
   await expect(page.getByRole("heading", { name: taskTitle })).toBeVisible();
 
   const taskRow = page.getByTestId(/sales-task-row-/).filter({ hasText: taskTitle }).first();
@@ -54,6 +56,6 @@ test("salesperson plans, completes, reopens, reviews, and uploads a voice note",
   const uploaded = (await upload.json()) as { voiceNoteId: string };
   await page.request.post(`/my-day/voice-notes/${uploaded.voiceNoteId}/transcribe`);
 
-  await page.goto("/my-day");
+  await page.goto("/my-day?note=voice");
   await expect(page.getByLabel(`Replay voice note ${uploaded.voiceNoteId}`)).toBeVisible();
 });

@@ -32,3 +32,10 @@ export type OrderStatusValue =
   | "READY_FOR_DELIVERY"
   | "DELIVERED"
   | "CANCELLED";
+
+export type OrderListFilters = {
+  financialYear?: number;
+  ownerId?: string;
+  quarter?: 1 | 2 | 3 | 4;
+  status?: OrderStatusValue;
+};

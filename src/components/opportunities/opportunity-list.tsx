@@ -98,6 +98,18 @@ function viewHref(filters: Filters, view: "list" | "board") {
   return `/opportunities?${params.toString()}`;
 }
 
+function ownerHref(filters: Filters, ownerId?: string) {
+  const params = new URLSearchParams();
+
+  for (const [key, value] of Object.entries({ ...filters, ownerId })) {
+    if (value) {
+      params.set(key, value);
+    }
+  }
+
+  return `/opportunities?${params.toString()}`;
+}
+
 function splitLabel(splits: OpportunityRow["splits"]) {
   if (splits.length === 0) {
     return "No splits";
@@ -153,7 +165,7 @@ export function OpportunityList({ children, filters, owners, records, stages }: 
         }
         description="Prioritized pipeline records with next follow-ups, owner context, customer access, and value health."
         eyebrow="Sales pipeline"
-        title="Opportunities"
+        title="Pipeline"
       />
 
       <MetricStrip
@@ -164,6 +176,38 @@ export function OpportunityList({ children, filters, owners, records, stages }: 
           { label: "Visible records", value: records.length.toString(), detail: "After current filters" }
         ]}
       />
+
+      <section className="surface p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-base font-semibold text-slate-950">Rep drilldown</h2>
+            <p className="mt-1 text-sm text-[var(--muted)]">Start with the full company pipeline, then narrow to one sales rep.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              className={`rounded-md border px-3 py-2 text-sm font-semibold ${
+                filters.ownerId ? "border-[var(--border)] text-[var(--brand-navy)]" : "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--brand-navy)]"
+              }`}
+              href={ownerHref(filters)}
+            >
+              All reps
+            </Link>
+            {owners.map((owner) => (
+              <Link
+                className={`rounded-md border px-3 py-2 text-sm font-semibold ${
+                  filters.ownerId === owner.id
+                    ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--brand-navy)]"
+                    : "border-[var(--border)] text-[var(--brand-navy)]"
+                }`}
+                href={ownerHref(filters, owner.id)}
+                key={owner.id}
+              >
+                {owner.name}
+              </Link>
+            ))}
+          </div>
+        </div>
+      </section>
 
       <form action="/opportunities" className="surface grid gap-4 p-4 md:grid-cols-6" method="get">
         <input name="view" type="hidden" value={filters.view ?? "list"} />

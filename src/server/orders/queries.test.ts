@@ -19,6 +19,26 @@ describe("order booking queries", () => {
     });
   });
 
+  it("filters booked orders by financial year and quarter", async () => {
+    const findMany = vi.fn().mockResolvedValue([]);
+
+    await listOrders(sales, { financialYear: 2026, quarter: 2 }, {
+      order: { findMany, findUnique: vi.fn() },
+      proposal: { findFirst: vi.fn() }
+    });
+
+    expect(findMany).toHaveBeenCalledWith({
+      orderBy: [{ bookedAt: "desc" }],
+      where: {
+        bookedAt: {
+          gte: new Date("2026-04-01T00:00:00.000Z"),
+          lte: new Date("2026-06-30T23:59:59.999Z")
+        }
+      },
+      include: expect.any(Object)
+    });
+  });
+
   it("loads order detail by id", async () => {
     const findUnique = vi.fn().mockResolvedValue({ id: "order_1", orderNumber: "ORD-2026-0001" });
 

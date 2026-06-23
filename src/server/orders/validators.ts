@@ -52,3 +52,36 @@ export const orderBookingInputSchema = poMetadataInputSchema.extend({
 export const orderStatusTransitionSchema = z.object({
   status: z.enum(["DRAFT", "BOOKED", "IN_PRODUCTION", "READY_FOR_DELIVERY", "DELIVERED", "CANCELLED"])
 });
+
+export const orderListFilterSchema = z.object({
+  financialYear: z.preprocess(
+    (value) => {
+      if (value === null || value === undefined || value === "") {
+        return undefined;
+      }
+
+      return Number(value);
+    },
+    z.number().int().min(2020).max(2100).optional()
+  ),
+  quarter: z.preprocess(
+    (value) => {
+      if (value === null || value === undefined || value === "") {
+        return undefined;
+      }
+
+      return Number(value);
+    },
+    z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]).optional()
+  ),
+  status: z.preprocess(
+    (value) => {
+      if (value === null || value === undefined || value === "") {
+        return undefined;
+      }
+
+      return value;
+    },
+    z.enum(["DRAFT", "BOOKED", "IN_PRODUCTION", "READY_FOR_DELIVERY", "DELIVERED", "CANCELLED"]).optional()
+  )
+});

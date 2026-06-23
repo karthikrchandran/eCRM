@@ -19,6 +19,10 @@ function parseView(value: string | string[] | undefined): "today" | "insights" |
   return "today";
 }
 
+function parseNoteView(value: string | string[] | undefined): "written" | "voice" {
+  return value === "voice" ? "voice" : "written";
+}
+
 export default async function MyDayRoute({
   searchParams
 }: {
@@ -28,11 +32,12 @@ export default async function MyDayRoute({
   const rawSearchParams = await searchParams;
   const date = parseDate(rawSearchParams.date);
   const activeView = parseView(rawSearchParams.view);
+  const activeNoteView = parseNoteView(rawSearchParams.note);
   const [myDay, insights, lookups] = await Promise.all([
     loadMyDay(user, date),
     loadMyDayInsights(user, date),
     loadMyDayLookups(user)
   ]);
 
-  return <MyDayPage activeView={activeView} insights={insights} lookups={lookups} myDay={myDay} />;
+  return <MyDayPage activeNoteView={activeNoteView} activeView={activeView} insights={insights} lookups={lookups} myDay={myDay} />;
 }

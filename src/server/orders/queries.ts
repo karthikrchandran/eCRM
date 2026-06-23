@@ -3,7 +3,7 @@ import { db } from "@/server/db";
 import { assertCanViewProposals } from "@/server/proposals/permissions";
 import type { ProposalUser } from "@/server/proposals/types";
 import { assertCanViewOrders } from "./permissions";
-import type { OrderUser } from "./types";
+import type { OrderListFilters, OrderUser } from "./types";
 
 const orderInclude = {
   branch: { select: { id: true, name: true, city: true, region: true } },
@@ -80,10 +80,19 @@ type OrderQueryDb = AcceptedProposalForBookingDb & {
   };
 };
 
-export type OrderListFilters = {
-  ownerId?: string;
-  status?: Prisma.EnumOrderStatusFilter["equals"];
-};
+function buildBookedAtFilter(filters: OrderListFilters) {
+  if (!filters.financialYear) {
+    return undefined;
+  }
+
+  const startMonth = filters.quarter ? (filters.quarter - 1) * 3 : 0;
+  const endMonth = filters.quarter ? startMonth + 2 : 11;
+
+  return {
+    gte: new Date(Date.UTC(filters.financialYear, startMonth, 1, 0, 0, 0, 0)),
+    lte: new Date(Date.UTC(filters.financialYear, endMonth + 1, 0, 23, 59, 59, 999))
+  };
+}
 
 export async function listOrders(
   user: OrderUser,
@@ -91,9 +100,11 @@ export async function listOrders(
   database: OrderQueryDb = db as unknown as OrderQueryDb
 ) {
   assertCanViewOrders(user);
+  const bookedAt = buildBookedAtFilter(filters);
 
   return database.order.findMany({
     where: {
+      ...(bookedAt ? { bookedAt } : {}),
       ...(filters.ownerId ? { ownerId: filters.ownerId } : {}),
       ...(filters.status ? { status: filters.status } : {})
     },

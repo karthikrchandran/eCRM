@@ -175,11 +175,20 @@ async function main() {
     role: UserRole.SALES
   });
 
+  await upsertUser({
+    name: "Arjun Srinivasan",
+    email: process.env.SEED_SALES2_EMAIL ?? "sales2@example.com",
+    password: process.env.SEED_SALES2_PASSWORD ?? "Sales2@12345",
+    role: UserRole.SALES
+  });
+
   const adminEmail = process.env.SEED_ADMIN_EMAIL ?? "admin@example.com";
   const salesEmail = process.env.SEED_SALES_EMAIL ?? "sales@example.com";
+  const arjunEmail = process.env.SEED_SALES2_EMAIL ?? "sales2@example.com";
 
   const admin = await prisma.user.findUniqueOrThrow({ where: { email: adminEmail } });
   const sales = await prisma.user.findUniqueOrThrow({ where: { email: salesEmail } });
+  const arjun = await prisma.user.findUniqueOrThrow({ where: { email: arjunEmail } });
 
   const sampleLead = await prisma.leadCustomer.upsert({
     where: { id: "seed_lead_acme_learning" },
@@ -368,6 +377,180 @@ async function main() {
       ownerId: sales.id,
       quarter: 1,
       targetValueInr: "1000000.00"
+    }
+  });
+
+  const arjunLead = await prisma.leadCustomer.upsert({
+    where: { id: "seed_lead_zenith_health" },
+    update: {
+      name: "Zenith Health Systems",
+      state: "CUSTOMER",
+      industry: "Healthcare",
+      source: "Web inquiry",
+      ownerId: arjun.id,
+      notes: "Existing customer evaluating a multilingual compliance-learning refresh.",
+      updatedById: admin.id
+    },
+    create: {
+      id: "seed_lead_zenith_health",
+      name: "Zenith Health Systems",
+      state: "CUSTOMER",
+      industry: "Healthcare",
+      source: "Web inquiry",
+      ownerId: arjun.id,
+      notes: "Existing customer evaluating a multilingual compliance-learning refresh.",
+      createdById: admin.id,
+      updatedById: admin.id
+    }
+  });
+
+  await prisma.branch.upsert({
+    where: { id: "seed_branch_zenith_mumbai" },
+    update: {
+      name: "Mumbai Corporate Office",
+      city: "Mumbai",
+      region: "Maharashtra",
+      country: "India",
+      salesContext: "Central HR and compliance training stakeholders"
+    },
+    create: {
+      id: "seed_branch_zenith_mumbai",
+      leadCustomerId: arjunLead.id,
+      name: "Mumbai Corporate Office",
+      city: "Mumbai",
+      region: "Maharashtra",
+      country: "India",
+      salesContext: "Central HR and compliance training stakeholders"
+    }
+  });
+
+  await prisma.contact.upsert({
+    where: { id: "seed_contact_zenith_meera" },
+    update: {
+      name: "Meera Shah",
+      designation: "VP People Operations",
+      email: "meera.shah@zenith-health.example",
+      phone: "+91 99887 76655",
+      isPrimary: true
+    },
+    create: {
+      id: "seed_contact_zenith_meera",
+      leadCustomerId: arjunLead.id,
+      branchId: "seed_branch_zenith_mumbai",
+      name: "Meera Shah",
+      designation: "VP People Operations",
+      email: "meera.shah@zenith-health.example",
+      phone: "+91 99887 76655",
+      isPrimary: true
+    }
+  });
+
+  await prisma.activity.upsert({
+    where: { id: "seed_activity_zenith_renewal_review" },
+    update: {
+      ownerId: arjun.id,
+      status: "OPEN",
+      subject: "Review compliance-learning renewal scope",
+      dueAt: new Date("2026-06-24T11:00:00.000Z")
+    },
+    create: {
+      id: "seed_activity_zenith_renewal_review",
+      leadCustomerId: arjunLead.id,
+      branchId: "seed_branch_zenith_mumbai",
+      contactId: "seed_contact_zenith_meera",
+      ownerId: arjun.id,
+      createdById: admin.id,
+      type: "MEETING",
+      status: "OPEN",
+      subject: "Review compliance-learning renewal scope",
+      dueAt: new Date("2026-06-24T11:00:00.000Z")
+    }
+  });
+
+  await prisma.leadOwnershipHistory.upsert({
+    where: { id: "seed_history_zenith_admin_to_arjun" },
+    update: {
+      fromOwnerId: admin.id,
+      toOwnerId: arjun.id,
+      changedById: admin.id,
+      reason: "Assigned to Arjun for healthcare account ownership."
+    },
+    create: {
+      id: "seed_history_zenith_admin_to_arjun",
+      leadCustomerId: arjunLead.id,
+      fromOwnerId: admin.id,
+      toOwnerId: arjun.id,
+      changedById: admin.id,
+      reason: "Assigned to Arjun for healthcare account ownership."
+    }
+  });
+
+  const arjunOpportunity = await prisma.opportunity.upsert({
+    where: { id: "seed_opportunity_zenith_compliance_refresh" },
+    update: {
+      branchId: "seed_branch_zenith_mumbai",
+      estimatedValueInr: "840000.00",
+      lastReachAt: new Date("2026-06-18T12:00:00.000Z"),
+      leadCustomerId: arjunLead.id,
+      nextFollowUpAt: new Date("2026-06-24T11:00:00.000Z"),
+      notes: "Customer wants updated compliance modules with Hindi and English voiceover.",
+      ownerId: arjun.id,
+      probability: 75,
+      productInterest: "Compliance learning refresh and animation",
+      stageId: "seed_stage_negotiation",
+      title: "Zenith compliance learning refresh",
+      updatedById: admin.id
+    },
+    create: {
+      id: "seed_opportunity_zenith_compliance_refresh",
+      branchId: "seed_branch_zenith_mumbai",
+      createdById: admin.id,
+      estimatedValueInr: "840000.00",
+      lastReachAt: new Date("2026-06-18T12:00:00.000Z"),
+      leadCustomerId: arjunLead.id,
+      nextFollowUpAt: new Date("2026-06-24T11:00:00.000Z"),
+      notes: "Customer wants updated compliance modules with Hindi and English voiceover.",
+      ownerId: arjun.id,
+      probability: 75,
+      productInterest: "Compliance learning refresh and animation",
+      stageId: "seed_stage_negotiation",
+      title: "Zenith compliance learning refresh",
+      updatedById: admin.id
+    }
+  });
+
+  await prisma.opportunityOwnerSplit.upsert({
+    where: {
+      opportunityId_userId: {
+        opportunityId: arjunOpportunity.id,
+        userId: arjun.id
+      }
+    },
+    update: { percent: 100 },
+    create: {
+      opportunityId: arjunOpportunity.id,
+      percent: 100,
+      userId: arjun.id
+    }
+  });
+
+  await prisma.salesTarget.upsert({
+    where: {
+      ownerId_financialYear_quarter: {
+        financialYear: 2026,
+        ownerId: arjun.id,
+        quarter: 1
+      }
+    },
+    update: {
+      targetValueInr: "900000.00"
+    },
+    create: {
+      createdById: admin.id,
+      financialYear: 2026,
+      ownerId: arjun.id,
+      quarter: 1,
+      targetValueInr: "900000.00"
     }
   });
 

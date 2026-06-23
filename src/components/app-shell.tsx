@@ -16,23 +16,82 @@ const baseNavItems = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/my-day", label: "My Day" },
   { href: "/customer-360", label: "Customer 360" },
-  { href: "/leads", label: "Leads" },
-  { href: "/opportunities", label: "Opportunities" },
+  { href: "/opportunities", label: "Pipeline" },
   { href: "/orders", label: "Orders" },
   { href: "/production", label: "Production" },
   { href: "/reports", label: "Reports" }
 ];
 
+const adminNavItems = [
+  { href: "/dashboard", label: "Dashboard" },
+  { href: "/customer-360", label: "Customer 360" },
+  { href: "/opportunities", label: "Pipeline" },
+  { href: "/orders", label: "Orders" },
+  { href: "/production", label: "Production" },
+  { href: "/reports", label: "Reports" },
+  { href: "/admin/products", label: "Products" },
+  { href: "/admin/production-config", label: "Production config" },
+  { href: "/admin/settings", label: "Settings" }
+];
+
 export function AppShell({ user, children }: AppShellProps) {
-  const navItems =
-    user.role === "ADMIN"
-      ? [
-          ...baseNavItems,
-          { href: "/admin/products", label: "Products" },
-          { href: "/admin/production-config", label: "Production config" },
-          { href: "/admin/settings", label: "Settings" }
-        ]
-      : baseNavItems;
+  if (user.role === "ADMIN") {
+    return (
+      <div className="min-h-screen bg-[var(--background)] md:grid md:grid-cols-[17rem_1fr]">
+        <aside className="border-r border-[var(--border)] bg-white px-4 py-5">
+          <Link className="text-lg font-semibold text-[var(--brand-navy)]" href="/dashboard">
+            eCRM
+          </Link>
+          <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Admin Console</p>
+          <nav className="mt-6 grid gap-1 text-sm" aria-label="Admin navigation">
+            {adminNavItems.map((item) => (
+              <Link
+                className="rounded-md px-3 py-2 font-semibold text-slate-700 hover:bg-[var(--surface-muted)] hover:text-[var(--brand-navy)]"
+                href={item.href}
+                key={item.href}
+              >
+                {item.label}
+              </Link>
+            ))}
+          </nav>
+        </aside>
+        <div className="min-w-0">
+          <header className="border-b border-[var(--border)] bg-slate-950 text-white" role="banner">
+            <div className="flex flex-col gap-3 px-4 py-3 md:flex-row md:items-center md:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-white">Admin Console</p>
+                <p className="text-xs text-slate-300">Company controls, reporting, configuration, and operations.</p>
+              </div>
+              <div className="flex items-center justify-between gap-3 text-sm">
+                <div className="min-w-0 md:hidden">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <p className="truncate font-medium text-white">{user.name}</p>
+                    <RoleBadge role={user.role} />
+                  </div>
+                  <p className="truncate text-xs text-slate-300">{user.email}</p>
+                </div>
+                <div className="hidden text-right md:block">
+                  <div className="flex items-center justify-end gap-2">
+                    <p className="font-medium text-white">{user.name}</p>
+                    <RoleBadge role={user.role} />
+                  </div>
+                  <p className="text-xs text-slate-300">{user.email}</p>
+                </div>
+                <form action={logoutAction}>
+                  <button className="crm-button crm-button-subtle text-sm" type="submit">
+                    Sign out
+                  </button>
+                </form>
+              </div>
+            </div>
+          </header>
+          <main className="mx-auto max-w-7xl px-4 py-8">{children}</main>
+        </div>
+      </div>
+    );
+  }
+
+  const navItems = baseNavItems;
 
   return (
     <div className="min-h-screen">
