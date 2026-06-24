@@ -35,8 +35,15 @@ export async function POST(request: Request) {
     return authResponse;
   }
 
+  let body: unknown;
   try {
-    const result = await upsertSharedRecord(await request.json());
+    body = await request.json();
+  } catch {
+    return Response.json({ error: "Invalid JSON." }, { status: 400 });
+  }
+
+  try {
+    const result = await upsertSharedRecord(body);
 
     return Response.json(result, { status: result.created ? 201 : 200 });
   } catch (error) {

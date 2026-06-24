@@ -207,6 +207,7 @@ model SharedBusinessRecord {
   @@index([email])
   @@index([phone])
   @@index([companyName])
+  @@index([searchText])
   @@index([updatedAt])
 }
 

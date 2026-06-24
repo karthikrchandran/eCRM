@@ -46,32 +46,42 @@ function toRecordData(input: SharedRecordUpsertInput) {
   };
 }
 
+function isPrismaUniqueConstraintError(error: unknown) {
+  return typeof error === "object" && error !== null && "code" in error && error.code === "P2002";
+}
+
+async function findExistingSharedRecord(input: SharedRecordUpsertInput, database: SharedRecordMutationDb) {
+  if (input.ecrmLegacyId) {
+    const existingByEcrmLegacyId = await database.sharedBusinessRecord.findFirst({
+      where: {
+        entityType: input.entityType,
+        ecrmLegacyId: input.ecrmLegacyId
+      }
+    });
+
+    if (existingByEcrmLegacyId) {
+      return existingByEcrmLegacyId;
+    }
+  }
+
+  if (input.emailVoiceLegacyId) {
+    return database.sharedBusinessRecord.findFirst({
+      where: {
+        entityType: input.entityType,
+        emailVoiceLegacyId: input.emailVoiceLegacyId
+      }
+    });
+  }
+
+  return null;
+}
+
 export async function upsertSharedRecord(
   rawInput: unknown,
   database: SharedRecordMutationDb = db as unknown as SharedRecordMutationDb
 ): Promise<SharedRecordMutationResult> {
   const input = sharedRecordUpsertSchema.parse(rawInput) as SharedRecordUpsertInput;
-
-  const existingByEcrmLegacyId = input.ecrmLegacyId
-    ? await database.sharedBusinessRecord.findFirst({
-        where: {
-          entityType: input.entityType,
-          ecrmLegacyId: input.ecrmLegacyId
-        }
-      })
-    : null;
-
-  const existing =
-    existingByEcrmLegacyId ??
-    (input.emailVoiceLegacyId
-      ? await database.sharedBusinessRecord.findFirst({
-          where: {
-            entityType: input.entityType,
-            emailVoiceLegacyId: input.emailVoiceLegacyId
-          }
-        })
-      : null);
-
+  const existing = await findExistingSharedRecord(input, database);
   const data = toRecordData(input);
 
   if (existing) {
@@ -83,9 +93,28 @@ export async function upsertSharedRecord(
     return { record: mapSharedRecordRow(row), created: false };
   }
 
-  const row = await database.sharedBusinessRecord.create({
-    data
-  });
+  try {
+    const row = await database.sharedBusinessRecord.create({
+      data
+    });
 
-  return { record: mapSharedRecordRow(row), created: true };
+    return { record: mapSharedRecordRow(row), created: true };
+  } catch (error) {
+    if (!isPrismaUniqueConstraintError(error)) {
+      throw error;
+    }
+
+    const duplicate = await findExistingSharedRecord(input, database);
+
+    if (!duplicate) {
+      throw error;
+    }
+
+    const row = await database.sharedBusinessRecord.update({
+      where: { id: duplicate.id },
+      data
+    });
+
+    return { record: mapSharedRecordRow(row), created: false };
+  }
 }

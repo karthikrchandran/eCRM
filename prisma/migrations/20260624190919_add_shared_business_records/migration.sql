@@ -60,6 +60,9 @@ CREATE INDEX "SharedBusinessRecord_phone_idx" ON "SharedBusinessRecord"("phone")
 CREATE INDEX "SharedBusinessRecord_companyName_idx" ON "SharedBusinessRecord"("companyName");
 
 -- CreateIndex
+CREATE INDEX "SharedBusinessRecord_searchText_idx" ON "SharedBusinessRecord"("searchText");
+
+-- CreateIndex
 CREATE INDEX "SharedBusinessRecord_updatedAt_idx" ON "SharedBusinessRecord"("updatedAt");
 
 -- CreateIndex

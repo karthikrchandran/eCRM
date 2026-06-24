@@ -17,12 +17,13 @@ export async function listSharedRecords(
   database: SharedRecordQueryDb = db as unknown as SharedRecordQueryDb
 ): Promise<SharedBusinessRecordDto[]> {
   const limit = filters.limit ?? DEFAULT_LIMIT;
+  const q = filters.q?.trim().toLowerCase();
   const where: Prisma.SharedBusinessRecordWhereInput = {
     archivedAt: null,
     ...(filters.entityType ? { entityType: filters.entityType } : {}),
     ...(filters.status ? { status: filters.status } : {}),
     ...(filters.parentId ? { parentId: filters.parentId } : {}),
-    ...(filters.q ? { searchText: { contains: filters.q.toLowerCase() } } : {})
+    ...(q ? { searchText: { contains: q } } : {})
   };
 
   const rows = await database.sharedBusinessRecord.findMany({
