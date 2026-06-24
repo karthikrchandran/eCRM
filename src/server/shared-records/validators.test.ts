@@ -49,6 +49,20 @@ describe("sharedRecordUpsertSchema", () => {
     });
   });
 
+  it("requires at least one durable identity key", () => {
+    const result = sharedRecordUpsertSchema.safeParse({
+      entityType: "LEAD",
+      displayName: "Website lead",
+      status: "OPEN",
+      sourceApp: "emailvoice"
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.flatten().formErrors).toContain("Provide ecrmLegacyId, emailVoiceLegacyId, or externalKey.");
+    }
+  });
+
   it("rejects missing required fields and unsupported source apps", () => {
     const result = sharedRecordUpsertSchema.safeParse({
       entityType: "LEAD",

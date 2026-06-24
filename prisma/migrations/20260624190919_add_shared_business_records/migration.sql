@@ -70,3 +70,6 @@ CREATE UNIQUE INDEX "SharedBusinessRecord_entityType_ecrmLegacyId_key" ON "Share
 
 -- CreateIndex
 CREATE UNIQUE INDEX "SharedBusinessRecord_entityType_emailVoiceLegacyId_key" ON "SharedBusinessRecord"("entityType", "emailVoiceLegacyId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "SharedBusinessRecord_entityType_externalKey_key" ON "SharedBusinessRecord"("entityType", "externalKey");

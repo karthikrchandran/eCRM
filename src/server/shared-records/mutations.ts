@@ -65,10 +65,23 @@ async function findExistingSharedRecord(input: SharedRecordUpsertInput, database
   }
 
   if (input.emailVoiceLegacyId) {
-    return database.sharedBusinessRecord.findFirst({
+    const existingByEmailVoiceLegacyId = await database.sharedBusinessRecord.findFirst({
       where: {
         entityType: input.entityType,
         emailVoiceLegacyId: input.emailVoiceLegacyId
+      }
+    });
+
+    if (existingByEmailVoiceLegacyId) {
+      return existingByEmailVoiceLegacyId;
+    }
+  }
+
+  if (input.externalKey) {
+    return database.sharedBusinessRecord.findFirst({
+      where: {
+        entityType: input.entityType,
+        externalKey: input.externalKey
       }
     });
   }
