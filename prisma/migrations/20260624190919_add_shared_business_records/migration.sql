@@ -45,6 +45,9 @@ CREATE INDEX "SharedBusinessRecord_relatedLeadId_idx" ON "SharedBusinessRecord"(
 CREATE INDEX "SharedBusinessRecord_relatedCustomerId_idx" ON "SharedBusinessRecord"("relatedCustomerId");
 
 -- CreateIndex
+CREATE INDEX "SharedBusinessRecord_relatedContactId_idx" ON "SharedBusinessRecord"("relatedContactId");
+
+-- CreateIndex
 CREATE INDEX "SharedBusinessRecord_relatedOpportunityId_idx" ON "SharedBusinessRecord"("relatedOpportunityId");
 
 -- CreateIndex
