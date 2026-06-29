@@ -301,8 +301,8 @@ function buildDashboardMetrics(currency: ReportCurrency, data: {
     { detail: "Opportunities in open stages", label: "Open opportunities", value: String(openOpportunityCount) },
     { detail: "Open estimated value", label: "Pipeline value", value: formatCurrencyPaisa(pipelineValuePaisa, currency) },
     {
-      detail: "Excludes GST",
-      label: "Booked value excl. GST",
+      detail: "Booked orders",
+      label: "Booked value",
       value: formatCurrencyPaisa(data.currentOrders.reduce((total, order) => total + order.subtotalPaisa, 0), currency)
     },
     {

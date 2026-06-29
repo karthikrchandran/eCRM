@@ -86,3 +86,13 @@ test("sales can see company-wide leads regardless of owner", async ({ page }) =>
   await page.getByRole("button", { name: "Apply filters" }).click();
   await expect(page).toHaveURL(/ownerId=/);
 });
+
+test("sales can open the contacts workspace and see lead-linked contacts", async ({ page }) => {
+  await signIn(page, "sales@example.com", "Sales@12345");
+
+  await page.goto("/contacts");
+  await expect(page.getByRole("heading", { name: "Contacts" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Northstar Learning Pvt Ltd" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Leads" })).toHaveAttribute("href", "/leads");
+  await expect(page.getByRole("link", { name: "Contacts" })).toHaveAttribute("href", "/contacts");
+});

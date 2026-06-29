@@ -5,12 +5,35 @@ import { useRouter } from "next/navigation";
 import type { MyDayTaskRecord } from "@/server/sales-day/types";
 
 type RecorderState = "idle" | "recording" | "uploading" | "transcribing" | "done" | "error";
+type SpeechRecognitionResult = {
+  readonly isFinal: boolean;
+  readonly 0: { readonly transcript: string };
+};
+type SpeechRecognitionLike = {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onerror: ((event: { error?: string }) => void) | null;
+  onresult: ((event: { resultIndex: number; results: ArrayLike<SpeechRecognitionResult> }) => void) | null;
+  start: () => void;
+  stop: () => void;
+};
+type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
+
+declare global {
+  interface Window {
+    SpeechRecognition?: SpeechRecognitionConstructor;
+    webkitSpeechRecognition?: SpeechRecognitionConstructor;
+  }
+}
 
 export function VoiceNoteRecorder({ tasks }: { tasks: MyDayTaskRecord[] }) {
   const router = useRouter();
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  const transcriptRef = useRef("");
   const [open, setOpen] = useState(false);
   const [state, setState] = useState<RecorderState>("idle");
   const [message, setMessage] = useState<string>("");
@@ -27,43 +50,68 @@ export function VoiceNoteRecorder({ tasks }: { tasks: MyDayTaskRecord[] }) {
     if (mediaRecorderRef.current?.state === "recording") {
       mediaRecorderRef.current.stop();
     }
+    recognitionRef.current?.stop();
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
     mediaRecorderRef.current = null;
+    recognitionRef.current = null;
     chunksRef.current = [];
+    transcriptRef.current = "";
     setOpen(false);
     resetDialog();
   }
 
-  async function uploadAndTranscribe(audio: Blob, fileName: string) {
+  async function uploadVoiceNote(audio: Blob, fileName: string, transcript?: string) {
     setState("uploading");
     const formData = new FormData();
     formData.set("audio", audio, fileName);
     if (taskId) {
       formData.set("taskId", taskId);
     }
+    const cleanedTranscript = transcript?.trim();
+    if (cleanedTranscript) {
+      formData.set("transcript", cleanedTranscript);
+    }
 
     const uploadResponse = await fetch("/my-day/voice-notes", { method: "POST", body: formData });
-    const uploaded = (await uploadResponse.json().catch(() => ({}))) as { voiceNoteId?: string; error?: string };
+    const uploaded = (await uploadResponse.json().catch(() => ({}))) as { voiceNoteId?: string; status?: string; error?: string };
     if (!uploadResponse.ok || !uploaded.voiceNoteId) {
       throw new Error(uploaded.error ?? "Voice note upload failed.");
     }
 
-    setState("transcribing");
-    const transcribeResponse = await fetch(`/my-day/voice-notes/${uploaded.voiceNoteId}/transcribe`, { method: "POST" });
-    const transcribed = (await transcribeResponse.json().catch(() => ({}))) as { status?: string; error?: string };
     router.refresh();
+    setState("done");
+    setMessage(cleanedTranscript ? "Voice note saved with browser transcript." : "Voice note saved without transcript.");
+  }
 
-    if (!transcribeResponse.ok) {
-      throw new Error(transcribed.error ?? "Voice note transcription failed.");
+  function startBrowserSpeechRecognition() {
+    const Recognition = window.SpeechRecognition ?? window.webkitSpeechRecognition;
+    if (!Recognition) {
+      setMessage("Browser transcription is not available here. Audio will still be saved.");
+      return;
     }
 
-    setState("done");
-    setMessage(
-      transcribed.status === "FAILED"
-        ? `Voice note saved, but transcription needs attention: ${transcribed.error ?? "Provider unavailable."}`
-        : "Voice note saved."
-    );
+    const recognition = new Recognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = "en-IN";
+    recognition.onresult = (event) => {
+      const finalParts: string[] = [];
+      for (let index = event.resultIndex; index < event.results.length; index += 1) {
+        const result = event.results[index];
+        if (result?.isFinal) {
+          finalParts.push(result[0].transcript);
+        }
+      }
+      if (finalParts.length > 0) {
+        transcriptRef.current = `${transcriptRef.current} ${finalParts.join(" ")}`.trim();
+      }
+    };
+    recognition.onerror = () => {
+      setMessage("Browser transcription stopped. Audio recording can still be saved.");
+    };
+    recognition.start();
+    recognitionRef.current = recognition;
   }
 
   async function startRecording() {
@@ -89,7 +137,9 @@ export function VoiceNoteRecorder({ tasks }: { tasks: MyDayTaskRecord[] }) {
       };
       mediaRecorderRef.current = recorder;
       recorder.start();
+      transcriptRef.current = "";
       setMessage("");
+      startBrowserSpeechRecognition();
       setState("recording");
     } catch (error) {
       setState("error");
@@ -107,6 +157,7 @@ export function VoiceNoteRecorder({ tasks }: { tasks: MyDayTaskRecord[] }) {
       recorder.addEventListener("stop", () => resolve(), { once: true });
     });
     recorder.stop();
+    recognitionRef.current?.stop();
     await stopped;
 
     try {
@@ -114,7 +165,7 @@ export function VoiceNoteRecorder({ tasks }: { tasks: MyDayTaskRecord[] }) {
       if (!blob.size) {
         throw new Error("Recording did not capture audio.");
       }
-      await uploadAndTranscribe(blob, "sales-voice-note.webm");
+      await uploadVoiceNote(blob, "sales-voice-note.webm", transcriptRef.current);
     } catch (error) {
       setState("error");
       setMessage(error instanceof Error ? error.message : "Voice note upload failed.");
@@ -129,7 +180,7 @@ export function VoiceNoteRecorder({ tasks }: { tasks: MyDayTaskRecord[] }) {
     }
 
     try {
-      await uploadAndTranscribe(audioFile, audioFile.name);
+      await uploadVoiceNote(audioFile, audioFile.name);
     } catch (error) {
       setState("error");
       setMessage(error instanceof Error ? error.message : "Voice note upload failed.");

@@ -61,6 +61,12 @@ export type LeadFilters = {
   followUp?: "overdue" | "today" | "upcoming";
 };
 
+export type ContactFilters = {
+  q?: string;
+  ownerId?: string;
+  state?: LeadState;
+};
+
 export type ReassignmentInput = {
   leadCustomerId: string;
   toOwnerId: string;

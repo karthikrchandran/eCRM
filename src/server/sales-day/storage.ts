@@ -2,6 +2,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 export const MAX_VOICE_NOTE_BYTES = 25 * 1024 * 1024;
+const VERCEL_BLOB_PREFIX = "vercel-blob:";
 
 const mimeToExtension = {
   "audio/webm": "webm",
@@ -36,6 +37,10 @@ export type SaveVoiceNoteAudioInput = {
 function storageRoot() {
   const configured = process.env.SALES_VOICE_STORAGE_DIR || ".local-storage/sales-voice-notes";
   return path.isAbsolute(configured) ? configured : path.join(/* turbopackIgnore: true */ process.cwd(), configured);
+}
+
+function isVercelBlobConfigured() {
+  return Boolean(process.env.BLOB_READ_WRITE_TOKEN || (process.env.VERCEL_OIDC_TOKEN && process.env.BLOB_STORE_ID));
 }
 
 function safePathSegment(value: string) {
@@ -82,6 +87,23 @@ export async function saveVoiceNoteAudio(input: SaveVoiceNoteAudioInput) {
   const storageKey = path
     .join(safePathSegment(input.ownerId), monthSegment(createdAt), `${safePathSegment(input.voiceNoteId)}.${extension}`)
     .replace(/\\/g, "/");
+
+  if (isVercelBlobConfigured()) {
+    const { put } = await import("@vercel/blob");
+    const blob = await put(storageKey, input.buffer, {
+      access: "private",
+      allowOverwrite: true,
+      contentType: mimeType
+    });
+
+    return {
+      storageKey: `${VERCEL_BLOB_PREFIX}${blob.pathname}`,
+      mimeType,
+      fileSizeBytes: input.buffer.byteLength,
+      originalFileName: input.originalFileName
+    };
+  }
+
   const absolutePath = path.join(storageRoot(), storageKey);
 
   await mkdir(path.dirname(absolutePath), { recursive: true });
@@ -96,10 +118,21 @@ export async function saveVoiceNoteAudio(input: SaveVoiceNoteAudioInput) {
 }
 
 export async function readVoiceNoteAudio(storageKey: string) {
+  if (storageKey.startsWith(VERCEL_BLOB_PREFIX)) {
+    const pathname = storageKey.slice(VERCEL_BLOB_PREFIX.length);
+    const { get } = await import("@vercel/blob");
+    const blob = await get(pathname, { access: "private" });
+    if (!blob?.stream) {
+      throw new Error("Voice note audio was not found.");
+    }
+    return Buffer.from(await new Response(blob.stream).arrayBuffer());
+  }
+
   return readFile(path.join(storageRoot(), storageKey));
 }
 
 export function contentTypeForAudio(storageKey: string) {
-  const extension = path.extname(storageKey).replace(".", "").toLowerCase();
+  const pathname = storageKey.startsWith(VERCEL_BLOB_PREFIX) ? storageKey.slice(VERCEL_BLOB_PREFIX.length) : storageKey;
+  const extension = path.extname(pathname).replace(".", "").toLowerCase();
   return extensionToMime[extension as keyof typeof extensionToMime] ?? "application/octet-stream";
 }

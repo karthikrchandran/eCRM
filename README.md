@@ -51,6 +51,8 @@ eCRM is a single-company CRM for a small sales organization. The foundation slic
 
 6. Open `http://localhost:3000`.
 
+Voice note audio is saved to `.local-storage/sales-voice-notes` locally. If `BLOB_READ_WRITE_TOKEN` is configured, the same code saves voice note audio to private Vercel Blob storage instead. Browser speech recognition is used for free live-recording transcripts when the browser supports it; uploaded audio files are saved without automatic transcription.
+
 ## Seeded Local Users
 
 - Admin: `admin@example.com` / `Admin@12345`
@@ -64,6 +66,10 @@ Run the local quality gate and browser smoke tests before every completion claim
 npm run gate
 npm run test:e2e
 ```
+
+## Deployment Notes
+
+For Vercel deployment, configure a hosted PostgreSQL `DATABASE_URL`, a strong `AUTH_SECRET`, `APP_BASE_URL`, and `BLOB_READ_WRITE_TOKEN` for durable voice-note audio storage. Local filesystem storage is only for local development.
 
 `next-env.d.ts` is intentionally ignored. Next 16 regenerates it differently between development and build flows, and the committed TypeScript config includes the generated `.next/types/**/*.ts` and `.next/dev/types/**/*.ts` route types.
 

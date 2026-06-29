@@ -293,7 +293,7 @@ describe("reports overview", () => {
     expect(overview.dashboardMetrics).toEqual([
       { detail: "Opportunities in open stages", label: "Open opportunities", value: "1" },
       { detail: "Open estimated value", label: "Pipeline value", value: "USD 2,500.50" },
-      { detail: "Excludes GST", label: "Booked value excl. GST", value: "USD 3,000.00" },
+      { detail: "Booked orders", label: "Booked value", value: "USD 3,000.00" },
       { detail: "Outstanding against order totals", label: "Pending receivables", value: "USD 1,360.00" },
       { detail: "Actual payment records", label: "Collected payments", value: "USD 2,180.00" },
       { detail: "Work not done or skipped", label: "Production pending", value: "1" },

@@ -1,7 +1,7 @@
 import type { Prisma, User } from "@prisma/client";
 import { db } from "@/server/db";
 import { assertCanViewCrmRecords, type CrmUser } from "./permissions";
-import type { LeadFilters } from "./types";
+import type { ContactFilters, LeadFilters } from "./types";
 
 const crmOwnerSelect = {
   id: true,
@@ -47,9 +47,31 @@ const leadDetailInclude = {
   }
 } satisfies Prisma.LeadCustomerInclude;
 
+const contactListInclude = {
+  branch: { select: { id: true, name: true, city: true, region: true } },
+  leadCustomer: {
+    select: {
+      id: true,
+      name: true,
+      state: true,
+      owner: { select: crmOwnerSelect },
+      _count: { select: { contacts: true, opportunities: true } }
+    }
+  }
+} satisfies Prisma.ContactInclude;
+
+const contactDetailInclude = {
+  branch: { select: { id: true, name: true, city: true, region: true } },
+  leadCustomer: {
+    select: { id: true, name: true }
+  },
+} satisfies Prisma.ContactInclude;
+
 export type CrmOwner = Pick<User, "id" | "name" | "email" | "role">;
 export type LeadCustomerListRecord = Prisma.LeadCustomerGetPayload<{ include: typeof leadListInclude }>;
 export type LeadCustomerDetail = Prisma.LeadCustomerGetPayload<{ include: typeof leadDetailInclude }>;
+export type ContactListRecord = Prisma.ContactGetPayload<{ include: typeof contactListInclude }>;
+export type ContactDetailRecord = Prisma.ContactGetPayload<{ include: typeof contactDetailInclude }>;
 export type CustomerTimelineKind =
   | "activity"
   | "follow_up"
@@ -80,8 +102,17 @@ type QueryDb = {
     findMany: (args: Prisma.LeadCustomerFindManyArgs) => Promise<LeadCustomerListRecord[]>;
     count?: (args?: Prisma.LeadCustomerCountArgs) => Promise<number>;
   };
+  contact: {
+    findMany: (args: Prisma.ContactFindManyArgs) => Promise<ContactListRecord[]>;
+  };
   user: {
     findMany: (args: Prisma.UserFindManyArgs) => Promise<CrmOwner[]>;
+  };
+};
+
+type ContactDetailDb = {
+  contact: {
+    findUnique: (args: Prisma.ContactFindUniqueArgs) => Promise<ContactDetailRecord | null>;
   };
 };
 
@@ -209,6 +240,23 @@ function buildLeadWhere(filters: LeadFilters): Prisma.LeadCustomerWhereInput {
   return where;
 }
 
+function buildContactWhere(filters: ContactFilters): Prisma.ContactWhereInput {
+  const where: Prisma.ContactWhereInput = {};
+
+  if (filters.q) {
+    where.OR = [
+      { name: { contains: filters.q, mode: "insensitive" } },
+      { designation: { contains: filters.q, mode: "insensitive" } },
+      { email: { contains: filters.q, mode: "insensitive" } },
+      { phone: { contains: filters.q, mode: "insensitive" } },
+      { leadCustomer: { name: { contains: filters.q, mode: "insensitive" } } },
+      { branch: { name: { contains: filters.q, mode: "insensitive" } } }
+    ];
+  }
+
+  return where;
+}
+
 export async function listLeadCustomers(
   user: CrmUser,
   filters: LeadFilters,
@@ -231,6 +279,55 @@ export async function listLeadCustomers(
   ]);
 
   return { records, owners };
+}
+
+export async function listContacts(
+  user: CrmUser,
+  filters: ContactFilters,
+  database: QueryDb = db as unknown as QueryDb
+) {
+  assertCanViewCrmRecords(user);
+  const where = buildContactWhere(filters);
+
+  const [records, owners] = await Promise.all([
+    database.contact.findMany({
+      where,
+      orderBy: [{ updatedAt: "desc" }, { name: "asc" }],
+      include: contactListInclude
+    }),
+    database.user.findMany({
+      where: { active: true, role: { in: ["ADMIN", "SALES"] } },
+      orderBy: { name: "asc" },
+      select: crmOwnerSelect
+    })
+  ]);
+
+  const filteredRecords = records.filter((contact) => {
+    if (filters.ownerId && contact.leadCustomer.owner.id !== filters.ownerId) {
+      return false;
+    }
+
+    if (filters.state && contact.leadCustomer.state !== filters.state) {
+      return false;
+    }
+
+    return true;
+  });
+
+  return { records: filteredRecords, owners };
+}
+
+export async function getContactDetail(
+  user: CrmUser,
+  contactId: string,
+  database: ContactDetailDb = db as unknown as ContactDetailDb
+) {
+  assertCanViewCrmRecords(user);
+
+  return database.contact.findUnique({
+    where: { id: contactId },
+    include: contactDetailInclude
+  });
 }
 
 export async function getLeadCustomerDetail(user: CrmUser, leadCustomerId: string) {

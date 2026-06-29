@@ -1,32 +1,4 @@
-import OpenAI, { toFile } from "openai";
 import type { SuggestedVoiceActionInput } from "./mutations";
-
-const TRANSCRIPTION_PROMPT = `Transcribe every spoken word. Do not summarize, omit, or clean up spoken content.
-The recording is a sales note for an Indian CRM. Common terms include LMS,
-eLearning, VR, AR, proposal, PO, GST, invoice, pricing sheet, demo, storyboard,
-voiceover, production, payment follow-up, Acme Learning, and customer follow-up.`;
-
-type TranscribeVoiceNoteAudioInput = {
-  fileName: string;
-  mimeType: string;
-  buffer: Buffer;
-  apiKey?: string;
-  model?: string;
-};
-
-export type VoiceNoteTranscriptionResult =
-  | {
-      ok: true;
-      transcript: string;
-      summary: string | null;
-      customerAsk: string | null;
-      nextStep: string | null;
-      suggestedActions: SuggestedVoiceActionInput[];
-    }
-  | {
-      ok: false;
-      error: string;
-    };
 
 function cleanSentence(value: string) {
   return value.trim().replace(/\s+/g, " ").replace(/[.!,;:]+$/, "");
@@ -114,39 +86,15 @@ function customerAskFromTranscript(transcript: string) {
   return null;
 }
 
-export async function transcribeVoiceNoteAudio(
-  input: TranscribeVoiceNoteAudioInput
-): Promise<VoiceNoteTranscriptionResult> {
-  const apiKey = input.apiKey ?? process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    return { ok: false, error: "Transcription provider is not configured." };
-  }
+export function buildTranscriptResult(transcript: string) {
+  const cleaned = transcript.trim().replace(/\s+/g, " ");
+  const suggestedActions = extractSuggestedActions(cleaned);
 
-  try {
-    const client = new OpenAI({ apiKey });
-    const file = await toFile(input.buffer, input.fileName, { type: input.mimeType });
-    const model = input.model ?? process.env.SALES_VOICE_TRANSCRIBE_MODEL ?? "gpt-4o-transcribe";
-    const response = await client.audio.transcriptions.create({
-      file,
-      model,
-      prompt: TRANSCRIPTION_PROMPT,
-      response_format: "json"
-    });
-    const transcript = response.text?.trim() ?? "";
-    const suggestedActions = extractSuggestedActions(transcript);
-
-    return {
-      ok: true,
-      transcript,
-      summary: summarizeTranscript(transcript),
-      customerAsk: customerAskFromTranscript(transcript),
-      nextStep: suggestedActions[0]?.title ?? null,
-      suggestedActions
-    };
-  } catch (error) {
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : "Transcription failed."
-    };
-  }
+  return {
+    transcript: cleaned,
+    summary: summarizeTranscript(cleaned),
+    customerAsk: customerAskFromTranscript(cleaned),
+    nextStep: suggestedActions[0]?.title ?? null,
+    suggestedActions
+  };
 }

@@ -111,6 +111,12 @@ export const leadFilterSchema = z.object({
   followUp: z.preprocess(emptyToUndefined, z.enum(["overdue", "today", "upcoming"]).optional())
 });
 
+export const contactFilterSchema = z.object({
+  q: optionalTrimmedString,
+  ownerId: optionalTrimmedString,
+  state: z.preprocess(emptyToUndefined, z.enum(["LEAD", "CUSTOMER", "DORMANT"]).optional())
+});
+
 export const reassignmentInputSchema = z.object({
   leadCustomerId: requiredTrimmedString("Choose a lead or customer."),
   toOwnerId: requiredTrimmedString("Choose the new owner."),

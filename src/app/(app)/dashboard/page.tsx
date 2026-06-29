@@ -3,39 +3,112 @@ import { requireUser } from "@/server/auth/current-user";
 import { formatInrPaisa } from "@/components/reports/report-formatters";
 import { getReportsOverview } from "@/server/reports/queries";
 
+function metricByLabel(
+  metrics: Array<{ detail: string; label: string; value: string }>,
+  label: string
+) {
+  const metric = metrics.find((entry) => entry.label === label);
+  if (!metric) {
+    throw new Error(`Dashboard metric not found: ${label}`);
+  }
+  return metric;
+}
+
+function MetricCard({ detail, label, value }: { detail: string; label: string; value: string }) {
+  return (
+    <article className="dashboard-metric-card">
+      <p className="text-sm text-[var(--muted)]">{label}</p>
+      <p className="mt-2 text-2xl font-semibold">{value}</p>
+      <p className="mt-1 text-xs text-[var(--muted)]">{detail}</p>
+    </article>
+  );
+}
+
 export default async function DashboardPage() {
   const user = await requireUser();
   const reports = await getReportsOverview(user);
+  const openOpportunities = metricByLabel(reports.dashboardMetrics, "Open opportunities");
+  const pipelineValue = metricByLabel(reports.dashboardMetrics, "Pipeline value");
+  const bookedValue = metricByLabel(reports.dashboardMetrics, "Booked value");
+  const pendingReceivables = metricByLabel(reports.dashboardMetrics, "Pending receivables");
+  const collectedPayments = metricByLabel(reports.dashboardMetrics, "Collected payments");
+  const productionPending = metricByLabel(reports.dashboardMetrics, "Production pending");
+  const upcomingFollowUps = metricByLabel(reports.dashboardMetrics, "Upcoming follow-ups");
 
   return (
-    <div className="space-y-6">
-      <section>
+    <div className="dashboard-shell">
+      <section className="dashboard-lead dashboard-lead-simple">
         <h1 className="text-2xl font-semibold">Dashboard</h1>
         <p className="mt-1 text-sm text-[var(--muted)]">
           Company-wide sales, billing, collection, production, and follow-up metrics from live CRM records.
         </p>
       </section>
 
-      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {reports.dashboardMetrics.map((metric) => (
-          <article className="surface p-4" key={metric.label}>
-            <p className="text-sm text-[var(--muted)]">{metric.label}</p>
-            <p className="mt-2 text-2xl font-semibold">{metric.value}</p>
-            <p className="mt-1 text-xs text-[var(--muted)]">{metric.detail}</p>
-          </article>
-        ))}
-      </section>
+      <section className="dashboard-grid dashboard-grid-stacked">
+        <section aria-label="Sales overview" className="dashboard-section">
+          <div className="dashboard-section-header">
+            <div>
+              <p className="dashboard-section-kicker">Sales</p>
+              <h2 className="text-lg font-semibold">Sales</h2>
+              <p className="text-sm text-[var(--muted)]">Customer follow-ups and booked-account momentum.</p>
+            </div>
+            <a className="dashboard-link" href="/reports">
+              View reports
+            </a>
+          </div>
+          <div className="dashboard-section-panel">
+            <div className="dashboard-metric-grid sm:grid-cols-2">
+              <MetricCard {...upcomingFollowUps} />
+            </div>
+          </div>
+          <div className="dashboard-section-panel surface overflow-hidden">
+            <table className="dashboard-table min-w-full text-left text-sm">
+              <thead className="bg-[var(--surface-muted)] text-xs uppercase text-[var(--muted)]">
+                <tr>
+                  <th className="px-4 py-3">Client</th>
+                  <th className="px-4 py-3">Orders</th>
+                  <th className="px-4 py-3">Booked value</th>
+                </tr>
+              </thead>
+              <tbody>
+                {reports.topClients.slice(0, 3).map((client) => (
+                  <tr className="border-t border-[var(--border)]" key={client.clientId}>
+                    <td className="px-4 py-3 font-medium">{client.clientName}</td>
+                    <td className="px-4 py-3">{client.orderCount}</td>
+                    <td className="px-4 py-3">{formatInrPaisa(client.bookedValuePaisa)}</td>
+                  </tr>
+                ))}
+                {reports.topClients.length === 0 ? (
+                  <tr>
+                    <td className="px-4 py-3 text-[var(--muted)]" colSpan={3}>
+                      No client billing data yet.
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+        </section>
 
-      <section className="grid gap-5 lg:grid-cols-2">
-        <div>
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold">Pipeline by stage</h2>
-            <Link className="text-sm font-medium text-[var(--accent)]" href="/opportunities">
+        <section aria-label="Pipeline overview" className="dashboard-section">
+          <div className="dashboard-section-header">
+            <div>
+              <p className="dashboard-section-kicker">Pipeline</p>
+              <h2 className="text-lg font-semibold">Pipeline</h2>
+              <p className="text-sm text-[var(--muted)]">Open opportunities and stage-wise value in motion.</p>
+            </div>
+            <Link className="dashboard-link" href="/opportunities">
               View pipeline
             </Link>
           </div>
-          <div className="surface overflow-hidden">
-            <table className="min-w-full text-left text-sm">
+          <div className="dashboard-section-panel">
+            <div className="dashboard-metric-grid sm:grid-cols-2">
+              <MetricCard {...openOpportunities} />
+              <MetricCard {...pipelineValue} />
+            </div>
+          </div>
+          <div className="dashboard-section-panel surface overflow-hidden">
+            <table className="dashboard-table min-w-full text-left text-sm">
               <thead className="bg-[var(--surface-muted)] text-xs uppercase text-[var(--muted)]">
                 <tr>
                   <th className="px-4 py-3">Stage</th>
@@ -61,60 +134,33 @@ export default async function DashboardPage() {
               </tbody>
             </table>
           </div>
-        </div>
+        </section>
 
-        <div>
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold">Upcoming follow-ups</h2>
-            <a className="text-sm font-medium text-[var(--accent)]" href="/reports">
+        <section aria-label="Orders overview" className="dashboard-section">
+          <div className="dashboard-section-header">
+            <div>
+              <p className="dashboard-section-kicker">Orders</p>
+              <h2 className="text-lg font-semibold">Orders</h2>
+              <p className="text-sm text-[var(--muted)]">Booked revenue, collections, and receivables in one place.</p>
+            </div>
+            <a className="dashboard-link" href="/reports">
               View reports
             </a>
           </div>
-          <div className="surface overflow-hidden">
-            <table className="min-w-full text-left text-sm">
-              <thead className="bg-[var(--surface-muted)] text-xs uppercase text-[var(--muted)]">
-                <tr>
-                  <th className="px-4 py-3">Client</th>
-                  <th className="px-4 py-3">Owner</th>
-                  <th className="px-4 py-3">Follow-up</th>
-                </tr>
-              </thead>
-              <tbody>
-                {reports.upcomingFollowUps.slice(0, 4).map((followUp) => (
-                  <tr className="border-t border-[var(--border)]" key={followUp.activityId}>
-                    <td className="px-4 py-3 font-medium">{followUp.clientName}</td>
-                    <td className="px-4 py-3">{followUp.ownerName}</td>
-                    <td className="px-4 py-3">{followUp.subject}</td>
-                  </tr>
-                ))}
-                {reports.upcomingFollowUps.length === 0 ? (
-                  <tr>
-                    <td className="px-4 py-3 text-[var(--muted)]" colSpan={3}>
-                      No open follow-ups.
-                    </td>
-                  </tr>
-                ) : null}
-              </tbody>
-            </table>
+          <div className="dashboard-section-panel">
+            <div className="dashboard-metric-grid sm:grid-cols-2 xl:grid-cols-3">
+              <MetricCard {...bookedValue} />
+              <MetricCard {...pendingReceivables} />
+              <MetricCard {...collectedPayments} />
+            </div>
           </div>
-        </div>
-      </section>
-
-      <section className="grid gap-5 lg:grid-cols-2">
-        <div>
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold">Top billings</h2>
-            <a className="text-sm font-medium text-[var(--accent)]" href="/reports">
-              View reports
-            </a>
-          </div>
-          <div className="surface overflow-hidden">
-            <table className="min-w-full text-left text-sm">
+          <div className="dashboard-section-panel surface overflow-hidden">
+            <table className="dashboard-table min-w-full text-left text-sm">
               <thead className="bg-[var(--surface-muted)] text-xs uppercase text-[var(--muted)]">
                 <tr>
                   <th className="px-4 py-3">Order</th>
                   <th className="px-4 py-3">Client</th>
-                  <th className="px-4 py-3">Booked excl. GST</th>
+                  <th className="px-4 py-3">Booked value</th>
                 </tr>
               </thead>
               <tbody>
@@ -135,38 +181,52 @@ export default async function DashboardPage() {
               </tbody>
             </table>
           </div>
-        </div>
+        </section>
 
-        <div>
-          <h2 className="mb-3 text-lg font-semibold">Top clients</h2>
-          <div className="surface overflow-hidden">
-            <table className="min-w-full text-left text-sm">
+        <section aria-label="Production overview" className="dashboard-section">
+          <div className="dashboard-section-header">
+            <div>
+              <p className="dashboard-section-kicker">Production</p>
+              <h2 className="text-lg font-semibold">Production</h2>
+              <p className="text-sm text-[var(--muted)]">Pending work items that still need delivery attention.</p>
+            </div>
+            <a className="dashboard-link" href="/reports">
+              View reports
+            </a>
+          </div>
+          <div className="dashboard-section-panel">
+            <div className="dashboard-metric-grid sm:grid-cols-2">
+              <MetricCard {...productionPending} />
+            </div>
+          </div>
+          <div className="dashboard-section-panel surface overflow-hidden">
+            <table className="dashboard-table min-w-full text-left text-sm">
               <thead className="bg-[var(--surface-muted)] text-xs uppercase text-[var(--muted)]">
                 <tr>
+                  <th className="px-4 py-3">Order</th>
                   <th className="px-4 py-3">Client</th>
-                  <th className="px-4 py-3">Orders</th>
-                  <th className="px-4 py-3">Booked excl. GST</th>
+                  <th className="px-4 py-3">Work item</th>
                 </tr>
               </thead>
               <tbody>
-                {reports.topClients.slice(0, 3).map((client) => (
-                  <tr className="border-t border-[var(--border)]" key={client.clientId}>
-                    <td className="px-4 py-3 font-medium">{client.clientName}</td>
-                    <td className="px-4 py-3">{client.orderCount}</td>
-                    <td className="px-4 py-3">{formatInrPaisa(client.bookedValuePaisa)}</td>
+                {reports.pendingProduction.slice(0, 4).map((workItem) => (
+                  <tr className="border-t border-[var(--border)]" key={workItem.workItemId}>
+                    <td className="px-4 py-3 font-medium">{workItem.orderNumber}</td>
+                    <td className="px-4 py-3">{workItem.clientName}</td>
+                    <td className="px-4 py-3">{workItem.productName}</td>
                   </tr>
                 ))}
-                {reports.topClients.length === 0 ? (
+                {reports.pendingProduction.length === 0 ? (
                   <tr>
                     <td className="px-4 py-3 text-[var(--muted)]" colSpan={3}>
-                      No client billing data yet.
+                      No pending production work.
                     </td>
                   </tr>
                 ) : null}
               </tbody>
             </table>
           </div>
-        </div>
+        </section>
       </section>
     </div>
   );

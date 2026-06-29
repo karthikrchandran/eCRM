@@ -95,7 +95,8 @@ function viewHref(filters: Filters, view: "list" | "board") {
     }
   }
 
-  return `/opportunities?${params.toString()}`;
+  const query = params.toString();
+  return query ? `/opportunities?${query}` : "/opportunities";
 }
 
 function ownerHref(filters: Filters, ownerId?: string) {
@@ -107,7 +108,8 @@ function ownerHref(filters: Filters, ownerId?: string) {
     }
   }
 
-  return `/opportunities?${params.toString()}`;
+  const query = params.toString();
+  return query ? `/opportunities?${query}` : "/opportunities";
 }
 
 function splitLabel(splits: OpportunityRow["splits"]) {
@@ -152,18 +154,18 @@ export function OpportunityList({ children, filters, owners, records, stages }: 
       <PageHeader
         actions={
           <>
-          <Link className="crm-button crm-button-secondary text-sm" href="/opportunities/stages">
-            Stages
-          </Link>
-          <Link className="crm-button crm-button-secondary text-sm" href="/opportunities/targets">
-            Targets
-          </Link>
-          <Link className="crm-button crm-button-primary text-sm" href="/opportunities/new">
-            New opportunity
-          </Link>
+            <Link className="crm-button crm-button-secondary text-sm" href="/opportunities/stages">
+              Stages
+            </Link>
+            <Link className="crm-button crm-button-secondary text-sm" href="/opportunities/targets">
+              Targets
+            </Link>
+            <Link className="crm-button crm-button-primary text-sm" href="/opportunities/new">
+              New opportunity
+            </Link>
           </>
         }
-        description="Prioritized pipeline records with next follow-ups, owner context, customer access, and value health."
+        description="Simple pipeline list with filters, owner drilldown, and quick access to stages and targets."
         eyebrow="Sales pipeline"
         title="Pipeline"
       />
@@ -180,8 +182,8 @@ export function OpportunityList({ children, filters, owners, records, stages }: 
       <section className="surface p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="text-base font-semibold text-slate-950">Rep drilldown</h2>
-            <p className="mt-1 text-sm text-[var(--muted)]">Start with the full company pipeline, then narrow to one sales rep.</p>
+            <h2 className="text-base font-semibold text-slate-950">Owner focus</h2>
+            <p className="mt-1 text-sm text-[var(--muted)]">Start with the full pipeline, then narrow to one sales rep if needed.</p>
           </div>
           <div className="flex flex-wrap gap-2">
             <Link
