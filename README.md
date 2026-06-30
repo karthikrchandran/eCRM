@@ -20,6 +20,8 @@ eCRM is a single-company CRM for a small sales organization. The foundation slic
 
    Use the root `.env` file as the canonical local environment file. Prisma CLI commands load it automatically, and the seed script uses the same `DATABASE_URL` and seed credentials. You may also export the same variables in your shell before running Prisma or seed commands. Use `.env.local` only for optional Next.js-only local overrides.
 
+   Set `SHARED_DATA_API_TOKEN` to a long random value before using `/api/shared-records`. Shared-records clients must send it as a `Bearer` token.
+
 3. Start the preferred local database with Docker Compose.
 
    ```powershell
@@ -57,6 +59,10 @@ Voice note audio is saved to `.local-storage/sales-voice-notes` locally. If `BLO
 
 - Admin: `admin@example.com` / `Admin@12345`
 - Sales: `sales@example.com` / `Sales@12345`
+
+## Shared Records API
+
+`/api/shared-records` is the first shared CRM data slice for eCRM and EmailVoice synchronization. It is protected by `SHARED_DATA_API_TOKEN` and uses simple `searchText contains` filtering for the first low-volume slice. The schema includes a normal index on `searchText`; full-text or trigram search is intentionally deferred until volume requires it.
 
 ## Gates
 

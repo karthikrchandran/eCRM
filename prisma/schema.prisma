@@ -156,11 +156,60 @@ enum CurrencyCode {
   USD
 }
 
+enum SharedRecordType {
+  LEAD
+  CUSTOMER
+  CONTACT
+  OPPORTUNITY
+  ORDER
+}
+
 model BusinessSettings {
   id              String       @id @default("default")
   defaultCurrency CurrencyCode @default(INR)
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
+}
+
+model SharedBusinessRecord {
+  id                   String           @id @default(cuid())
+  entityType           SharedRecordType
+  displayName          String
+  status               String
+  ownerId              String?
+  parentId             String?
+  relatedLeadId        String?
+  relatedCustomerId    String?
+  relatedContactId     String?
+  relatedOpportunityId String?
+  sourceApp            String
+  ecrmLegacyId         String?
+  emailVoiceLegacyId   String?
+  externalKey          String?
+  email                String?
+  phone                String?
+  companyName          String?
+  searchText           String
+  data                 Json
+  archivedAt           DateTime?
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+
+  @@unique([entityType, ecrmLegacyId])
+  @@unique([entityType, emailVoiceLegacyId])
+  @@unique([entityType, externalKey])
+  @@index([entityType, status])
+  @@index([ownerId])
+  @@index([parentId])
+  @@index([relatedLeadId])
+  @@index([relatedCustomerId])
+  @@index([relatedContactId])
+  @@index([relatedOpportunityId])
+  @@index([email])
+  @@index([phone])
+  @@index([companyName])
+  @@index([searchText])
+  @@index([updatedAt])
 }
 
 model User {
