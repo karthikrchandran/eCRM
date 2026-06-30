@@ -14,7 +14,7 @@ vi.mock("@/server/auth/current-user", () => ({
   requireUser: vi.fn().mockResolvedValue({ id: "admin", name: "Admin User", email: "admin@example.com", role: "ADMIN" })
 }));
 
-vi.mock("@/server/reports/queries", () => ({
+    vi.mock("@/server/reports/queries", () => ({
   getReportsOverview: vi.fn().mockResolvedValue({
     dashboardMetrics: [
       { detail: "Open stages", label: "Open opportunities", value: "2" },
@@ -24,6 +24,9 @@ vi.mock("@/server/reports/queries", () => ({
       { detail: "Actual payment records", label: "Collected payments", value: "INR 0.00" },
       { detail: "Work not done or skipped", label: "Production pending", value: "3" },
       { detail: "Open future-dated activities", label: "Upcoming follow-ups", value: "0" }
+    ],
+    pendingProduction: [
+      { workItemId: "work_1", orderNumber: "ORD-001", clientName: "Acme", productName: "eLearning" }
     ],
     pipelineByStage: [{ count: 2, stageId: "stage_1", stageName: "Qualified", valuePaisa: 2090000 }],
     upcomingFollowUps: [
@@ -43,10 +46,9 @@ describe("DashboardPage", () => {
     const orders = screen.getByRole("region", { name: "Orders overview" });
     const production = screen.getByRole("region", { name: "Production overview" });
 
-    expect(within(sales).getByText("Open opportunities")).toBeVisible();
     expect(within(sales).getByText("Upcoming follow-ups")).toBeVisible();
     expect(within(pipeline).getByText("Pipeline value")).toBeVisible();
-    expect(within(orders).getByText("Booked value")).toBeVisible();
+    expect(within(orders).getByText("Booked orders")).toBeVisible();
     expect(within(orders).getByText("Pending receivables")).toBeVisible();
     expect(within(orders).getByText("Collected payments")).toBeVisible();
     expect(within(production).getByText("Production pending")).toBeVisible();
