@@ -32,6 +32,10 @@ export type SharedRecordExportFilters = {
 
 export class SharedRecordExportError extends Error {}
 
+function normalizeEntityType(entityType: ExportableSharedRecordType | "" | undefined): ExportableSharedRecordType | undefined {
+  return entityType ? entityType : undefined;
+}
+
 function buildExportStreamScope(entityType: ExportableSharedRecordType | undefined): SharedRecordExportCursor["stream"] {
   return {
     entityType: entityType ?? null
@@ -120,12 +124,13 @@ export async function buildSharedRecordExportPage(
   database: SharedRecordExportDb = db as unknown as SharedRecordExportDb
 ): Promise<{ items: SharedBusinessRecordDto[]; nextCursor: string | null }> {
   const limit = Math.min(Math.max(filters.limit ?? DEFAULT_LIMIT, 1), MAX_LIMIT);
+  const entityType = normalizeEntityType(filters.entityType as ExportableSharedRecordType | "" | undefined);
   const cursor = decodeSharedRecordExportCursor(filters.cursor);
-  ensureCursorMatchesRequestedStream(cursor, filters.entityType);
-  const stream = buildExportStreamScope(filters.entityType);
+  ensureCursorMatchesRequestedStream(cursor, entityType);
+  const stream = buildExportStreamScope(entityType);
   const where: Prisma.SharedBusinessRecordWhereInput = {
     archivedAt: null,
-    ...(filters.entityType ? { entityType: filters.entityType } : { entityType: { in: [...exportableSharedRecordTypes] } }),
+    ...(entityType ? { entityType } : { entityType: { in: [...exportableSharedRecordTypes] } }),
     ...(cursor ? buildCursorWhere(cursor) : {})
   };
 

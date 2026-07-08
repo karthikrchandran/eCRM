@@ -119,6 +119,35 @@ describe("buildSharedRecordExportPage", () => {
     });
   });
 
+  it("treats an empty entityType value as the all-entities stream", async () => {
+    const findMany = vi
+      .fn<(_: Prisma.SharedBusinessRecordFindManyArgs) => Promise<ExportRow[]>>()
+      .mockResolvedValue([exportRow({ id: "rec_5", entityType: "LEAD", updatedAt: new Date("2026-07-07T12:00:00.000Z") })]);
+
+    const page = await buildSharedRecordExportPage(
+      { entityType: "" as never, cursor: null, limit: 1 },
+      {
+        sharedBusinessRecord: {
+          findMany
+        }
+      }
+    );
+
+    expect(findMany).toHaveBeenCalledWith({
+      where: {
+        archivedAt: null,
+        entityType: { in: ["LEAD", "CUSTOMER", "CONTACT", "ORDER"] }
+      },
+      orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+      take: 1
+    });
+    expect(decodeSharedRecordExportCursor(page.nextCursor)).toEqual({
+      stream: { entityType: null },
+      updatedAt: "2026-07-07T12:00:00.000Z",
+      id: "rec_5"
+    });
+  });
+
   it("uses the cursor to continue from the next deterministic slice", async () => {
     const findMany = vi
       .fn<(_: Prisma.SharedBusinessRecordFindManyArgs) => Promise<ExportRow[]>>()

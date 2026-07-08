@@ -18,7 +18,7 @@ export async function GET(request: Request) {
 
   try {
     const searchParams = new URL(request.url).searchParams;
-    const entityTypeParam = searchParams.get("entityType");
+    const entityTypeParam = searchParams.get("entityType")?.trim() || undefined;
     const limitParam = searchParams.get("limit");
     const limit = limitParam === null ? undefined : Number(limitParam);
 
@@ -31,7 +31,7 @@ export async function GET(request: Request) {
     }
 
     const page = await buildSharedRecordExportPage({
-      entityType: entityTypeParam === null ? undefined : (entityTypeParam as ExportableSharedRecordType),
+      entityType: entityTypeParam as ExportableSharedRecordType | undefined,
       cursor: searchParams.get("cursor"),
       limit
     });
