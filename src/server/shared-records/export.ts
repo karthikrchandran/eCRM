@@ -17,7 +17,9 @@ type SharedRecordExportDb = {
 };
 
 type SharedRecordExportCursor = {
-  entityType: ExportableSharedRecordType;
+  stream: {
+    entityType: ExportableSharedRecordType | null;
+  };
   updatedAt: string;
   id: string;
 };
@@ -30,6 +32,26 @@ export type SharedRecordExportFilters = {
 
 export class SharedRecordExportError extends Error {}
 
+function buildExportStreamScope(entityType: ExportableSharedRecordType | undefined): SharedRecordExportCursor["stream"] {
+  return {
+    entityType: entityType ?? null
+  };
+}
+
+function ensureCursorMatchesRequestedStream(
+  cursor: SharedRecordExportCursor | null,
+  entityType: ExportableSharedRecordType | undefined
+): void {
+  if (!cursor) {
+    return;
+  }
+
+  const requestedStream = buildExportStreamScope(entityType);
+  if (cursor.stream.entityType !== requestedStream.entityType) {
+    throw new SharedRecordExportError("Export cursor stream does not match the requested stream.");
+  }
+}
+
 export function decodeSharedRecordExportCursor(cursor: string | null | undefined): SharedRecordExportCursor | null {
   if (!cursor) {
     return null;
@@ -41,8 +63,11 @@ export function decodeSharedRecordExportCursor(cursor: string | null | undefined
       !parsed ||
       typeof parsed.id !== "string" ||
       typeof parsed.updatedAt !== "string" ||
-      typeof parsed.entityType !== "string" ||
-      !exportableSharedRecordTypes.includes(parsed.entityType as ExportableSharedRecordType)
+      !parsed.stream ||
+      !("entityType" in parsed.stream) ||
+      (parsed.stream.entityType !== null &&
+        (typeof parsed.stream.entityType !== "string" ||
+          !exportableSharedRecordTypes.includes(parsed.stream.entityType as ExportableSharedRecordType)))
     ) {
       throw new SharedRecordExportError("Invalid export cursor.");
     }
@@ -53,7 +78,9 @@ export function decodeSharedRecordExportCursor(cursor: string | null | undefined
     }
 
     return {
-      entityType: parsed.entityType as ExportableSharedRecordType,
+      stream: {
+        entityType: (parsed.stream.entityType ?? null) as ExportableSharedRecordType | null
+      },
       updatedAt: updatedAt.toISOString(),
       id: parsed.id
     };
@@ -66,14 +93,13 @@ export function decodeSharedRecordExportCursor(cursor: string | null | undefined
   }
 }
 
-function encodeSharedRecordExportCursor(item: Pick<SharedBusinessRecordRow, "entityType" | "updatedAt" | "id">): string {
-  if (!exportableSharedRecordTypes.includes(item.entityType as ExportableSharedRecordType)) {
-    throw new SharedRecordExportError("Unsupported shared record type in export page.");
-  }
-
+function encodeSharedRecordExportCursor(
+  stream: SharedRecordExportCursor["stream"],
+  item: Pick<SharedBusinessRecordRow, "updatedAt" | "id">
+): string {
   return Buffer.from(
     JSON.stringify({
-      entityType: item.entityType as ExportableSharedRecordType,
+      stream,
       updatedAt: item.updatedAt.toISOString(),
       id: item.id
     } satisfies SharedRecordExportCursor),
@@ -95,6 +121,8 @@ export async function buildSharedRecordExportPage(
 ): Promise<{ items: SharedBusinessRecordDto[]; nextCursor: string | null }> {
   const limit = Math.min(Math.max(filters.limit ?? DEFAULT_LIMIT, 1), MAX_LIMIT);
   const cursor = decodeSharedRecordExportCursor(filters.cursor);
+  ensureCursorMatchesRequestedStream(cursor, filters.entityType);
+  const stream = buildExportStreamScope(filters.entityType);
   const where: Prisma.SharedBusinessRecordWhereInput = {
     archivedAt: null,
     ...(filters.entityType ? { entityType: filters.entityType } : { entityType: { in: [...exportableSharedRecordTypes] } }),
@@ -109,6 +137,6 @@ export async function buildSharedRecordExportPage(
 
   return {
     items: rows.map(mapSharedRecordRow),
-    nextCursor: rows.length === limit ? encodeSharedRecordExportCursor(rows[rows.length - 1] as SharedBusinessRecordRow) : null
+    nextCursor: rows.length === limit ? encodeSharedRecordExportCursor(stream, rows[rows.length - 1] as SharedBusinessRecordRow) : null
   };
 }

@@ -84,9 +84,38 @@ describe("buildSharedRecordExportPage", () => {
     });
     expect(page.items.map((item) => item.id)).toEqual(["rec_3", "rec_2"]);
     expect(decodeSharedRecordExportCursor(page.nextCursor)).toEqual({
-      entityType: "CONTACT",
+      stream: { entityType: "CONTACT" },
       updatedAt: "2026-07-07T10:00:00.000Z",
       id: "rec_2"
+    });
+  });
+
+  it("emits an all-entities stream cursor when no entity filter is requested", async () => {
+    const findMany = vi
+      .fn<(_: Prisma.SharedBusinessRecordFindManyArgs) => Promise<ExportRow[]>>()
+      .mockResolvedValue([exportRow({ id: "rec_4", entityType: "ORDER", updatedAt: new Date("2026-07-07T11:00:00.000Z") })]);
+
+    const page = await buildSharedRecordExportPage(
+      { cursor: null, limit: 1 },
+      {
+        sharedBusinessRecord: {
+          findMany
+        }
+      }
+    );
+
+    expect(findMany).toHaveBeenCalledWith({
+      where: {
+        archivedAt: null,
+        entityType: { in: ["LEAD", "CUSTOMER", "CONTACT", "ORDER"] }
+      },
+      orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+      take: 1
+    });
+    expect(decodeSharedRecordExportCursor(page.nextCursor)).toEqual({
+      stream: { entityType: null },
+      updatedAt: "2026-07-07T11:00:00.000Z",
+      id: "rec_4"
     });
   });
 
@@ -100,7 +129,7 @@ describe("buildSharedRecordExportPage", () => {
         entityType: "CONTACT",
         cursor: Buffer.from(
           JSON.stringify({
-            entityType: "CONTACT",
+            stream: { entityType: "CONTACT" },
             updatedAt: "2026-07-07T10:00:00.000Z",
             id: "rec_2"
           }),
@@ -132,5 +161,53 @@ describe("buildSharedRecordExportPage", () => {
     });
     expect(page.items.map((item) => item.id)).toEqual(["rec_1"]);
     expect(page.nextCursor).toBeNull();
+  });
+
+  it("rejects a cursor from a different entity-scoped stream", async () => {
+    await expect(
+      buildSharedRecordExportPage(
+        {
+          entityType: "CUSTOMER",
+          cursor: Buffer.from(
+            JSON.stringify({
+              stream: { entityType: "CONTACT" },
+              updatedAt: "2026-07-07T10:00:00.000Z",
+              id: "rec_2"
+            }),
+            "utf8"
+          ).toString("base64url"),
+          limit: 2
+        },
+        {
+          sharedBusinessRecord: {
+            findMany: vi.fn()
+          }
+        }
+      )
+    ).rejects.toThrow("Export cursor stream does not match the requested stream.");
+  });
+
+  it("rejects a cursor from the all-entities stream when a scoped stream is requested", async () => {
+    await expect(
+      buildSharedRecordExportPage(
+        {
+          entityType: "CONTACT",
+          cursor: Buffer.from(
+            JSON.stringify({
+              stream: { entityType: null },
+              updatedAt: "2026-07-07T10:00:00.000Z",
+              id: "rec_2"
+            }),
+            "utf8"
+          ).toString("base64url"),
+          limit: 2
+        },
+        {
+          sharedBusinessRecord: {
+            findMany: vi.fn()
+          }
+        }
+      )
+    ).rejects.toThrow("Export cursor stream does not match the requested stream.");
   });
 });
