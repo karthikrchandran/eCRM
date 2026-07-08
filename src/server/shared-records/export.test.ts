@@ -1,0 +1,136 @@
+import type { Prisma } from "@prisma/client";
+import { describe, expect, it, vi } from "vitest";
+
+import { buildSharedRecordExportPage, decodeSharedRecordExportCursor } from "./export";
+
+type ExportRow = {
+  id: string;
+  entityType: "LEAD" | "CUSTOMER" | "CONTACT" | "ORDER";
+  displayName: string;
+  status: string;
+  ownerId: string | null;
+  parentId: string | null;
+  relatedLeadId: string | null;
+  relatedCustomerId: string | null;
+  relatedContactId: string | null;
+  relatedOpportunityId: string | null;
+  sourceApp: string;
+  ecrmLegacyId: string | null;
+  emailVoiceLegacyId: string | null;
+  externalKey: string | null;
+  email: string | null;
+  phone: string | null;
+  companyName: string | null;
+  searchText: string;
+  data: Record<string, never>;
+  archivedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+function exportRow(overrides: Partial<ExportRow>): ExportRow {
+  return {
+    id: "rec_1",
+    entityType: "CONTACT",
+    displayName: "Ada Lovelace",
+    status: "ACTIVE",
+    ownerId: null,
+    parentId: "cust_1",
+    relatedLeadId: null,
+    relatedCustomerId: "cust_1",
+    relatedContactId: null,
+    relatedOpportunityId: null,
+    sourceApp: "ecrm",
+    ecrmLegacyId: "legacy_1",
+    emailVoiceLegacyId: null,
+    externalKey: "contact:ada@example.com",
+    email: "ada@example.com",
+    phone: null,
+    companyName: "Acme",
+    searchText: "ada lovelace active ada@example.com acme",
+    data: {},
+    archivedAt: null,
+    createdAt: new Date("2026-07-07T08:00:00.000Z"),
+    updatedAt: new Date("2026-07-07T09:00:00.000Z"),
+    ...overrides
+  };
+}
+
+describe("buildSharedRecordExportPage", () => {
+  it("requests deterministic ordering and emits a cursor from the last item in the page", async () => {
+    const findMany = vi
+      .fn<(_: Prisma.SharedBusinessRecordFindManyArgs) => Promise<ExportRow[]>>()
+      .mockResolvedValue([
+        exportRow({ id: "rec_3", updatedAt: new Date("2026-07-07T10:00:00.000Z"), ecrmLegacyId: "legacy_3" }),
+        exportRow({ id: "rec_2", updatedAt: new Date("2026-07-07T10:00:00.000Z"), ecrmLegacyId: "legacy_2" })
+      ]);
+
+    const page = await buildSharedRecordExportPage(
+      { entityType: "CONTACT", cursor: null, limit: 2 },
+      {
+        sharedBusinessRecord: {
+          findMany
+        }
+      }
+    );
+
+    expect(findMany).toHaveBeenCalledWith({
+      where: {
+        archivedAt: null,
+        entityType: "CONTACT"
+      },
+      orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+      take: 2
+    });
+    expect(page.items.map((item) => item.id)).toEqual(["rec_3", "rec_2"]);
+    expect(decodeSharedRecordExportCursor(page.nextCursor)).toEqual({
+      entityType: "CONTACT",
+      updatedAt: "2026-07-07T10:00:00.000Z",
+      id: "rec_2"
+    });
+  });
+
+  it("uses the cursor to continue from the next deterministic slice", async () => {
+    const findMany = vi
+      .fn<(_: Prisma.SharedBusinessRecordFindManyArgs) => Promise<ExportRow[]>>()
+      .mockResolvedValue([exportRow({ id: "rec_1", updatedAt: new Date("2026-07-07T09:00:00.000Z") })]);
+
+    const page = await buildSharedRecordExportPage(
+      {
+        entityType: "CONTACT",
+        cursor: Buffer.from(
+          JSON.stringify({
+            entityType: "CONTACT",
+            updatedAt: "2026-07-07T10:00:00.000Z",
+            id: "rec_2"
+          }),
+          "utf8"
+        ).toString("base64url"),
+        limit: 2
+      },
+      {
+        sharedBusinessRecord: {
+          findMany
+        }
+      }
+    );
+
+    expect(findMany).toHaveBeenCalledWith({
+      where: {
+        archivedAt: null,
+        entityType: "CONTACT",
+        OR: [
+          { updatedAt: { lt: new Date("2026-07-07T10:00:00.000Z") } },
+          {
+            updatedAt: new Date("2026-07-07T10:00:00.000Z"),
+            id: { lt: "rec_2" }
+          }
+        ]
+      },
+      orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+      take: 2
+    });
+    expect(page.items.map((item) => item.id)).toEqual(["rec_1"]);
+    expect(page.nextCursor).toBeNull();
+  });
+});
