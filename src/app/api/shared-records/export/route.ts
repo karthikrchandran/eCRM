@@ -10,6 +10,24 @@ function badRequest(error: string) {
   return Response.json({ error }, { status: 400 });
 }
 
+function parseLimit(limitParam: string | null): number | undefined {
+  if (limitParam === null) {
+    return undefined;
+  }
+
+  const trimmed = limitParam.trim();
+  if (trimmed.length === 0) {
+    return undefined;
+  }
+
+  const limit = Number(trimmed);
+  if (!Number.isFinite(limit) || !Number.isInteger(limit) || limit < 1 || limit > 500) {
+    throw new SharedRecordExportError("Invalid limit.");
+  }
+
+  return limit;
+}
+
 export async function GET(request: Request) {
   const authResponse = requireSharedDataApiToken(request);
   if (authResponse) {
@@ -19,15 +37,10 @@ export async function GET(request: Request) {
   try {
     const searchParams = new URL(request.url).searchParams;
     const entityTypeParam = searchParams.get("entityType")?.trim() || undefined;
-    const limitParam = searchParams.get("limit");
-    const limit = limitParam === null ? undefined : Number(limitParam);
+    const limit = parseLimit(searchParams.get("limit"));
 
     if (entityTypeParam && !exportableSharedRecordTypes.includes(entityTypeParam as ExportableSharedRecordType)) {
       return badRequest("Invalid entityType.");
-    }
-
-    if (limitParam !== null && (!Number.isFinite(limit) || !Number.isInteger(limit))) {
-      return badRequest("Invalid limit.");
     }
 
     const page = await buildSharedRecordExportPage({

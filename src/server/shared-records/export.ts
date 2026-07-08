@@ -19,6 +19,7 @@ type SharedRecordExportDb = {
 type SharedRecordExportCursor = {
   stream: {
     entityType: ExportableSharedRecordType | null;
+    asOf: string;
   };
   updatedAt: string;
   id: string;
@@ -36,9 +37,13 @@ function normalizeEntityType(entityType: ExportableSharedRecordType | "" | undef
   return entityType ? entityType : undefined;
 }
 
-function buildExportStreamScope(entityType: ExportableSharedRecordType | undefined): SharedRecordExportCursor["stream"] {
+function buildExportStreamScope(
+  entityType: ExportableSharedRecordType | undefined,
+  asOf: string
+): SharedRecordExportCursor["stream"] {
   return {
-    entityType: entityType ?? null
+    entityType: entityType ?? null,
+    asOf
   };
 }
 
@@ -50,8 +55,7 @@ function ensureCursorMatchesRequestedStream(
     return;
   }
 
-  const requestedStream = buildExportStreamScope(entityType);
-  if (cursor.stream.entityType !== requestedStream.entityType) {
+  if (cursor.stream.entityType !== (entityType ?? null)) {
     throw new SharedRecordExportError("Export cursor stream does not match the requested stream.");
   }
 }
@@ -63,27 +67,30 @@ export function decodeSharedRecordExportCursor(cursor: string | null | undefined
 
   try {
     const parsed = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as Partial<SharedRecordExportCursor>;
+    const normalizedEntityType = normalizeEntityType((parsed.stream?.entityType ?? null) as ExportableSharedRecordType | "" | undefined);
     if (
       !parsed ||
       typeof parsed.id !== "string" ||
       typeof parsed.updatedAt !== "string" ||
       !parsed.stream ||
       !("entityType" in parsed.stream) ||
-      (parsed.stream.entityType !== null &&
-        (typeof parsed.stream.entityType !== "string" ||
-          !exportableSharedRecordTypes.includes(parsed.stream.entityType as ExportableSharedRecordType)))
+      !("asOf" in parsed.stream) ||
+      typeof parsed.stream.asOf !== "string" ||
+      (normalizedEntityType !== undefined && !exportableSharedRecordTypes.includes(normalizedEntityType))
     ) {
       throw new SharedRecordExportError("Invalid export cursor.");
     }
 
     const updatedAt = new Date(parsed.updatedAt);
-    if (Number.isNaN(updatedAt.getTime())) {
+    const asOf = new Date(parsed.stream.asOf);
+    if (Number.isNaN(updatedAt.getTime()) || Number.isNaN(asOf.getTime())) {
       throw new SharedRecordExportError("Invalid export cursor.");
     }
 
     return {
       stream: {
-        entityType: (parsed.stream.entityType ?? null) as ExportableSharedRecordType | null
+        entityType: normalizedEntityType ?? null,
+        asOf: asOf.toISOString()
       },
       updatedAt: updatedAt.toISOString(),
       id: parsed.id
@@ -127,10 +134,11 @@ export async function buildSharedRecordExportPage(
   const entityType = normalizeEntityType(filters.entityType as ExportableSharedRecordType | "" | undefined);
   const cursor = decodeSharedRecordExportCursor(filters.cursor);
   ensureCursorMatchesRequestedStream(cursor, entityType);
-  const stream = buildExportStreamScope(entityType);
+  const asOf = cursor?.stream.asOf ?? new Date().toISOString();
   const where: Prisma.SharedBusinessRecordWhereInput = {
     archivedAt: null,
     ...(entityType ? { entityType } : { entityType: { in: [...exportableSharedRecordTypes] } }),
+    updatedAt: { lte: new Date(asOf) },
     ...(cursor ? buildCursorWhere(cursor) : {})
   };
 
@@ -139,6 +147,8 @@ export async function buildSharedRecordExportPage(
     orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
     take: limit
   });
+
+  const stream = buildExportStreamScope(entityType, asOf);
 
   return {
     items: rows.map(mapSharedRecordRow),

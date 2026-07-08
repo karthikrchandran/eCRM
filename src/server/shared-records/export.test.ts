@@ -1,5 +1,5 @@
 import type { Prisma } from "@prisma/client";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { buildSharedRecordExportPage, decodeSharedRecordExportCursor } from "./export";
 
@@ -57,7 +57,14 @@ function exportRow(overrides: Partial<ExportRow>): ExportRow {
 }
 
 describe("buildSharedRecordExportPage", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("requests deterministic ordering and emits a cursor from the last item in the page", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-07T10:30:00.000Z"));
+
     const findMany = vi
       .fn<(_: Prisma.SharedBusinessRecordFindManyArgs) => Promise<ExportRow[]>>()
       .mockResolvedValue([
@@ -77,20 +84,27 @@ describe("buildSharedRecordExportPage", () => {
     expect(findMany).toHaveBeenCalledWith({
       where: {
         archivedAt: null,
-        entityType: "CONTACT"
+        entityType: "CONTACT",
+        updatedAt: { lte: new Date("2026-07-07T10:30:00.000Z") }
       },
       orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
       take: 2
     });
     expect(page.items.map((item) => item.id)).toEqual(["rec_3", "rec_2"]);
     expect(decodeSharedRecordExportCursor(page.nextCursor)).toEqual({
-      stream: { entityType: "CONTACT" },
+      stream: {
+        entityType: "CONTACT",
+        asOf: "2026-07-07T10:30:00.000Z"
+      },
       updatedAt: "2026-07-07T10:00:00.000Z",
       id: "rec_2"
     });
   });
 
   it("emits an all-entities stream cursor when no entity filter is requested", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-07T11:30:00.000Z"));
+
     const findMany = vi
       .fn<(_: Prisma.SharedBusinessRecordFindManyArgs) => Promise<ExportRow[]>>()
       .mockResolvedValue([exportRow({ id: "rec_4", entityType: "ORDER", updatedAt: new Date("2026-07-07T11:00:00.000Z") })]);
@@ -107,19 +121,26 @@ describe("buildSharedRecordExportPage", () => {
     expect(findMany).toHaveBeenCalledWith({
       where: {
         archivedAt: null,
-        entityType: { in: ["LEAD", "CUSTOMER", "CONTACT", "ORDER"] }
+        entityType: { in: ["LEAD", "CUSTOMER", "CONTACT", "ORDER"] },
+        updatedAt: { lte: new Date("2026-07-07T11:30:00.000Z") }
       },
       orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
       take: 1
     });
     expect(decodeSharedRecordExportCursor(page.nextCursor)).toEqual({
-      stream: { entityType: null },
+      stream: {
+        entityType: null,
+        asOf: "2026-07-07T11:30:00.000Z"
+      },
       updatedAt: "2026-07-07T11:00:00.000Z",
       id: "rec_4"
     });
   });
 
   it("treats an empty entityType value as the all-entities stream", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-07T12:30:00.000Z"));
+
     const findMany = vi
       .fn<(_: Prisma.SharedBusinessRecordFindManyArgs) => Promise<ExportRow[]>>()
       .mockResolvedValue([exportRow({ id: "rec_5", entityType: "LEAD", updatedAt: new Date("2026-07-07T12:00:00.000Z") })]);
@@ -136,13 +157,17 @@ describe("buildSharedRecordExportPage", () => {
     expect(findMany).toHaveBeenCalledWith({
       where: {
         archivedAt: null,
-        entityType: { in: ["LEAD", "CUSTOMER", "CONTACT", "ORDER"] }
+        entityType: { in: ["LEAD", "CUSTOMER", "CONTACT", "ORDER"] },
+        updatedAt: { lte: new Date("2026-07-07T12:30:00.000Z") }
       },
       orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
       take: 1
     });
     expect(decodeSharedRecordExportCursor(page.nextCursor)).toEqual({
-      stream: { entityType: null },
+      stream: {
+        entityType: null,
+        asOf: "2026-07-07T12:30:00.000Z"
+      },
       updatedAt: "2026-07-07T12:00:00.000Z",
       id: "rec_5"
     });
@@ -158,7 +183,10 @@ describe("buildSharedRecordExportPage", () => {
         entityType: "CONTACT",
         cursor: Buffer.from(
           JSON.stringify({
-            stream: { entityType: "CONTACT" },
+            stream: {
+              entityType: "CONTACT",
+              asOf: "2026-07-07T10:30:00.000Z"
+            },
             updatedAt: "2026-07-07T10:00:00.000Z",
             id: "rec_2"
           }),
@@ -177,6 +205,7 @@ describe("buildSharedRecordExportPage", () => {
       where: {
         archivedAt: null,
         entityType: "CONTACT",
+        updatedAt: { lte: new Date("2026-07-07T10:30:00.000Z") },
         OR: [
           { updatedAt: { lt: new Date("2026-07-07T10:00:00.000Z") } },
           {
@@ -199,7 +228,10 @@ describe("buildSharedRecordExportPage", () => {
           entityType: "CUSTOMER",
           cursor: Buffer.from(
             JSON.stringify({
-              stream: { entityType: "CONTACT" },
+              stream: {
+                entityType: "CONTACT",
+                asOf: "2026-07-07T10:00:00.000Z"
+              },
               updatedAt: "2026-07-07T10:00:00.000Z",
               id: "rec_2"
             }),
@@ -223,7 +255,10 @@ describe("buildSharedRecordExportPage", () => {
           entityType: "CONTACT",
           cursor: Buffer.from(
             JSON.stringify({
-              stream: { entityType: null },
+              stream: {
+                entityType: null,
+                asOf: "2026-07-07T10:00:00.000Z"
+              },
               updatedAt: "2026-07-07T10:00:00.000Z",
               id: "rec_2"
             }),
@@ -238,5 +273,73 @@ describe("buildSharedRecordExportPage", () => {
         }
       )
     ).rejects.toThrow("Export cursor stream does not match the requested stream.");
+  });
+
+  it("keeps the first page watermark across continuation pages", async () => {
+    const findMany = vi
+      .fn<(_: Prisma.SharedBusinessRecordFindManyArgs) => Promise<ExportRow[]>>()
+      .mockResolvedValue([exportRow({ id: "rec_6", updatedAt: new Date("2026-07-07T09:00:00.000Z") })]);
+
+    await buildSharedRecordExportPage(
+      {
+        cursor: Buffer.from(
+          JSON.stringify({
+            stream: {
+              entityType: null,
+              asOf: "2026-07-07T10:30:00.000Z"
+            },
+            updatedAt: "2026-07-07T10:00:00.000Z",
+            id: "rec_2"
+          }),
+          "utf8"
+        ).toString("base64url"),
+        limit: 2
+      },
+      {
+        sharedBusinessRecord: {
+          findMany
+        }
+      }
+    );
+
+    expect(findMany).toHaveBeenCalledWith({
+      where: {
+        archivedAt: null,
+        entityType: { in: ["LEAD", "CUSTOMER", "CONTACT", "ORDER"] },
+        updatedAt: { lte: new Date("2026-07-07T10:30:00.000Z") },
+        OR: [
+          { updatedAt: { lt: new Date("2026-07-07T10:00:00.000Z") } },
+          {
+            updatedAt: new Date("2026-07-07T10:00:00.000Z"),
+            id: { lt: "rec_2" }
+          }
+        ]
+      },
+      orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+      take: 2
+    });
+  });
+
+  it("decodes legacy all-entities cursors with empty-string scope", () => {
+    const cursor = Buffer.from(
+      JSON.stringify({
+        stream: {
+          entityType: "",
+          asOf: "2026-07-07T10:30:00.000Z"
+        },
+        updatedAt: "2026-07-07T10:00:00.000Z",
+        id: "rec_2"
+      }),
+      "utf8"
+    ).toString("base64url");
+
+    expect(decodeSharedRecordExportCursor(cursor)).toEqual({
+      stream: {
+        entityType: null,
+        asOf: "2026-07-07T10:30:00.000Z"
+      },
+      updatedAt: "2026-07-07T10:00:00.000Z",
+      id: "rec_2"
+    });
   });
 });
