@@ -54,3 +54,28 @@ export async function POST(request: Request) {
     return Response.json({ error: "Unable to upsert shared record." }, { status: 500 });
   }
 }
+
+export async function PATCH(request: Request) {
+  const authResponse = requireSharedDataApiToken(request);
+  if (authResponse) {
+    return authResponse;
+  }
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return Response.json({ error: "Invalid JSON." }, { status: 400 });
+  }
+
+  try {
+    const event = await import("@/server/workflow-events/service").then((module) => module.ingestWorkflowEvent(body as never));
+    return Response.json({ event }, { status: 201 });
+  } catch (error) {
+    if (error instanceof ZodError) {
+      return badRequest(error);
+    }
+
+    return Response.json({ error: "Unable to ingest workflow event." }, { status: 500 });
+  }
+}
