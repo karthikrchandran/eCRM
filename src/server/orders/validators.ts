@@ -63,6 +63,16 @@ export const orderListFilterSchema = z.object({
       return Number(value);
     },
     z.number().int().min(2020).max(2100).optional()
+    ),
+  ownerId: z.preprocess(
+    (value) => {
+      if (value === null || value === undefined || value === "") {
+        return undefined;
+      }
+
+      return value;
+    },
+    z.string().optional()
   ),
   quarter: z.preprocess(
     (value) => {

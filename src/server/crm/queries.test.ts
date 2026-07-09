@@ -157,6 +157,65 @@ describe("crm queries", () => {
     expect(result?.leadCustomer.name).toBe("Acme Learning Pvt Ltd");
   });
 
+  it("includes workflow events from EmailVoice in the customer timeline", async () => {
+    const workflowEventFindMany = vi.fn().mockResolvedValue([
+      {
+        id: "workflow_1",
+        sourceApp: "emailvoice",
+        sourceEventType: "meeting_booked",
+        summary: "Meeting booked in EmailVoice",
+        payload: { meetingTime: "2026-06-16T10:30:00.000Z" },
+        occurredAt: new Date("2026-06-16T10:30:00.000Z"),
+        createdAt: new Date("2026-06-16T10:30:00.000Z"),
+        updatedAt: new Date("2026-06-16T10:30:00.000Z")
+      }
+    ]);
+
+    const result = await getCustomer360Timeline(requester, "lead_1", {
+      activity: {
+        findMany: vi.fn().mockResolvedValue([])
+      },
+      salesTask: {
+        findMany: vi.fn().mockResolvedValue([])
+      },
+      salesTextNote: {
+        findMany: vi.fn().mockResolvedValue([])
+      },
+      salesVoiceNote: {
+        findMany: vi.fn().mockResolvedValue([])
+      },
+      opportunity: {
+        findMany: vi.fn().mockResolvedValue([])
+      },
+      proposal: {
+        findMany: vi.fn().mockResolvedValue([])
+      },
+      order: {
+        findMany: vi.fn().mockResolvedValue([])
+      },
+      workflowEvent: {
+        findMany: workflowEventFindMany
+      }
+    } as never);
+
+    expect(workflowEventFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          OR: [{ entityId: "lead_1" }, { relatedRecordId: "lead_1" }]
+        }
+      })
+    );
+    expect(result).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "workflow_event",
+          title: "Meeting booked in EmailVoice",
+          actor: "emailvoice"
+        })
+      ])
+    );
+  });
+
   it("builds a customer 360 timeline across CRM, My Day, opportunity, order, and finance records", async () => {
     const result = await getCustomer360Timeline(requester, "lead_1", {
       activity: {

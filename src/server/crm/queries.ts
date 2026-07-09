@@ -37,6 +37,30 @@ const leadDetailInclude = {
       branch: { select: { id: true, name: true } }
     }
   },
+  orders: {
+    orderBy: { bookedAt: "desc" },
+    take: 3,
+    include: {
+      invoices: {
+        select: { id: true, totalPaisa: true }
+      },
+      payments: {
+        orderBy: { paymentDate: "desc" },
+        select: { id: true, amountPaisa: true, paymentDate: true, mode: true, reference: true }
+      },
+      costComponents: {
+        select: { id: true, amountPaisa: true, status: true }
+      },
+      incentive: {
+        select: {
+          id: true,
+          payableAmountPaisa: true,
+          readinessReason: true,
+          status: true
+        }
+      }
+    }
+  },
   ownershipHistory: {
     orderBy: { createdAt: "desc" },
     include: {
@@ -78,6 +102,7 @@ export type CustomerTimelineKind =
   | "task"
   | "text_note"
   | "voice_note"
+  | "workflow_event"
   | "opportunity"
   | "proposal"
   | "order"
@@ -159,6 +184,19 @@ type CustomerTimelineDb = {
         status: string;
         createdAt: Date;
         owner: { id: string; name: string };
+      }>
+    >;
+  };
+  workflowEvent?: {
+    findMany: (args: Prisma.WorkflowEventFindManyArgs) => Promise<
+      Array<{
+        id: string;
+        sourceApp: string;
+        sourceEventType: string;
+        summary: string;
+        payload: Record<string, unknown>;
+        occurredAt: Date;
+        createdAt: Date;
       }>
     >;
   };
@@ -351,11 +389,12 @@ const timelineKindRank: Record<CustomerTimelineKind, number> = {
   order: 4,
   proposal: 5,
   opportunity: 6,
-  follow_up: 7,
-  task: 8,
-  voice_note: 9,
-  text_note: 10,
-  activity: 11
+  workflow_event: 7,
+  follow_up: 8,
+  task: 9,
+  voice_note: 10,
+  text_note: 11,
+  activity: 12
 };
 
 export async function getCustomer360Timeline(
@@ -365,7 +404,7 @@ export async function getCustomer360Timeline(
 ): Promise<CustomerTimelineItem[]> {
   assertCanViewCrmRecords(user);
 
-  const [activities, salesTasks, textNotes, voiceNotes, opportunities, proposals, orders] = await Promise.all([
+  const [activities, salesTasks, textNotes, voiceNotes, workflowEvents, opportunities, proposals, orders] = await Promise.all([
     database.activity.findMany({
       where: { leadCustomerId },
       orderBy: { createdAt: "desc" },
@@ -415,6 +454,22 @@ export async function getCustomer360Timeline(
         owner: { select: { id: true, name: true } }
       }
     }),
+    database.workflowEvent?.findMany({
+      where: {
+        OR: [{ entityId: leadCustomerId }, { relatedRecordId: leadCustomerId }]
+      },
+      orderBy: [{ occurredAt: "desc" }, { createdAt: "desc" }],
+      take: 50,
+      select: {
+        id: true,
+        sourceApp: true,
+        sourceEventType: true,
+        summary: true,
+        payload: true,
+        occurredAt: true,
+        createdAt: true
+      }
+    }) ?? [],
     database.opportunity.findMany({
       where: { leadCustomerId },
       orderBy: { updatedAt: "desc" },
@@ -510,6 +565,16 @@ export async function getCustomer360Timeline(
         detail: note.transcript ?? note.status,
         occurredAt: note.createdAt,
         actor: note.owner.name
+      })
+    ),
+    ...workflowEvents.map((event) =>
+      timelineItem({
+        id: event.id,
+        kind: "workflow_event",
+        title: event.summary,
+        detail: `${event.sourceApp} • ${event.sourceEventType}`,
+        occurredAt: event.occurredAt ?? event.createdAt,
+        actor: event.sourceApp
       })
     ),
     ...opportunities.map((opportunity) =>

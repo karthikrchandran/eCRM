@@ -12,15 +12,14 @@ type AppShellProps = {
   children: React.ReactNode;
 };
 
-const baseNavItems = [
+const salesNavItems = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/my-day", label: "My Day" },
   { href: "/leads", label: "Leads" },
   { href: "/contacts", label: "Contacts" },
   { href: "/customer-360", label: "Customer 360" },
   { href: "/opportunities", label: "Pipeline" },
-  { href: "/orders", label: "Orders" },
-  { href: "/production", label: "Production" },
+  { href: "/performance", label: "Performance" },
   { href: "/reports", label: "Reports" }
 ];
 
@@ -29,8 +28,13 @@ const adminNavItems = [
   { href: "/customer-360", label: "Customer 360" },
   { href: "/opportunities", label: "Pipeline" },
   { href: "/orders", label: "Orders" },
+  { href: "/incentives", label: "Incentives" },
+  { href: "/admin/performance", label: "Team performance" },
+  { href: "/reports", label: "Reports" }
+];
+
+const adminSetupNavItems = [
   { href: "/production", label: "Production" },
-  { href: "/reports", label: "Reports" },
   { href: "/admin/products", label: "Products" },
   { href: "/admin/production-config", label: "Production config" },
   { href: "/admin/settings", label: "Settings" }
@@ -47,6 +51,18 @@ export function AppShell({ user, children }: AppShellProps) {
           <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Admin Console</p>
           <nav className="mt-6 grid gap-1 text-sm" aria-label="Admin navigation">
             {adminNavItems.map((item) => (
+              <Link
+                className="rounded-md px-3 py-2 font-semibold text-slate-700 hover:bg-[var(--surface-muted)] hover:text-[var(--brand-navy)]"
+                href={item.href}
+                key={item.href}
+              >
+                {item.label}
+              </Link>
+            ))}
+            <div className="mt-4 px-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Setup</p>
+            </div>
+            {adminSetupNavItems.map((item) => (
               <Link
                 className="rounded-md px-3 py-2 font-semibold text-slate-700 hover:bg-[var(--surface-muted)] hover:text-[var(--brand-navy)]"
                 href={item.href}
@@ -93,7 +109,7 @@ export function AppShell({ user, children }: AppShellProps) {
     );
   }
 
-  const navItems = baseNavItems;
+  const navItems = salesNavItems;
 
   return (
     <div className="min-h-screen">

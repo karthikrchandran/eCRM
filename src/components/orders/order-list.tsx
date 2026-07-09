@@ -4,6 +4,7 @@ import type { OrderListFilters } from "@/server/orders/types";
 
 type OrderListProps = {
   filters: OrderListFilters;
+  owners?: Array<{ email: string; id: string; name: string }>;
   orders: OrderRecord[];
 };
 
@@ -21,7 +22,7 @@ function yearOptions() {
   return Array.from({ length: 6 }, (_, index) => currentYear - index);
 }
 
-export function OrderList({ filters, orders }: OrderListProps) {
+export function OrderList({ filters, orders, owners = [] }: OrderListProps) {
   return (
     <div className="space-y-6">
       <header>
@@ -29,7 +30,7 @@ export function OrderList({ filters, orders }: OrderListProps) {
         <p className="mt-1 text-sm text-[var(--muted)]">Booked orders from accepted proposals.</p>
       </header>
 
-      <form action="/orders" className="surface grid gap-4 p-4 md:grid-cols-4" method="get">
+      <form action="/orders" className="surface grid gap-4 p-4 md:grid-cols-5" method="get">
         <label className="flex flex-col gap-1 text-sm font-medium">
           Financial year
           <select className="crm-control" defaultValue={filters.financialYear?.toString() ?? ""} name="financialYear">
@@ -49,6 +50,17 @@ export function OrderList({ filters, orders }: OrderListProps) {
             <option value="2">Q2 Apr-Jun</option>
             <option value="3">Q3 Jul-Sep</option>
             <option value="4">Q4 Oct-Dec</option>
+          </select>
+        </label>
+        <label className="flex flex-col gap-1 text-sm font-medium">
+          Owner
+          <select className="crm-control" defaultValue={filters.ownerId ?? ""} name="ownerId">
+            <option value="">All owners</option>
+            {owners.map((owner) => (
+              <option key={owner.id} value={owner.id}>
+                {owner.name} ({owner.email})
+              </option>
+            ))}
           </select>
         </label>
         <label className="flex flex-col gap-1 text-sm font-medium">
@@ -82,7 +94,7 @@ export function OrderList({ filters, orders }: OrderListProps) {
                   {order.orderNumber}
                 </Link>
                 <p className="mt-1 text-sm text-[var(--muted)]">
-                  {order.leadCustomer.name} - {order.opportunity.title} - {order.status}
+                  {order.leadCustomer.name} - {order.opportunity.title} - {order.owner.name} - {order.status}
                 </p>
               </div>
               <p className="font-semibold">{formatPaisa(order.totalPaisa, order.currency)}</p>

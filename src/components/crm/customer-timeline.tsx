@@ -32,7 +32,8 @@ const kindLabels: Record<CustomerTimelineItem["kind"], string> = {
   proposal: "Proposal",
   task: "Task",
   text_note: "Typed note",
-  voice_note: "Voice note"
+  voice_note: "Voice note",
+  workflow_event: "Workflow event"
 };
 
 export function CustomerTimeline({ items }: { items: CustomerTimelineItem[] }) {

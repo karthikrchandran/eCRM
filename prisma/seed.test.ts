@@ -10,5 +10,7 @@ describe("local seed data", () => {
     expect(seedSource).toContain("sales2@example.com");
     expect(seedSource).toContain("seed_lead_zenith_health");
     expect(seedSource).toContain("ownerId: arjun.id");
+    expect(seedSource).toContain("TRUNCATE TABLE");
+    expect(seedSource).toContain("RESTART IDENTITY CASCADE");
   });
 });
