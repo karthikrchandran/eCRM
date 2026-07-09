@@ -7,6 +7,8 @@ import type { OrderListFilters, OrderUser } from "./types";
 
 const orderInclude = {
   branch: { select: { id: true, name: true, city: true, region: true } },
+  costComponents: { select: { id: true, amountPaisa: true, status: true } },
+  invoices: { select: { id: true, totalPaisa: true } },
   leadCustomer: { select: { id: true, name: true, state: true } },
   lineItems: {
     orderBy: { sortOrder: "asc" },
@@ -17,6 +19,7 @@ const orderInclude = {
   opportunity: { select: { id: true, title: true } },
   owner: { select: { id: true, name: true, email: true, role: true } },
   proposal: { select: { id: true, title: true, status: true, sequenceNumber: true, versionLabel: true } },
+  payments: { select: { id: true, amountPaisa: true } },
   splitSnapshots: {
     include: {
       user: { select: { id: true, name: true, email: true, role: true } }

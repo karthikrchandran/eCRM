@@ -8,6 +8,23 @@ if (process.env.NODE_ENV === "production") {
 
 const prisma = new PrismaClient();
 
+async function resetLocalDemoData() {
+  const tables = await prisma.$queryRaw<Array<{ tablename: string }>>`
+    select tablename
+    from pg_tables
+    where schemaname = 'public'
+      and tablename <> '_prisma_migrations'
+    order by tablename asc
+  `;
+
+  if (tables.length === 0) {
+    return;
+  }
+
+  const tableList = tables.map(({ tablename }) => `"${tablename}"`).join(", ");
+  await prisma.$executeRawUnsafe(`TRUNCATE TABLE ${tableList} RESTART IDENTITY CASCADE`);
+}
+
 const defaultStages = [
   { id: "seed_stage_lead", name: "Lead", sortOrder: 10, kind: PipelineStageKind.OPEN },
   { id: "seed_stage_qualified", name: "Qualified", sortOrder: 20, kind: PipelineStageKind.OPEN },
@@ -161,6 +178,8 @@ async function upsertUser(input: {
 }
 
 async function main() {
+  await resetLocalDemoData();
+
   await upsertUser({
     name: "Kavya Iyer",
     email: process.env.SEED_ADMIN_EMAIL ?? "admin@example.com",

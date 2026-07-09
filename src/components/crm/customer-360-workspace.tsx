@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { CustomerTimelineItem, LeadCustomerDetail } from "@/server/crm/queries";
+import { calculateApprovedCostTotal, calculateOrderPaymentSummary } from "@/server/finance/calculations";
 import { StatusBadge } from "@/components/ui/sales-primitives";
 
 type TimelineFilter = "all" | "sales" | "notes" | "delivery" | "money";
@@ -19,7 +20,7 @@ const filterKinds: Record<Exclude<TimelineFilter, "all">, CustomerTimelineItem["
   delivery: ["production"],
   money: ["invoice", "payment", "cost"],
   notes: ["text_note", "voice_note"],
-  sales: ["activity", "follow_up", "task", "opportunity", "proposal", "order"]
+  sales: ["activity", "follow_up", "task", "workflow_event", "opportunity", "proposal", "order"]
 };
 
 const kindLabels: Record<CustomerTimelineItem["kind"], string> = {
@@ -34,7 +35,8 @@ const kindLabels: Record<CustomerTimelineItem["kind"], string> = {
   proposal: "Proposal",
   task: "Task",
   text_note: "Typed note",
-  voice_note: "Voice note"
+  voice_note: "Voice note",
+  workflow_event: "Workflow event"
 };
 
 function formatDate(date: Date | null) {
@@ -57,6 +59,14 @@ function formatAmount(amount: NonNullable<CustomerTimelineItem["amount"]>) {
     maximumFractionDigits: 2,
     minimumFractionDigits: 2
   }).format(amount.minorUnits / 100)}`;
+}
+
+function formatPaisa(value: number, currency: string) {
+  const locale = currency === "USD" ? "en-US" : "en-IN";
+  return `${currency} ${new Intl.NumberFormat(locale, {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2
+  }).format(value / 100)}`;
 }
 
 function getFilteredItems(items: CustomerTimelineItem[], filter: TimelineFilter) {
@@ -88,6 +98,9 @@ export function Customer360Workspace({ lead, timeline }: { lead: LeadCustomerDet
   const primaryContact = lead.contacts.find((contact) => contact.isPrimary) ?? lead.contacts[0] ?? null;
   const primaryBranch = primaryContact?.branch ?? lead.branches[0] ?? null;
   const openActivities = lead.activities.filter((activity) => activity.status === "OPEN");
+  const latestOrder = lead.orders[0] ?? null;
+  const latestOrderPaymentSummary = latestOrder ? calculateOrderPaymentSummary(latestOrder.totalPaisa, latestOrder.invoices, latestOrder.payments) : null;
+  const latestOrderApprovedCosts = latestOrder ? calculateApprovedCostTotal(latestOrder.costComponents) : 0;
   const filteredItems = useMemo(() => getFilteredItems(timeline, activeFilter), [activeFilter, timeline]);
   const filters: TimelineFilter[] = ["all", "sales", "notes", "delivery", "money"];
 
@@ -167,6 +180,49 @@ export function Customer360Workspace({ lead, timeline }: { lead: LeadCustomerDet
                 </article>
               ))}
             </div>
+          </section>
+
+          <section className="surface p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-lg font-semibold text-slate-950">Finance snapshot</h2>
+              {latestOrder ? <StatusBadge tone={latestOrderPaymentSummary?.pendingReceivablePaisa ? "warning" : "success"}>{latestOrder.status}</StatusBadge> : null}
+            </div>
+            {latestOrder && latestOrderPaymentSummary ? (
+              <div className="mt-3 space-y-3 text-sm">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Latest order</p>
+                  <p className="font-medium text-slate-950">{latestOrder.orderNumber}</p>
+                  <p className="text-[var(--muted)]">{formatPaisa(latestOrder.totalPaisa, latestOrder.currency)} booked</p>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Collected</p>
+                    <p className="font-medium">{formatPaisa(latestOrderPaymentSummary.collectedPaisa, latestOrder.currency)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Pending receivable</p>
+                    <p className="font-medium">{formatPaisa(latestOrderPaymentSummary.pendingReceivablePaisa, latestOrder.currency)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Approved costs</p>
+                    <p className="font-medium">{formatPaisa(latestOrderApprovedCosts, latestOrder.currency)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Incentive</p>
+                    <p className="font-medium">{latestOrder.incentive?.status ?? "NOT_READY"}</p>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Readiness</p>
+                  <p className="text-[var(--muted)]">{latestOrder.incentive?.readinessReason ?? "Ready state is recalculated after payment and cost changes."}</p>
+                </div>
+                <Link className="font-semibold text-[var(--brand-navy)]" href={`/orders/${latestOrder.id}`}>
+                  Open finance summary
+                </Link>
+              </div>
+            ) : (
+              <p className="mt-3 text-sm text-[var(--muted)]">No booked order yet, so there is nothing to summarize.</p>
+            )}
           </section>
         </aside>
 

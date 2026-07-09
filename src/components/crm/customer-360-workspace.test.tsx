@@ -55,6 +55,22 @@ const lead = {
       branch: { id: "branch_1", name: "Bengaluru Delivery Office" }
     }
   ],
+  orders: [
+    {
+      id: "order_1",
+      orderNumber: "ORD-2026-0001",
+      status: "IN_PRODUCTION" as const,
+      bookedAt: new Date("2026-06-18T10:00:00.000Z"),
+      currency: "INR",
+      subtotalPaisa: 25000000,
+      gstPaisa: 4500000,
+      totalPaisa: 29500000,
+      invoices: [{ id: "invoice_1", totalPaisa: 29500000 }],
+      payments: [{ id: "payment_1", amountPaisa: 14750000, paymentDate: new Date("2026-06-20T10:00:00.000Z"), mode: "BANK_TRANSFER" as const, reference: "NEFT-001" }],
+      costComponents: [{ id: "cost_1", amountPaisa: 2500000, status: "APPROVED" as const }],
+      incentive: { id: "incentive_1", status: "READY_FOR_REVIEW" as const, payableAmountPaisa: 1000000, readinessReason: "Order is fully paid." }
+    }
+  ],
   ownershipHistory: [
     {
       id: "history_1",
@@ -108,12 +124,14 @@ const timeline = [
 
 describe("Customer360Workspace", () => {
   it("renders the split command view with profile, contacts, open work, and a filterable timeline", () => {
-    render(<Customer360Workspace lead={lead} timeline={timeline} />);
+    render(<Customer360Workspace lead={lead as never} timeline={timeline} />);
 
     expect(screen.getByRole("heading", { name: "Customer profile" })).toBeVisible();
     expect(screen.getByText("Owned by Priya Menon")).toBeVisible();
     expect(screen.getByText("Anita Rao")).toBeVisible();
     expect(screen.getByText("Follow up on onboarding module requirements")).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Finance snapshot" })).toBeVisible();
+    expect(screen.getByText("ORD-2026-0001")).toBeVisible();
     expect(screen.getByRole("button", { name: "All 4" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByText("Payment received")).toBeVisible();
     expect(screen.getByText("Production IN_PROGRESS: Build module")).toBeVisible();
