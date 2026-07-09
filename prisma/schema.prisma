@@ -190,10 +190,14 @@ model SharedBusinessRecord {
   phone                String?
   companyName          String?
   searchText           String
+  headVersion          Int              @default(1)
+  lastChangedByApp     String?
+  lastChangeAt         DateTime?
   data                 Json
   archivedAt           DateTime?
   createdAt            DateTime         @default(now())
   updatedAt            DateTime         @updatedAt
+  versions             SharedBusinessRecordVersion[]
 
   @@unique([entityType, ecrmLegacyId])
   @@unique([entityType, emailVoiceLegacyId])
@@ -209,7 +213,72 @@ model SharedBusinessRecord {
   @@index([phone])
   @@index([companyName])
   @@index([searchText])
+  @@index([headVersion])
   @@index([updatedAt])
+}
+
+model SharedBusinessRecordVersion {
+  id             String               @id @default(cuid())
+  recordId       String
+  versionNumber  Int
+  entityType     SharedRecordType
+  sourceApp      String
+  changeType     String
+  changedAt      DateTime             @default(now())
+  actorId        String?
+  idempotencyKey String?
+  baseVersion    Int?
+  snapshot       Json
+  changedFields  Json?
+
+  record SharedBusinessRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
+
+  @@unique([recordId, versionNumber])
+  @@index([entityType, changedAt])
+  @@index([sourceApp, changedAt])
+  @@index([idempotencyKey])
+}
+
+model SharedRecordExportSnapshot {
+  id         String                         @id @default(cuid())
+  entityType SharedRecordType?
+  itemCount  Int                            @default(0)
+  createdAt  DateTime                       @default(now())
+  expiresAt  DateTime
+  items      SharedRecordExportSnapshotItem[]
+
+  @@index([createdAt])
+  @@index([expiresAt])
+}
+
+model SharedRecordExportSnapshotItem {
+  snapshotId String
+  position   Int
+  payload    Json
+
+  snapshot SharedRecordExportSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+
+  @@id([snapshotId, position])
+}
+
+model WorkflowEvent {
+  id              String   @id @default(cuid())
+  sourceApp       String
+  sourceEventType String
+  entityType      String
+  entityId        String?
+  relatedRecordType String?
+  relatedRecordId String?
+  summary         String
+  payload         Json
+  occurredAt      DateTime @default(now())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([sourceApp, occurredAt])
+  @@index([entityType, entityId])
+  @@index([relatedRecordType, relatedRecordId])
+  @@index([sourceEventType, occurredAt])
 }
 
 model User {
