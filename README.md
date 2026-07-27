@@ -2,6 +2,8 @@
 
 eCRM is a single-company CRM for a small sales organization. The foundation slice provides the Next.js App Router application baseline, local Postgres database, Prisma schema and migration, internal email/password authentication, Admin and Sales roles, seeded local users, a protected dashboard shell, and verification gates for the CRM modules that follow.
 
+The current workflow covers the sales path from leads and Customer 360 through pipeline, proposals, orders, production, finance, and rep-specific performance. Admins also have company finance, team performance, incentive, product, production-configuration, and reporting views. See [docs/getting-started.md](docs/getting-started.md) for the end-to-end local workflow and the SignalLoop boundary.
+
 ## Local Development
 
 1. Install dependencies.
@@ -81,5 +83,6 @@ For Vercel deployment, configure a hosted PostgreSQL `DATABASE_URL`, a strong `A
 
 ## Project Documents
 
+- Getting started: [docs/getting-started.md](docs/getting-started.md)
 - Product design spec: [docs/superpowers/specs/2026-06-15-ecrm-design.md](docs/superpowers/specs/2026-06-15-ecrm-design.md)
 - Foundation plan: [docs/superpowers/plans/2026-06-15-ecrm-foundation-plan.md](docs/superpowers/plans/2026-06-15-ecrm-foundation-plan.md)

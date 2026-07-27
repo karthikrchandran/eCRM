@@ -20,6 +20,7 @@ const salesNavItems = [
   { href: "/customer-360", label: "Customer 360" },
   { href: "/opportunities", label: "Pipeline" },
   { href: "/performance", label: "Performance" },
+  { href: "/finance", label: "Finance" },
   { href: "/reports", label: "Reports" }
 ];
 
@@ -28,6 +29,7 @@ const adminNavItems = [
   { href: "/customer-360", label: "Customer 360" },
   { href: "/opportunities", label: "Pipeline" },
   { href: "/orders", label: "Orders" },
+  { href: "/finance", label: "Finance" },
   { href: "/incentives", label: "Incentives" },
   { href: "/admin/performance", label: "Team performance" },
   { href: "/reports", label: "Reports" }

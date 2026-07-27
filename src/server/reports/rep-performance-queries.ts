@@ -12,6 +12,7 @@ function assertAdminOnly(user: ReportsUser) {
 
 export type RepPerformanceFilters = {
   financialYear?: number;
+  ownerId?: string;
   quarter?: 1 | 2 | 3 | 4;
 };
 
@@ -26,6 +27,7 @@ export type RepPerformanceSummary = {
 };
 
 type RepUser = Pick<User, "id" | "name" | "email">;
+export type SalesRepOption = RepUser;
 type OrderSummaryRecord = {
   id: string;
   ownerId: string;
@@ -43,6 +45,19 @@ export type RepPerformanceDb = {
   salesTarget: { findMany: (args: unknown) => Promise<TargetRecord[]> };
   incentive: { findMany: (args: unknown) => Promise<IncentiveSummaryRecord[]> };
 };
+
+export async function listSalesRepOptions(
+  user: ReportsUser,
+  database: RepPerformanceDb = db as unknown as RepPerformanceDb
+): Promise<SalesRepOption[]> {
+  assertAdminOnly(user);
+
+  return database.user.findMany({
+    where: { active: true, role: "SALES" },
+    orderBy: { name: "asc" },
+    select: { id: true, name: true, email: true }
+  });
+}
 
 function buildBookedAtFilter(filters: RepPerformanceFilters) {
   if (!filters.financialYear) {
@@ -69,7 +84,7 @@ export async function listRepPerformanceSummaries(
 
   const [reps, orders, targets, incentives] = await Promise.all([
     database.user.findMany({
-      where: { active: true, role: "SALES" },
+      where: { active: true, role: "SALES", ...(filters.ownerId ? { id: filters.ownerId } : {}) },
       orderBy: { name: "asc" },
       select: { id: true, name: true, email: true }
     }),

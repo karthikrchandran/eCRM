@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { RepComparisonTable } from "./rep-comparison-table";
 import type { RepPerformanceSummary } from "@/server/reports/rep-performance-queries";
@@ -27,13 +27,28 @@ const rows: RepPerformanceSummary[] = [
 describe("RepComparisonTable", () => {
   it("renders the page heading", () => {
     render(<RepComparisonTable filters={{}} rows={rows} />);
-    expect(screen.getByRole("heading", { name: "Team performance" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Sales performance" })).toBeVisible();
   });
 
   it("shows one row per rep with their name", () => {
     render(<RepComparisonTable filters={{}} rows={rows} />);
     expect(screen.getByText("Priya Menon")).toBeVisible();
     expect(screen.getByText("Arun Kumar")).toBeVisible();
+  });
+
+  it("shows individual rep rollups when a sales rep is selected", () => {
+    render(<RepComparisonTable filters={{ ownerId: "rep_priya" }} repOptions={rows.map((row) => row.rep)} rows={[rows[0]]} />);
+
+    const summary = screen.getByRole("region", { name: "Sales rep performance summary" });
+    expect(within(summary).getByText("Rep target")).toBeVisible();
+    expect(within(summary).getByText("Rep incentive payable")).toBeVisible();
+  });
+
+  it("does not show cumulative team rollups before a rep is selected", () => {
+    render(<RepComparisonTable filters={{}} repOptions={rows.map((row) => row.rep)} rows={rows} />);
+
+    expect(screen.queryByRole("region", { name: "Sales rep performance summary" })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Sales reps" })).toBeVisible();
   });
 
   it("shows the order count per rep", () => {
@@ -56,6 +71,19 @@ describe("RepComparisonTable", () => {
   it("shows the filter form linked to the admin performance route", () => {
     render(<RepComparisonTable filters={{ financialYear: 2026, quarter: 2 }} rows={rows} />);
     expect(screen.getByRole("button", { name: "Apply" })).toBeVisible();
+  });
+
+  it("shows a sales rep filter with all available reps", () => {
+    render(
+      <RepComparisonTable
+        filters={{ ownerId: "rep_priya" }}
+        repOptions={rows.map((row) => row.rep)}
+        rows={[rows[0]]}
+      />
+    );
+
+    expect(screen.getByLabelText("Sales rep")).toHaveValue("rep_priya");
+    expect(screen.getByRole("option", { name: "Arun Kumar" })).toBeVisible();
   });
 
   it("shows an empty state when there are no reps", () => {
