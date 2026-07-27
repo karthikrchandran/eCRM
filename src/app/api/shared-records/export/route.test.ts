@@ -11,6 +11,7 @@ vi.mock("@/server/shared-records/api-auth", () => ({
 vi.mock("@/server/shared-records/export", () => ({
   buildSharedRecordExportPage: vi.fn(),
   exportableSharedRecordTypes: ["LEAD", "CUSTOMER", "CONTACT", "ORDER"],
+  MAX_SHARED_RECORD_EXPORT_PAGE_SIZE: 500,
   SharedRecordExportError: class SharedRecordExportError extends Error {}
 }));
 
@@ -55,6 +56,22 @@ describe("shared-record export route", () => {
     expect(zero.status).toBe(400);
     expect(tooLarge.status).toBe(400);
     expect(fractional.status).toBe(400);
+    expect(buildSharedRecordExportPageMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects entity types outside the approved export scope", async () => {
+    const response = await GET(new Request("http://localhost/api/shared-records/export?entityType=OPPORTUNITY"));
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({ error: "Invalid entityType." });
+    expect(buildSharedRecordExportPageMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects a blank cursor instead of silently restarting the export", async () => {
+    const response = await GET(new Request("http://localhost/api/shared-records/export?cursor=%20%20"));
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({ error: "Invalid export cursor." });
     expect(buildSharedRecordExportPageMock).not.toHaveBeenCalled();
   });
 

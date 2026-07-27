@@ -3,6 +3,7 @@ import { db } from "@/server/db";
 
 export type WorkflowEventInput = {
   sourceApp: string;
+  sourceEventId?: string | null;
   sourceEventType: string;
   entityType: string;
   entityId?: string | null;
@@ -16,6 +17,7 @@ export type WorkflowEventInput = {
 export type WorkflowEventRecord = {
   id: string;
   sourceApp: string;
+  sourceEventId?: string | null;
   sourceEventType: string;
   entityType: string;
   entityId?: string | null;
@@ -32,6 +34,7 @@ type WorkflowEventDb = {
   workflowEvent: {
     create: (args: Prisma.WorkflowEventCreateArgs) => Promise<WorkflowEventRecord>;
     findMany: (args: Prisma.WorkflowEventFindManyArgs) => Promise<WorkflowEventRecord[]>;
+    findFirst?: (args: Prisma.WorkflowEventFindFirstArgs) => Promise<WorkflowEventRecord | null>;
   };
   salesTask?: {
     create: (args: Prisma.SalesTaskCreateArgs) => Promise<{ id: string }>;
@@ -46,9 +49,17 @@ export async function ingestWorkflowEvent(
   input: WorkflowEventInput,
   database: WorkflowEventDb = db as unknown as WorkflowEventDb
 ): Promise<WorkflowEventRecord> {
+  if (input.sourceEventId && database.workflowEvent.findFirst) {
+    const existing = await database.workflowEvent.findFirst({
+      where: { sourceApp: input.sourceApp, sourceEventId: input.sourceEventId }
+    });
+    if (existing) return existing;
+  }
+
   const event = await database.workflowEvent.create({
     data: {
       sourceApp: input.sourceApp,
+      sourceEventId: input.sourceEventId ?? null,
       sourceEventType: input.sourceEventType,
       entityType: input.entityType,
       entityId: input.entityId ?? null,

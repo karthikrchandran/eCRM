@@ -64,4 +64,33 @@ describe("workflow event service", () => {
       })
     );
   });
+
+  it("returns the existing event without creating a second follow-up for a repeated source event", async () => {
+    const existing = { id: "event_1", sourceApp: "emailvoice", sourceEventId: "scheduling-booked:req_1" };
+    const createMock = vi.fn();
+    const salesTaskCreateMock = vi.fn();
+    const database = {
+      workflowEvent: {
+        findFirst: vi.fn().mockResolvedValue(existing),
+        create: createMock,
+        findMany: vi.fn().mockResolvedValue([])
+      },
+      salesTask: { create: salesTaskCreateMock }
+    } as never;
+
+    const result = await ingestWorkflowEvent(
+      {
+        sourceApp: "emailvoice",
+        sourceEventId: "scheduling-booked:req_1",
+        sourceEventType: "meeting_booked",
+        entityType: "LEAD",
+        summary: "Meeting booked in EmailVoice"
+      },
+      database
+    );
+
+    expect(result).toBe(existing);
+    expect(createMock).not.toHaveBeenCalled();
+    expect(salesTaskCreateMock).not.toHaveBeenCalled();
+  });
 });

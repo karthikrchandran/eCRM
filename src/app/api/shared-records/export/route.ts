@@ -1,6 +1,7 @@
 import {
   buildSharedRecordExportPage,
   exportableSharedRecordTypes,
+  MAX_SHARED_RECORD_EXPORT_PAGE_SIZE,
   type ExportableSharedRecordType,
   SharedRecordExportError
 } from "@/server/shared-records/export";
@@ -21,11 +22,29 @@ function parseLimit(limitParam: string | null): number | undefined {
   }
 
   const limit = Number(trimmed);
-  if (!Number.isFinite(limit) || !Number.isInteger(limit) || limit < 1 || limit > 500) {
+  if (
+    !Number.isFinite(limit) ||
+    !Number.isInteger(limit) ||
+    limit < 1 ||
+    limit > MAX_SHARED_RECORD_EXPORT_PAGE_SIZE
+  ) {
     throw new SharedRecordExportError("Invalid limit.");
   }
 
   return limit;
+}
+
+function parseCursor(cursorParam: string | null): string | null {
+  if (cursorParam === null) {
+    return null;
+  }
+
+  const trimmed = cursorParam.trim();
+  if (trimmed.length === 0) {
+    throw new SharedRecordExportError("Invalid export cursor.");
+  }
+
+  return trimmed;
 }
 
 export async function GET(request: Request) {
@@ -38,6 +57,7 @@ export async function GET(request: Request) {
     const searchParams = new URL(request.url).searchParams;
     const entityTypeParam = searchParams.get("entityType")?.trim() || undefined;
     const limit = parseLimit(searchParams.get("limit"));
+    const cursor = parseCursor(searchParams.get("cursor"));
 
     if (entityTypeParam && !exportableSharedRecordTypes.includes(entityTypeParam as ExportableSharedRecordType)) {
       return badRequest("Invalid entityType.");
@@ -45,7 +65,7 @@ export async function GET(request: Request) {
 
     const page = await buildSharedRecordExportPage({
       entityType: entityTypeParam as ExportableSharedRecordType | undefined,
-      cursor: searchParams.get("cursor"),
+      cursor,
       limit
     });
 

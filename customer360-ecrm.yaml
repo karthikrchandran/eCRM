@@ -1,0 +1,129 @@
+- generic [ref=e1]:
+  - button "Open Next.js Dev Tools" [ref=e36] [cursor=pointer]:
+    - img [ref=e37]
+  - alert [ref=e40]
+  - generic [ref=e41]:
+    - complementary [ref=e42]:
+      - link "eCRM" [ref=e43] [cursor=pointer]:
+        - /url: /dashboard
+      - paragraph [ref=e44]: Admin Console
+      - navigation "Admin navigation" [ref=e45]:
+        - link "Dashboard" [ref=e46] [cursor=pointer]:
+          - /url: /dashboard
+        - link "Customer 360" [active] [ref=e47] [cursor=pointer]:
+          - /url: /customer-360
+        - link "Pipeline" [ref=e48] [cursor=pointer]:
+          - /url: /opportunities
+        - link "Orders" [ref=e49] [cursor=pointer]:
+          - /url: /orders
+        - link "Incentives" [ref=e50] [cursor=pointer]:
+          - /url: /incentives
+        - link "Team performance" [ref=e51] [cursor=pointer]:
+          - /url: /admin/performance
+        - link "Reports" [ref=e52] [cursor=pointer]:
+          - /url: /reports
+        - paragraph [ref=e54]: Setup
+        - link "Production" [ref=e55] [cursor=pointer]:
+          - /url: /production
+        - link "Products" [ref=e56] [cursor=pointer]:
+          - /url: /admin/products
+        - link "Production config" [ref=e57] [cursor=pointer]:
+          - /url: /admin/production-config
+        - link "Settings" [ref=e58] [cursor=pointer]:
+          - /url: /admin/settings
+    - generic [ref=e59]:
+      - banner [ref=e60]:
+        - generic [ref=e61]:
+          - generic [ref=e62]:
+            - paragraph [ref=e63]: Admin Console
+            - paragraph [ref=e64]: Company controls, reporting, configuration, and operations.
+          - generic [ref=e65]:
+            - generic [ref=e66]:
+              - generic [ref=e67]:
+                - paragraph [ref=e68]: Kavya Iyer
+                - generic [ref=e69]: Admin
+              - paragraph [ref=e70]: admin@example.com
+            - button "Sign out" [ref=e72]
+      - main [ref=e73]:
+        - generic [ref=e199]:
+          - generic [ref=e201]:
+            - paragraph [ref=e202]: Customer workspace
+            - heading "Customer 360" [level=1] [ref=e203]
+            - paragraph [ref=e204]: Launch a single customer view with activity, notes, opportunities, orders, production, finance, and follow-up history.
+          - generic [ref=e205]:
+            - generic [ref=e206]:
+              - text: Search customer
+              - searchbox "Search customer" [ref=e207]
+            - generic [ref=e208]:
+              - text: Owner
+              - combobox "Owner" [ref=e209]:
+                - option "All owners" [selected]
+                - option "Arjun Srinivasan (sales2@example.com)"
+                - option "Kavya Iyer (admin@example.com)"
+                - option "Priya Menon (sales@example.com)"
+            - generic [ref=e210]:
+              - text: State
+              - combobox "State" [ref=e211]:
+                - option "Any state" [selected]
+                - option "Lead"
+                - option "Customer"
+                - option "Dormant"
+            - button "Search" [ref=e213]
+          - generic [ref=e214]:
+            - article [ref=e215]:
+              - generic [ref=e216]:
+                - generic [ref=e217]:
+                  - heading "Hitachi" [level=2] [ref=e218]
+                  - generic [ref=e219]: CUSTOMER
+                - paragraph [ref=e220]: Owner Kavya Iyer
+                - generic [ref=e221]:
+                  - generic [ref=e222]:
+                    - paragraph [ref=e223]: Branches
+                    - paragraph [ref=e224]: "1"
+                  - generic [ref=e225]:
+                    - paragraph [ref=e226]: Contacts
+                    - paragraph [ref=e227]: "1"
+                - paragraph [ref=e228]: "Next follow-up: No open follow-up"
+              - generic [ref=e229]:
+                - link "Open 360" [ref=e230] [cursor=pointer]:
+                  - /url: /customer-360/cmqs3s9rt0001tnm817tnpfoj
+                - link "Lead detail" [ref=e231] [cursor=pointer]:
+                  - /url: /leads/cmqs3s9rt0001tnm817tnpfoj
+            - article [ref=e232]:
+              - generic [ref=e233]:
+                - generic [ref=e234]:
+                  - heading "Zenith Health Systems" [level=2] [ref=e235]
+                  - generic [ref=e236]: CUSTOMER
+                - paragraph [ref=e237]: Owner Arjun Srinivasan
+                - generic [ref=e238]:
+                  - generic [ref=e239]:
+                    - paragraph [ref=e240]: Branches
+                    - paragraph [ref=e241]: "1"
+                  - generic [ref=e242]:
+                    - paragraph [ref=e243]: Contacts
+                    - paragraph [ref=e244]: "1"
+                - paragraph [ref=e245]: "Next follow-up: Review compliance-learning renewal scope on 24 Jun 2026"
+              - generic [ref=e246]:
+                - link "Open 360" [ref=e247] [cursor=pointer]:
+                  - /url: /customer-360/seed_lead_zenith_health
+                - link "Lead detail" [ref=e248] [cursor=pointer]:
+                  - /url: /leads/seed_lead_zenith_health
+            - article [ref=e249]:
+              - generic [ref=e250]:
+                - generic [ref=e251]:
+                  - heading "Northstar Learning Pvt Ltd" [level=2] [ref=e252]
+                  - generic [ref=e253]: LEAD
+                - paragraph [ref=e254]: Owner Priya Menon
+                - generic [ref=e255]:
+                  - generic [ref=e256]:
+                    - paragraph [ref=e257]: Branches
+                    - paragraph [ref=e258]: "1"
+                  - generic [ref=e259]:
+                    - paragraph [ref=e260]: Contacts
+                    - paragraph [ref=e261]: "1"
+                - paragraph [ref=e262]: "Next follow-up: Follow up on onboarding module requirements on 20 Jun 2026"
+              - generic [ref=e263]:
+                - link "Open 360" [ref=e264] [cursor=pointer]:
+                  - /url: /customer-360/seed_lead_acme_learning
+                - link "Lead detail" [ref=e265] [cursor=pointer]:
+                  - /url: /leads/seed_lead_acme_learning

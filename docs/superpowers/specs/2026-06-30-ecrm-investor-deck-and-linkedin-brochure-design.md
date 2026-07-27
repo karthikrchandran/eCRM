@@ -10,30 +10,31 @@ The repo already contains generated sales collateral under `docs/sales-materials
 - A 6-page investor pitch deck suitable for a conference presentation.
 - A 2-page brochure suitable for LinkedIn promotion and lightweight outbound sharing.
 
-The materials need to reflect the real eCRM product as it exists in this checkout. They should use the current positioning around a lead-to-cash operating workflow, reuse existing generator patterns where practical, and avoid invented traction, revenue, customer-count, or fundraising claims that are not supported by the local repo.
+The materials need to reflect the real eCRM product as it exists in this checkout. They should use the current positioning around an end-to-end sales and operations workflow, reuse existing generator patterns where practical, avoid calling the product a CRM in outward-facing category language, and avoid invented traction, revenue, customer-count, or fundraising claims that are not supported by the local repo.
 
 ## Goals
 
 - Produce one investor-facing deck with exactly 6 slides.
 - Produce one LinkedIn-friendly brochure with exactly 2 pages.
 - Keep both assets source-backed from the current local product, screenshots, docs, and schema.
-- Present eCRM as a broader lead-to-cash operating system rather than a narrow contact database.
+- Present eCRM as a broader SalesOS or sales intelligence platform rather than a CRM or contact database.
 - Tighten the narrative so the deck reads like an investor conversation instead of a feature dump.
 - Reuse the existing HTML-to-PDF generation flow in `docs/sales-materials/build-materials.mjs`.
+- Keep `eCRM` as the repo/product name only where needed, while the outward positioning language shifts to `SalesOS` or `sales intelligence platform`.
 
 ## Non-Goals
 
 - No Canva, PowerPoint, or external publishing integration in this slice.
 - No new screenshot-capture automation unless the existing local assets are clearly insufficient.
 - No fabricated TAM, ARR, user-count, customer-logo, or fundraising figures.
-- No rebrand mandate for the product name in code; naming can be expressed in copy without renaming the application.
+- No rebrand mandate for the product name in code; the shift is in category and positioning language, not repository or app renaming.
 - No user-guide rewrite unless required for generator stability.
 
 ## Chosen Direction
 
 The approved direction is an investor-oriented operating-platform pitch:
 
-- Deck angle: lead-to-cash operating system for small B2B service teams.
+- Deck angle: SalesOS for small B2B service teams, with sales intelligence and workflow control as the supporting idea.
 - Brochure angle: concise product promotion for LinkedIn and business development.
 - Content standard: honest, product-real, conference-ready, with stronger positioning and less module sprawl.
 
@@ -46,7 +47,7 @@ This direction is preferred over a sales-demo-heavy deck because investors need 
 The deck will be reduced to exactly 6 slides:
 
 1. Title and thesis
-   - Present eCRM as a lead-to-cash operating system.
+   - Present eCRM as a SalesOS or sales intelligence platform, not a CRM.
    - Include a concise promise for small B2B sales and delivery teams.
    - Use a strong headline with one supporting sentence and a grounded visual.
 
@@ -56,8 +57,8 @@ The deck will be reduced to exactly 6 slides:
 
 3. Solution
    - Present one lifecycle and one operating workspace.
-   - Show the lead-to-cash flow from lead through finance/reporting.
-   - Establish the product category and operating model clearly.
+   - Show the operating flow from demand capture through finance/reporting.
+   - Establish the product category and operating model clearly using SalesOS or sales intelligence platform language.
 
 4. Product proof
    - Show the most credible application proof points from the existing product.
@@ -93,8 +94,10 @@ The brochure will stay at exactly 2 pages:
 ## Copy Rules
 
 - Use plain business language.
-- Prefer "lead-to-cash", "operating discipline", "workflow visibility", and "single workspace" over generic CRM marketing language.
+- Prefer "SalesOS", "sales intelligence platform", "operating discipline", "workflow visibility", and "single workspace" over generic CRM marketing language.
 - Avoid filler adjectives and exaggerated claims.
+- Avoid calling the product a CRM in headlines, subheads, category labels, or concluding statements.
+- It is acceptable to mention that the product includes CRM workflow coverage when describing functional scope, but the platform itself should not be categorized as a CRM.
 - Avoid saying the product is multi-tenant, mobile-native, AI-first, or deeply integrated with external accounting systems because the repo does not support those claims.
 - Avoid numeric traction statements unless they are backed by the local checkout or explicitly supplied by the user.
 - Preserve the current reality that proposal documents are external links and that some finance and reporting features are workflow-rich but still MVP-scoped.
@@ -111,6 +114,7 @@ The brochure will stay at exactly 2 pages:
 
 - Update `docs/sales-materials/build-materials.mjs` so the generated deck contains 6 slides instead of the current longer sequence.
 - Update the brochure HTML generator in the same file to match the new LinkedIn-focused structure.
+- Replace outward-facing `CRM` framing in deck and brochure copy with broader SalesOS or sales intelligence platform phrasing.
 - Regenerate:
   - `docs/sales-materials/ecrm-pitch-deck.html`
   - `docs/sales-materials/ecrm-pitch-deck.pdf`
@@ -158,6 +162,7 @@ Manual checks after generation:
 - The brochure is exactly 2 pages.
 - Both assets are regenerated under `docs/sales-materials`.
 - The narrative reflects the approved investor-oriented direction.
+- The narrative does not categorize the product as a CRM.
 - The content is grounded in the local product rather than invented startup metrics.
 - The brochure is suitable for LinkedIn promotion and general PDF sharing.
 - Existing unrelated repo work remains untouched.

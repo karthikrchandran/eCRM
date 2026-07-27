@@ -264,6 +264,7 @@ model SharedRecordExportSnapshotItem {
 model WorkflowEvent {
   id              String   @id @default(cuid())
   sourceApp       String
+  sourceEventId   String?
   sourceEventType String
   entityType      String
   entityId        String?
@@ -276,6 +277,7 @@ model WorkflowEvent {
   updatedAt       DateTime @updatedAt
 
   @@index([sourceApp, occurredAt])
+  @@unique([sourceApp, sourceEventId])
   @@index([entityType, entityId])
   @@index([relatedRecordType, relatedRecordId])
   @@index([sourceEventType, occurredAt])
