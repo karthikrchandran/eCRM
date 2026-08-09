@@ -163,10 +163,10 @@ describe("organization tenancy schema contract", () => {
     expect(model).toContain("@@index([organizationId])");
   });
 
-  test("scopes shared external-key uniqueness to the organization", () => {
+  test("declares both legacy and tenant shared external-key uniqueness during expand", () => {
     const sharedRecord = block(schema, "model", "SharedBusinessRecord");
+    expect(sharedRecord).toContain("@@unique([entityType, externalKey])");
     expect(sharedRecord).toContain("@@unique([organizationId, entityType, externalKey])");
-    expect(sharedRecord).not.toMatch(/@@unique\(\[entityType, externalKey\]\)/);
   });
 });
 
@@ -267,16 +267,28 @@ function parseDatabaseIdentity(rawUrl: string) {
   }
 
   const port = parsed.port || "5432";
+  const schemaParameters = parsed.searchParams.getAll("schema");
+  if (schemaParameters.length > 1) {
+    throw new Error("ECRM_TENANCY_TEST_DATABASE_URL must include at most one schema parameter");
+  }
+  const schemaName = schemaParameters[0] ?? "public";
+  const databaseIdentity = `${parsed.hostname.toLowerCase()}:${port}/${databaseName}`;
   return {
     databaseName,
+    databaseIdentity,
     host: parsed.hostname,
-    identity: `${parsed.hostname.toLowerCase()}:${port}/${databaseName}`,
-    port
+    identity: `${databaseIdentity}?schema=${schemaName}`,
+    port,
+    schema: schemaName
   };
 }
 
 function validateIntegrationDatabaseUrl(dedicatedUrl: string, ordinaryUrl?: string) {
   const dedicated = parseDatabaseIdentity(dedicatedUrl);
+
+  if (dedicated.schema !== "public") {
+    throw new Error("ECRM_TENANCY_TEST_DATABASE_URL schema must be public");
+  }
 
   if (!/(?:disposable|rehearsal|test)/i.test(dedicated.databaseName)) {
     throw new Error("database name must include an explicit disposable test marker");
@@ -284,7 +296,7 @@ function validateIntegrationDatabaseUrl(dedicatedUrl: string, ordinaryUrl?: stri
 
   if (ordinaryUrl) {
     const ordinary = parseDatabaseIdentity(ordinaryUrl);
-    if (ordinary.identity === dedicated.identity) {
+    if (ordinary.databaseIdentity === dedicated.databaseIdentity) {
       throw new Error(
         "ECRM_TENANCY_TEST_DATABASE_URL must not identify the ordinary DATABASE_URL database"
       );
@@ -294,7 +306,9 @@ function validateIntegrationDatabaseUrl(dedicatedUrl: string, ordinaryUrl?: stri
   return {
     databaseName: dedicated.databaseName,
     host: dedicated.host,
-    port: dedicated.port
+    identity: dedicated.identity,
+    port: dedicated.port,
+    schema: dedicated.schema
   };
 }
 
@@ -305,9 +319,34 @@ describe("organization tenancy integration safety", () => {
     expect(validateIntegrationDatabaseUrl(safeUrl)).toEqual({
       databaseName: "ecrm_tenancy_disposable_test_example",
       host: "127.0.0.1",
-      port: "55441"
+      identity: "127.0.0.1:55441/ecrm_tenancy_disposable_test_example?schema=public",
+      port: "55441",
+      schema: "public"
     });
   });
+
+  test.each(["public", "%70ublic"])(
+    "accepts and canonicalizes the explicit public schema %s",
+    (schemaName) => {
+      expect(validateIntegrationDatabaseUrl(`${safeUrl}?schema=${schemaName}`)).toMatchObject({
+        identity: "127.0.0.1:55441/ecrm_tenancy_disposable_test_example?schema=public",
+        schema: "public"
+      });
+    }
+  );
+
+  test.each(["customer_data", "PUBLIC", "%50UBLIC"])(
+    "rejects non-public schema %s before a caller can mutate it",
+    (schemaName) => {
+      let mutationAttempted = false;
+
+      expect(() => {
+        validateIntegrationDatabaseUrl(`${safeUrl}?schema=${schemaName}`);
+        mutationAttempted = true;
+      }).toThrow("ECRM_TENANCY_TEST_DATABASE_URL schema must be public");
+      expect(mutationAttempted).toBe(false);
+    }
+  );
 
   test("refuses the ordinary application database", () => {
     expect(() => validateIntegrationDatabaseUrl(safeUrl, safeUrl)).toThrow(
@@ -759,18 +798,20 @@ integrationDescribe("organization tenancy PostgreSQL integration", () => {
     client = new PrismaClient({ datasources: { db: { url: integrationDatabaseUrl } } });
 
     const [actualDatabase] = await client.$queryRawUnsafe<
-      Array<{ databaseName: string; port: number; publicTableCount: number }>
+      Array<{ databaseName: string; port: number; schemaName: string; targetTableCount: number }>
     >(`
       SELECT
         current_database() AS "databaseName",
         inet_server_port() AS "port",
-        (SELECT COUNT(*)::integer FROM pg_tables WHERE schemaname = 'public') AS "publicTableCount"
+        current_schema() AS "schemaName",
+        (SELECT COUNT(*)::integer FROM pg_tables WHERE schemaname = current_schema()) AS "targetTableCount"
     `);
 
     expect(actualDatabase).toEqual({
       databaseName: databaseIdentity.databaseName,
       port: Number(databaseIdentity.port),
-      publicTableCount: 0
+      schemaName: databaseIdentity.schema,
+      targetTableCount: 0
     });
 
     const temporaryPrisma = createPreWp2PrismaRoot();

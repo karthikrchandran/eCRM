@@ -339,6 +339,7 @@ model SharedBusinessRecord {
 
   @@unique([entityType, ecrmLegacyId])
   @@unique([entityType, emailVoiceLegacyId])
+  @@unique([entityType, externalKey])
   @@unique([organizationId, entityType, externalKey])
   @@index([organizationId])
   @@index([entityType, status])
