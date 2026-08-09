@@ -2,10 +2,13 @@ import { describe, expect, it, vi } from "vitest";
 import {
   acceptSuggestedAction,
   completeSalesTask,
+  createSalesTask,
   createSalesTextNote,
+  createSalesVoiceNote,
   deleteSalesTextNote,
   reopenSalesTask,
   saveEndOfDayReview,
+  updateSalesTask,
   updateSalesTextNote
 } from "./mutations";
 import type { SalesDayUser } from "./permissions";
@@ -198,6 +201,8 @@ describe("sales-day mutations", () => {
 
   it("creates a typed My Day note linked to CRM records", async () => {
     const database = {
+      leadCustomer: { findFirst: vi.fn().mockResolvedValue({ id: "lead_1" }) },
+      opportunity: { findFirst: vi.fn().mockResolvedValue({ id: "opp_1" }) },
       salesTextNote: {
         create: vi.fn().mockResolvedValue({ id: "text_note_1" })
       }
@@ -230,6 +235,7 @@ describe("sales-day mutations", () => {
 
   it("updates and deletes only notes owned by the signed-in salesperson", async () => {
     const database = {
+      order: { findFirst: vi.fn().mockResolvedValue({ id: "order_1" }) },
       salesTextNote: {
         findFirst: vi.fn().mockResolvedValue({ id: "text_note_1", ownerId: "sales_1" }),
         update: vi.fn().mockResolvedValue({ id: "text_note_1" }),
@@ -256,5 +262,39 @@ describe("sales-day mutations", () => {
       where: { id: "text_note_1" },
       select: { id: true }
     });
+  });
+
+  it.each([
+    ["task create", (database: unknown) => createSalesTask(salesUser, {
+      title: "Call", type: "CALL", priority: "MEDIUM", leadCustomerId: "lead_B"
+    } as never, database as never), "salesTask"],
+    ["task update", (database: unknown) => updateSalesTask(salesUser, "task_A", {
+      opportunityId: "opportunity_B"
+    } as never, database as never), "salesTask"],
+    ["text note", (database: unknown) => createSalesTextNote(salesUser, {
+      body: "Private", proposalId: "proposal_B"
+    }, database as never), "salesTextNote"],
+    ["voice note", (database: unknown) => createSalesVoiceNote(salesUser, {
+      audioStorageKey: "audio/A", fileSizeBytes: 1, mimeType: "audio/webm",
+      originalFileName: "note.webm", orderId: "order_B", taskId: "task_B"
+    }, database as never), "salesVoiceNote"]
+  ])("rejects cross-organization optional foreign IDs for %s", async (_name, mutate, writeModel) => {
+    const database = {
+      leadCustomer: { findFirst: vi.fn().mockResolvedValue(null) },
+      opportunity: { findFirst: vi.fn().mockResolvedValue(null) },
+      proposal: { findFirst: vi.fn().mockResolvedValue(null) },
+      order: { findFirst: vi.fn().mockResolvedValue(null) },
+      salesTask: {
+        findFirst: vi.fn().mockImplementation(({ where }) =>
+          where.id === "task_A" ? Promise.resolve({ id: "task_A", ownerId: "sales_1" }) : Promise.resolve(null)),
+        create: vi.fn(), update: vi.fn()
+      },
+      salesTextNote: { create: vi.fn() },
+      salesVoiceNote: { create: vi.fn() }
+    };
+
+    await expect(mutate(database)).rejects.toThrow("Related record was not found.");
+    expect((database as Record<string, { create?: ReturnType<typeof vi.fn>; update?: ReturnType<typeof vi.fn> }>)[writeModel].create ??
+      (database as Record<string, { update?: ReturnType<typeof vi.fn> }>)[writeModel].update).not.toHaveBeenCalled();
   });
 });

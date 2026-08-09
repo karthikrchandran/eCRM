@@ -1,6 +1,7 @@
 import type { PipelineStage, Prisma, User } from "@prisma/client";
 import { db } from "@/server/db";
 import { withOrganization } from "@/server/organizations/with-organization";
+import { listOrganizationUserOptions } from "@/server/organizations/member-options";
 import { assertCanViewOpportunities, type OpportunityUser } from "./permissions";
 import type { OpportunityFilters } from "./types";
 
@@ -164,13 +165,16 @@ export async function getOpportunityDetail(user: OpportunityUser, opportunityId:
   });
 }
 
-export async function listOpportunityFormOptions(user: OpportunityUser, database: QueryDb = db as unknown as QueryDb): Promise<{
+export async function listOpportunityFormOptions(user: OpportunityUser, database: QueryDb = db as unknown as QueryDb, preloadedOwners?: OpportunityOwner[]): Promise<{
   leads: Array<{ id: string; name: string; state: string }>;
   branches: Array<{ id: string; name: string; leadCustomerId: string }>;
   stages: PipelineStageRecord[];
   owners: OpportunityOwner[];
 }> {
-  if (database === (db as unknown as QueryDb)) return withOrganization(user.organizationId, (tx) => listOpportunityFormOptions(user, tx as unknown as QueryDb));
+  if (database === (db as unknown as QueryDb)) {
+    const owners = await listOrganizationUserOptions(user.organizationId, ["ADMIN", "SALES"]);
+    return withOrganization(user.organizationId, (tx) => listOpportunityFormOptions(user, tx as unknown as QueryDb, owners));
+  }
   const [leads, branches, stages, owners] = await Promise.all([
     database.leadCustomer!.findMany({
       where: { organizationId: user.organizationId },
@@ -187,7 +191,7 @@ export async function listOpportunityFormOptions(user: OpportunityUser, database
       orderBy: { sortOrder: "asc" },
       select: { id: true, name: true, sortOrder: true, kind: true, active: true }
     }),
-    database.user!.findMany({
+    preloadedOwners ? Promise.resolve(preloadedOwners) : database.user!.findMany({
       where: { active: true, role: { in: ["ADMIN", "SALES"] }, memberships: { some: { organizationId: user.organizationId, status: "ACTIVE" } } },
       orderBy: { name: "asc" },
       select: opportunityOwnerSelect

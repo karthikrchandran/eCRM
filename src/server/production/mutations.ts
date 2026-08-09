@@ -65,6 +65,9 @@ type ProductionTransactionDb = {
 };
 
 type ProductionStageDb = {
+  organizationMembership?: {
+    findFirst: (args: Prisma.OrganizationMembershipFindFirstArgs) => Promise<{ id: string } | null>;
+  };
   productionStageInstance: {
     findFirst: (args: Prisma.ProductionStageInstanceFindFirstArgs) => Promise<{
       id: string;
@@ -295,8 +298,39 @@ export async function updateProductionStageStatus(
   input: ProductionStageStatusInput,
   database: ProductionStageDb = db as unknown as ProductionStageDb
 ): Promise<{ id: string; status: ProductionStageStatus | string }> {
-  if (database === (db as unknown as ProductionStageDb)) return withOrganization(user.organizationId, (tx) => updateProductionStageStatus(user, stageInstanceId, input, tx as unknown as ProductionStageDb));
   assertCanWriteProductionRecords(user);
+
+  if (input.assignedToId) {
+    const membershipDatabase = database === (db as unknown as ProductionStageDb)
+      ? db as unknown as ProductionStageDb
+      : database;
+    const assignee = await membershipDatabase.organizationMembership?.findFirst({
+      where: {
+        organizationId: user.organizationId,
+        userId: input.assignedToId,
+        status: "ACTIVE",
+        role: { in: ["ADMIN", "SALES", "PRODUCTION"] },
+        user: { active: true }
+      },
+      select: { id: true }
+    });
+    if (!assignee) throw new Error("Assignee was not found.");
+  }
+
+  if (database === (db as unknown as ProductionStageDb)) {
+    return withOrganization(user.organizationId, (tx) =>
+      updateProductionStageStatusInTenant(user, stageInstanceId, input, tx as unknown as ProductionStageDb));
+  }
+
+  return updateProductionStageStatusInTenant(user, stageInstanceId, input, database);
+}
+
+async function updateProductionStageStatusInTenant(
+  user: ProductionUser,
+  stageInstanceId: string,
+  input: ProductionStageStatusInput,
+  database: ProductionStageDb
+): Promise<{ id: string; status: ProductionStageStatus | string }> {
 
   const stage = await database.productionStageInstance.findFirst({
     where: { id: stageInstanceId, organizationId: user.organizationId },
@@ -412,6 +446,12 @@ export async function saveProductionTemplateStage(
 ): Promise<{ id: string }> {
   if (database === (db as unknown as ProductionConfigDb)) return withOrganization(user.organizationId, (tx) => saveProductionTemplateStage(user, input, tx as unknown as ProductionConfigDb));
   assertCanManageProductionConfig(user);
+
+  const template = await database.productionTemplate.findFirst({
+    where: { id: input.templateId, organizationId: user.organizationId },
+    select: { id: true }
+  });
+  if (!template) throw new Error("Production template was not found.");
 
   const data = {
     organizationId: user.organizationId,

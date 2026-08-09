@@ -183,7 +183,7 @@ describe("finance mutations", () => {
       admin,
       "invoice_1",
       { gstPaisa: 9000, invoiceDate: new Date("2026-08-03"), invoiceNumber: "INV-1A", orderId: "order_1", subtotalPaisa: 50000 },
-      { invoice: { create: vi.fn(), update: invoiceUpdate }, order: { findUnique: vi.fn().mockResolvedValue(order) } }
+      { invoice: { create: vi.fn(), findFirst: vi.fn().mockResolvedValue({ id: "invoice_1" }), update: invoiceUpdate }, order: { findUnique: vi.fn().mockResolvedValue(order) } }
     );
     expect(invoiceUpdate).toHaveBeenCalledWith({
       where: { id: "invoice_1" },
@@ -213,6 +213,35 @@ describe("finance mutations", () => {
       })
     });
     expect(incentiveUpsert).toHaveBeenCalled();
+  });
+
+  test("rejects an invoice target from another organization before update", async () => {
+    const update = vi.fn();
+    await expect(updateInvoice(
+      admin,
+      "invoice_B",
+      { gstPaisa: 0, invoiceDate: new Date("2026-08-03"), invoiceNumber: "INV-A", orderId: "order_1", subtotalPaisa: 1 },
+      {
+        invoice: { create: vi.fn(), findFirst: vi.fn().mockResolvedValue(null), update },
+        order: { findFirst: vi.fn().mockResolvedValue(order) }
+      } as never
+    )).rejects.toThrow("Invoice was not found.");
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  test("rejects a cost line item outside the order and organization", async () => {
+    const create = vi.fn();
+    const tx = {
+      costComponent: { create },
+      incentive: { upsert: vi.fn() },
+      order: { findFirst: vi.fn().mockResolvedValue(order) },
+      orderLineItem: { findFirst: vi.fn().mockResolvedValue(null) }
+    };
+
+    await expect(createCostComponent(admin, {
+      amountPaisa: 1, category: "Vendor", description: "Cross tenant", orderId: "order_1", orderLineItemId: "line_B"
+    }, { $transaction: vi.fn(async (callback) => callback(tx)) } as never)).rejects.toThrow("Order line item was not found.");
+    expect(create).not.toHaveBeenCalled();
   });
 
   test("rejects Sales writes and incentive approval before ready", async () => {

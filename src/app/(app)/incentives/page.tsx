@@ -2,8 +2,8 @@ import { redirect } from "next/navigation";
 import type { IncentiveStatus } from "@prisma/client";
 import { IncentiveList } from "@/components/incentives/incentive-list";
 import { requireUser } from "@/server/auth/current-user";
-import { db } from "@/server/db";
 import { listIncentives } from "@/server/finance/incentives-queries";
+import { listOrganizationUserOptions } from "@/server/organizations/member-options";
 
 function parseOptionalNumber(value: string | string[] | undefined) {
   if (value === undefined) {
@@ -44,11 +44,7 @@ export default async function IncentivesPage({
 
   const [incentives, owners] = await Promise.all([
     listIncentives(user, filters),
-    db.user.findMany({
-      where: { active: true, role: { in: ["ADMIN", "SALES"] } },
-      orderBy: { name: "asc" },
-      select: { id: true, name: true, email: true }
-    })
+    listOrganizationUserOptions(user.organizationId, ["ADMIN", "SALES"])
   ]);
 
   return <IncentiveList filters={filters} incentives={incentives} owners={owners} title="Incentives" subtitle="Company-wide incentive status and payout tracking." />;

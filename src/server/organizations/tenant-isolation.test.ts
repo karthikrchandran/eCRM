@@ -52,21 +52,51 @@ describe("tenant contract migration", () => {
 
   it("makes every owned organizationId non-null and forces RLS with read/write policies", () => {
     const sql = readFileSync(migrationPath, "utf8");
+    const executableSql = sql
+      .split("\n")
+      .filter((line) => !line.trimStart().startsWith("--"))
+      .join("\n");
+    const policyLoop = [...executableSql.matchAll(/FOREACH tenant_table[\s\S]+?END LOOP;/g)]
+      .find((match) => match[0].includes("CREATE POLICY"))?.[0] ?? "";
 
     for (const model of ownedModels) {
-      expect(sql, `${model} NOT NULL`).toContain(
+      expect(executableSql, `${model} NOT NULL`).toContain(
         `ALTER TABLE "${model}" ALTER COLUMN "organizationId" SET NOT NULL`
       );
-      expect(sql, `${model} RLS enabled`).toContain(`ALTER TABLE "${model}" ENABLE ROW LEVEL SECURITY`);
-      expect(sql, `${model} RLS forced`).toContain(`ALTER TABLE "${model}" FORCE ROW LEVEL SECURITY`);
-      expect(sql, `${model} policy`).toContain(`CREATE POLICY "${model}_organization_isolation"`);
+      expect(executableSql, `${model} RLS enabled`).toContain(`ALTER TABLE "${model}" ENABLE ROW LEVEL SECURITY`);
+      expect(executableSql, `${model} RLS forced`).toContain(`ALTER TABLE "${model}" FORCE ROW LEVEL SECURITY`);
+      expect(policyLoop, `${model} executable policy inventory`).toContain(`'${model}'`);
     }
 
-    expect(sql).toContain("current_setting(''app.organization_id'', true)");
-    expect(sql).toContain("USING (");
-    expect(sql).toContain("WITH CHECK (");
-    expect(sql).toContain("rolsuper");
-    expect(sql).toContain("rolbypassrls");
+    expect(policyLoop).toContain("current_setting(''app.organization_id'', true)");
+    expect(policyLoop).toContain("USING (");
+    expect(policyLoop).toContain("WITH CHECK (");
+  });
+});
+
+describe("tenant database role operation", () => {
+  const roleOperationPath = join(
+    process.cwd(),
+    "prisma/operations/configure-tenant-app-role.sql"
+  );
+
+  it("keeps privileges in a NOLOGIN role and grants it to an external LOGIN principal", () => {
+    const sql = readFileSync(roleOperationPath, "utf8");
+
+    expect(sql).toContain("app_role is required");
+    expect(sql).toContain("login_role is required");
+    expect(sql).toMatch(/CREATE ROLE %I NOLOGIN/);
+    expect(sql).toContain("rolcanlogin");
+    expect(sql).toContain("GRANT %I TO %I");
+    expect(sql).not.toMatch(/PASSWORD\s+/i);
+  });
+
+  it("prevents the tenant role from reading authentication and control-plane tables", () => {
+    const sql = readFileSync(roleOperationPath, "utf8");
+
+    expect(sql).toContain(
+      'REVOKE ALL PRIVILEGES ON TABLE "User", "Organization", "OrganizationMembership", "OrganizationSettings", "OrganizationBranding"'
+    );
   });
 });
 

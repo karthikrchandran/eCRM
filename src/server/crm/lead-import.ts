@@ -439,7 +439,6 @@ export async function previewLeadImportCsv(
   csvText: string,
   database: LeadImportDatabase = db as unknown as LeadImportDatabase
 ): Promise<LeadImportPreviewResult> {
-  if (database === (db as unknown as LeadImportDatabase)) return withOrganization(user.organizationId, (tx) => previewLeadImportCsv(user, csvText, tx as unknown as LeadImportDatabase));
   assertCanWriteCrmRecords(user);
   const parsed = parseCsv(csvText);
 
@@ -515,7 +514,7 @@ export async function importLeadCsv(
       }
 
       const importRow = async (tx: LeadImportTransactionDb) => {
-        const lead = await createLeadCustomer(user, row.lead, tx);
+        const lead = await createLeadCustomer(user, row.lead, tx, true);
         let branchId: string | undefined;
 
         if (row.branch) {

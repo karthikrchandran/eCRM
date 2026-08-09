@@ -1,6 +1,7 @@
 import type { Prisma, ProductionStageStatus, User } from "@prisma/client";
 import { db } from "@/server/db";
 import { withOrganization } from "@/server/organizations/with-organization";
+import { listOrganizationUserOptions } from "@/server/organizations/member-options";
 import { assertCanManageProductionConfig, assertCanViewProductionRecords } from "./permissions";
 import type { ProductionFilters, ProductionUser } from "./types";
 
@@ -167,7 +168,9 @@ export async function getProductionWorkItemDetail(
 }
 
 export async function listProductionFormOptions(user: ProductionUser, database: ProductionQueryDb = db as unknown as ProductionQueryDb): Promise<{ owners: ProductionOwner[] }> {
-  if (database === (db as unknown as ProductionQueryDb)) return withOrganization(user.organizationId, (tx) => listProductionFormOptions(user, tx as unknown as ProductionQueryDb));
+  if (database === (db as unknown as ProductionQueryDb)) {
+    return { owners: await listOrganizationUserOptions(user.organizationId, ["ADMIN", "SALES", "PRODUCTION"]) };
+  }
   if (!database.user) {
     throw new Error("Production form options query is unavailable.");
   }

@@ -12,6 +12,16 @@ import type { SalesDayReviewInput, SalesTaskInput, SalesTaskUpdateInput, SalesTe
 
 type IdResult = { id: string };
 type OwnedRecord = { id: string; ownerId: string };
+type RelatedRecordModel = {
+  findFirst: (args: { where: { id: string; organizationId: string }; select: { id: true } }) => Promise<{ id: string } | null>;
+};
+type RelatedRecordsDb = {
+  leadCustomer?: RelatedRecordModel;
+  opportunity?: RelatedRecordModel;
+  proposal?: RelatedRecordModel;
+  order?: RelatedRecordModel;
+  salesTask?: RelatedRecordModel;
+};
 type TaskForCarryForward = OwnedRecord & {
   leadCustomerId: string | null;
   opportunityId: string | null;
@@ -30,21 +40,21 @@ type TaskLifecycleDb = {
   };
 };
 
-type CreateTaskDb = {
+type CreateTaskDb = RelatedRecordsDb & {
   salesTask: {
     create: (args: Prisma.SalesTaskCreateArgs) => Promise<IdResult>;
   };
 };
 
-type UpdateTaskDb = TaskLifecycleDb;
+type UpdateTaskDb = TaskLifecycleDb & RelatedRecordsDb;
 
-type CreateTextNoteDb = {
+type CreateTextNoteDb = RelatedRecordsDb & {
   salesTextNote: {
     create: (args: Prisma.SalesTextNoteCreateArgs) => Promise<IdResult>;
   };
 };
 
-type TextNoteDb = {
+type TextNoteDb = RelatedRecordsDb & {
   salesTextNote: {
     findFirst: (args: Prisma.SalesTextNoteFindFirstArgs) => Promise<OwnedRecord | null>;
     update: (args: Prisma.SalesTextNoteUpdateArgs) => Promise<IdResult>;
@@ -67,7 +77,7 @@ type VoiceNoteInput = {
   retainedUntil?: Date;
 };
 
-type VoiceNoteDb = {
+type VoiceNoteDb = RelatedRecordsDb & {
   salesVoiceNote: {
     findFirst: (args: Prisma.SalesVoiceNoteFindFirstArgs) => Promise<OwnedRecord | null>;
     create?: (args: Prisma.SalesVoiceNoteCreateArgs) => Promise<IdResult>;
@@ -149,6 +159,33 @@ function tomorrowMorning(reviewDate: Date) {
   return new Date(Date.UTC(reviewDate.getUTCFullYear(), reviewDate.getUTCMonth(), reviewDate.getUTCDate() + 1, 9));
 }
 
+type RelatedRecordInput = {
+  taskId?: string | null;
+  leadCustomerId?: string | null;
+  opportunityId?: string | null;
+  proposalId?: string | null;
+  orderId?: string | null;
+};
+
+async function assertRelatedRecords(database: RelatedRecordsDb, organizationId: string, input: RelatedRecordInput) {
+  const references = [
+    ["salesTask", input.taskId],
+    ["leadCustomer", input.leadCustomerId],
+    ["opportunity", input.opportunityId],
+    ["proposal", input.proposalId],
+    ["order", input.orderId]
+  ] as const;
+
+  for (const [model, id] of references) {
+    if (!id) continue;
+    const record = await database[model]?.findFirst({
+      where: { id, organizationId },
+      select: { id: true }
+    });
+    if (!record) throw new Error("Related record was not found.");
+  }
+}
+
 async function findOwnedTask(database: TaskLifecycleDb, user: SalesDayUser, taskId: string) {
   const task = await database.salesTask.findFirst({
     where: { id: taskId, organizationId: user.organizationId },
@@ -170,6 +207,7 @@ export async function createSalesTask(
 ): Promise<IdResult> {
   if (database === (db as unknown as CreateTaskDb)) return withOrganization(user.organizationId, (tx) => createSalesTask(user, input, tx as unknown as CreateTaskDb));
   assertCanUseSalesWorkspace(user);
+  await assertRelatedRecords(database, user.organizationId, input);
 
   return database.salesTask.create({
     data: {
@@ -198,6 +236,7 @@ export async function updateSalesTask(
 ): Promise<IdResult> {
   if (database === (db as unknown as UpdateTaskDb)) return withOrganization(user.organizationId, (tx) => updateSalesTask(user, taskId, input, tx as unknown as UpdateTaskDb));
   await findOwnedTask(database, user, taskId);
+  await assertRelatedRecords(database, user.organizationId, input);
 
   return database.salesTask.update({
     where: { id: taskId },
@@ -249,6 +288,7 @@ export async function createSalesTextNote(
 ): Promise<IdResult> {
   if (database === (db as unknown as CreateTextNoteDb)) return withOrganization(user.organizationId, (tx) => createSalesTextNote(user, input, tx as unknown as CreateTextNoteDb));
   assertCanUseSalesWorkspace(user);
+  await assertRelatedRecords(database, user.organizationId, input);
 
   return database.salesTextNote.create({
     data: textNoteData(user, input),
@@ -264,6 +304,7 @@ export async function updateSalesTextNote(
 ): Promise<IdResult> {
   if (database === (db as unknown as TextNoteDb)) return withOrganization(user.organizationId, (tx) => updateSalesTextNote(user, noteId, input, tx as unknown as TextNoteDb));
   await assertOwnedTextNote(database, user, noteId);
+  await assertRelatedRecords(database, user.organizationId, input);
 
   return database.salesTextNote.update({
     where: { id: noteId },
@@ -413,6 +454,7 @@ export async function createSalesVoiceNote(
 ): Promise<IdResult> {
   if (database === (db as unknown as VoiceNoteDb)) return withOrganization(user.organizationId, (tx) => createSalesVoiceNote(user, input, tx as unknown as VoiceNoteDb));
   assertCanUseSalesWorkspace(user);
+  await assertRelatedRecords(database, user.organizationId, input);
 
   if (!database.salesVoiceNote.create) {
     throw new Error("Voice note storage is not available.");

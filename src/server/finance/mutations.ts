@@ -34,6 +34,7 @@ type FinanceOrderRead = {
 type InvoiceCreateDb = FinanceOrderRead & {
   invoice: {
     create: (args: Prisma.InvoiceCreateArgs) => Promise<{ id: string }>;
+    findFirst?: (args: Prisma.InvoiceFindFirstArgs) => Promise<{ id: string } | null>;
     update?: (args: Prisma.InvoiceUpdateArgs) => Promise<{ id: string }>;
   };
 };
@@ -44,6 +45,9 @@ type FinanceTransaction = FinanceOrderRead & {
     findFirst?: (args: Prisma.CostComponentFindFirstArgs) => Promise<{ id: string; orderId: string } | null>;
     findUnique?: (args: Prisma.CostComponentFindUniqueArgs) => Promise<{ id: string; orderId: string } | null>;
     update?: (args: Prisma.CostComponentUpdateArgs) => Promise<{ id: string; orderId?: string }>;
+  };
+  orderLineItem?: {
+    findFirst: (args: Prisma.OrderLineItemFindFirstArgs) => Promise<{ id: string } | null>;
   };
   incentive: {
     upsert: (args: Prisma.IncentiveUpsertArgs) => Promise<{ id: string }>;
@@ -196,6 +200,11 @@ export async function updateInvoice(
   assertCanManageFinance(user);
 
   await loadFinanceOrder(database, user.organizationId, input.orderId);
+  const invoice = await database.invoice.findFirst?.({
+    where: { id: invoiceId, orderId: input.orderId, organizationId: user.organizationId },
+    select: { id: true }
+  });
+  if (!invoice) throw new Error("Invoice was not found.");
   const invoiceTotalPaisa = input.subtotalPaisa + input.gstPaisa;
 
   return database.invoice.update?.({
@@ -272,6 +281,13 @@ export async function createCostComponent(
 
   return inFinanceTransaction(database, async (transaction) => {
     const order = await loadFinanceOrder(transaction, user.organizationId, input.orderId);
+    if (input.orderLineItemId) {
+      const orderLineItem = await transaction.orderLineItem?.findFirst({
+        where: { id: input.orderLineItemId, orderId: input.orderId, organizationId: user.organizationId },
+        select: { id: true }
+      });
+      if (!orderLineItem) throw new Error("Order line item was not found.");
+    }
     const cost = await transaction.costComponent.create({
       data: {
         organizationId: user.organizationId,

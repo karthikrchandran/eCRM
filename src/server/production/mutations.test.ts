@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import { instantiateProductionForOrderLineItem, updateProductionStageStatus } from "./mutations";
+import { instantiateProductionForOrderLineItem, saveProductionTemplateStage, updateProductionStageStatus } from "./mutations";
 
 const actor = { id: "user_sales", organizationId: "org_test", role: "SALES" as const };
+const adminActor = { id: "user_admin", organizationId: "org_test", role: "ADMIN" as const };
 
 const orderLineItem = {
   id: "order_line_1",
@@ -295,5 +296,48 @@ describe("production mutations", () => {
       where: { id: "order_1" },
       data: { status: "IN_PRODUCTION", updatedById: "user_sales" }
     });
+  });
+
+  it("rejects an assignee without an active membership in the organization", async () => {
+    const update = vi.fn();
+    const database = {
+      organizationMembership: { findFirst: vi.fn().mockResolvedValue(null) },
+      productionStageInstance: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: "stage_1", workItemId: "work_1", status: "NOT_STARTED", startedAt: null,
+          workItem: { id: "work_1", orderLineItem: { orderId: "order_1", order: { id: "order_1", status: "BOOKED" } } }
+        }),
+        update
+      }
+    };
+
+    await expect(updateProductionStageStatus(actor, "stage_1", {
+      assignedToId: "user_B", status: "IN_PROGRESS"
+    }, database as never)).rejects.toThrow("Assignee was not found.");
+    expect(database.organizationMembership.findFirst).toHaveBeenCalledWith({
+      where: {
+        organizationId: "org_test",
+        userId: "user_B",
+        status: "ACTIVE",
+        role: { in: ["ADMIN", "SALES", "PRODUCTION"] },
+        user: { active: true }
+      },
+      select: { id: true }
+    });
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("rejects a template-stage parent from another organization", async () => {
+    const create = vi.fn();
+    const database = {
+      productionTemplate: { findFirst: vi.fn().mockResolvedValue(null) },
+      productionTemplateStage: { create, findFirst: vi.fn(), update: vi.fn(), upsert: vi.fn() }
+    };
+
+    await expect(saveProductionTemplateStage(adminActor, {
+      defaultDurationDays: 1, key: "review", name: "Review", required: true,
+      sortOrder: 10, templateId: "template_B"
+    }, database as never)).rejects.toThrow("Production template was not found.");
+    expect(create).not.toHaveBeenCalled();
   });
 });

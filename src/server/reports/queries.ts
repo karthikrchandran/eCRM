@@ -1,6 +1,7 @@
 import { formatCurrencyPaisa, type ReportCurrency } from "@/components/reports/report-formatters";
 import { db } from "@/server/db";
 import { withOrganization } from "@/server/organizations/with-organization";
+import { listOrganizationUserOptions } from "@/server/organizations/member-options";
 import { calculateOrderPaymentSummary } from "@/server/finance/calculations";
 import { assertCanViewReports } from "./permissions";
 import type {
@@ -459,10 +460,10 @@ function optionsFromCustomers(orders: OrderRecord[], opportunities: OpportunityR
   return Array.from(customers.values()).sort((left, right) => left.name.localeCompare(right.name));
 }
 
-async function loadFilterOptions(database: ReportsQueryDb, organizationId: string, orders: OrderRecord[], opportunities: OpportunityRecord[], products: ProductServiceRecord[]): Promise<ReportsFilterOptions> {
-  const owners = database.user
+async function loadFilterOptions(database: ReportsQueryDb, organizationId: string, orders: OrderRecord[], opportunities: OpportunityRecord[], products: ProductServiceRecord[], preloadedOwners?: ReportOption[]): Promise<ReportsFilterOptions> {
+  const owners = preloadedOwners ?? (database.user
     ? await database.user.findMany({ where: { memberships: { some: { organizationId, status: "ACTIVE" } } }, orderBy: { name: "asc" }, select: { id: true, name: true, email: true } })
-    : [];
+    : []);
   const stageMap = new Map<string, ReportOption>();
   for (const opportunity of opportunities) stageMap.set(opportunity.stage.id, { id: opportunity.stage.id, name: opportunity.stage.name });
 
@@ -480,9 +481,13 @@ export async function getReportsOverview(
   user: ReportsUser,
   database: ReportsQueryDb = db as unknown as ReportsQueryDb,
   filters: ReportsFilters = {},
-  now = new Date()
+  now = new Date(),
+  preloadedOwners?: ReportOption[]
 ): Promise<ReportsOverview> {
-  if (database === (db as unknown as ReportsQueryDb)) return withOrganization(user.organizationId, (tx) => getReportsOverview(user, tx as unknown as ReportsQueryDb, filters, now));
+  if (database === (db as unknown as ReportsQueryDb)) {
+    const owners = await listOrganizationUserOptions(user.organizationId, ["ADMIN", "SALES", "FINANCE", "PRODUCTION", "READ_ONLY", "OWNER"]);
+    return withOrganization(user.organizationId, (tx) => getReportsOverview(user, tx as unknown as ReportsQueryDb, filters, now, owners));
+  }
   assertCanViewReports(user);
 
   const settings = database.businessSettings
@@ -582,7 +587,7 @@ export async function getReportsOverview(
   const pendingProduction = buildPendingProduction(productionWorkItems);
   const upcomingFollowUps = buildUpcomingFollowUps(activities, now);
   const topBillings = currentOrders.map(toBillingSummary).sort((left, right) => right.bookedValuePaisa - left.bookedValuePaisa);
-  const filterOptions = await loadFilterOptions(database, user.organizationId, currentOrders, opportunities, products);
+  const filterOptions = await loadFilterOptions(database, user.organizationId, currentOrders, opportunities, products, preloadedOwners);
 
   return {
     collections,

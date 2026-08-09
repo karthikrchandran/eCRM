@@ -1,6 +1,7 @@
 import type { Prisma, User } from "@prisma/client";
 import { db } from "@/server/db";
 import { withOrganization } from "@/server/organizations/with-organization";
+import { listOrganizationUserOptions } from "@/server/organizations/member-options";
 import { assertCanViewCrmRecords, type CrmUser } from "./permissions";
 import type { ContactFilters, LeadFilters } from "./types";
 
@@ -300,9 +301,13 @@ function buildContactWhere(organizationId: string, filters: ContactFilters): Pri
 export async function listLeadCustomers(
   user: CrmUser,
   filters: LeadFilters,
-  database: QueryDb = db as unknown as QueryDb
+  database: QueryDb = db as unknown as QueryDb,
+  preloadedOwners?: CrmOwner[]
 ): Promise<{ records: LeadCustomerListRecord[]; owners: CrmOwner[] }> {
-  if (database === (db as unknown as QueryDb)) return withOrganization(user.organizationId, (tx) => listLeadCustomers(user, filters, tx as unknown as QueryDb));
+  if (database === (db as unknown as QueryDb)) {
+    const owners = await listOrganizationUserOptions(user.organizationId, ["ADMIN", "SALES"]);
+    return withOrganization(user.organizationId, (tx) => listLeadCustomers(user, filters, tx as unknown as QueryDb, owners));
+  }
   assertCanViewCrmRecords(user);
   const where = buildLeadWhere(user.organizationId, filters);
 
@@ -312,7 +317,7 @@ export async function listLeadCustomers(
       orderBy: [{ updatedAt: "desc" }, { name: "asc" }],
       include: leadListInclude
     }),
-    database.user.findMany({
+    preloadedOwners ? Promise.resolve(preloadedOwners) : database.user.findMany({
       where: { active: true, role: { in: ["ADMIN", "SALES"] }, memberships: { some: { organizationId: user.organizationId, status: "ACTIVE" } } },
       orderBy: { name: "asc" },
       select: crmOwnerSelect
@@ -325,9 +330,13 @@ export async function listLeadCustomers(
 export async function listContacts(
   user: CrmUser,
   filters: ContactFilters,
-  database: QueryDb = db as unknown as QueryDb
+  database: QueryDb = db as unknown as QueryDb,
+  preloadedOwners?: CrmOwner[]
 ): Promise<{ records: ContactListRecord[]; owners: CrmOwner[] }> {
-  if (database === (db as unknown as QueryDb)) return withOrganization(user.organizationId, (tx) => listContacts(user, filters, tx as unknown as QueryDb));
+  if (database === (db as unknown as QueryDb)) {
+    const owners = await listOrganizationUserOptions(user.organizationId, ["ADMIN", "SALES"]);
+    return withOrganization(user.organizationId, (tx) => listContacts(user, filters, tx as unknown as QueryDb, owners));
+  }
   assertCanViewCrmRecords(user);
   const where = buildContactWhere(user.organizationId, filters);
 
@@ -337,7 +346,7 @@ export async function listContacts(
       orderBy: [{ updatedAt: "desc" }, { name: "asc" }],
       include: contactListInclude
     }),
-    database.user.findMany({
+    preloadedOwners ? Promise.resolve(preloadedOwners) : database.user.findMany({
       where: { active: true, role: { in: ["ADMIN", "SALES"] }, memberships: { some: { organizationId: user.organizationId, status: "ACTIVE" } } },
       orderBy: { name: "asc" },
       select: crmOwnerSelect
@@ -692,7 +701,7 @@ export async function getCustomer360Timeline(
 }
 
 export async function listCrmOwners(user: CrmUser, database = db): Promise<CrmOwner[]> {
-  if (database === db) return withOrganization(user.organizationId, (tx) => listCrmOwners(user, tx as unknown as typeof db));
+  if (database === db) return listOrganizationUserOptions(user.organizationId, ["ADMIN", "SALES"]);
   return database.user.findMany({
     where: { active: true, role: { in: ["ADMIN", "SALES"] }, memberships: { some: { organizationId: user.organizationId, status: "ACTIVE" } } },
     orderBy: { name: "asc" },

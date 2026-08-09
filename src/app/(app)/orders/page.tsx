@@ -1,7 +1,7 @@
 import { OrderList } from "@/components/orders/order-list";
 import { requireUser } from "@/server/auth/current-user";
-import { db } from "@/server/db";
 import { listOrders } from "@/server/orders/queries";
+import { listOrganizationUserOptions } from "@/server/organizations/member-options";
 import { orderListFilterSchema } from "@/server/orders/validators";
 import { redirect } from "next/navigation";
 
@@ -24,11 +24,7 @@ export default async function OrdersPage({
   });
   const [orders, owners] = await Promise.all([
     listOrders(user, filters),
-    db.user.findMany({
-      where: { active: true, role: { in: ["ADMIN", "SALES"] } },
-      orderBy: { name: "asc" },
-      select: { id: true, name: true, email: true }
-    })
+    listOrganizationUserOptions(user.organizationId, ["ADMIN", "SALES"])
   ]);
 
   return <OrderList filters={filters} orders={orders} owners={owners} />;

@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { db } from "@/server/db";
 import { withOrganization } from "@/server/organizations/with-organization";
+import { assertOrganizationUserEligible } from "@/server/organizations/member-options";
 import { assertCanWriteCrmRecords, type CrmUser } from "./permissions";
 import type { ActivityInput, BranchInput, ContactInput, LeadCustomerInput, ReassignmentInput } from "./types";
 
@@ -137,11 +138,15 @@ async function assertContactBelongsToLead(database: CreateActivityDb, organizati
 export async function createLeadCustomer(
   user: CrmUser,
   input: LeadCustomerInput,
-  database: CreateLeadDb = db as unknown as CreateLeadDb
+  database: CreateLeadDb = db as unknown as CreateLeadDb,
+  ownerVerified = false
 ): Promise<IdResult> {
-  if (database === (db as unknown as CreateLeadDb)) return withOrganization(user.organizationId, (tx) => createLeadCustomer(user, input, tx as unknown as CreateLeadDb));
+  if (database === (db as unknown as CreateLeadDb)) {
+    await assertOrganizationUserEligible(user.organizationId, input.ownerId, ["ADMIN", "SALES"]);
+    return withOrganization(user.organizationId, (tx) => createLeadCustomer(user, input, tx as unknown as CreateLeadDb, true));
+  }
   assertCanWriteCrmRecords(user);
-  await assertActiveOwner(database, user.organizationId, input.ownerId);
+  if (!ownerVerified) await assertActiveOwner(database, user.organizationId, input.ownerId);
 
   return database.leadCustomer.create({
     data: {
@@ -162,12 +167,16 @@ export async function updateLeadCustomer(
   user: CrmUser,
   leadCustomerId: string,
   input: LeadCustomerInput,
-  database: UpdateLeadDb = db as unknown as UpdateLeadDb
+  database: UpdateLeadDb = db as unknown as UpdateLeadDb,
+  ownerVerified = false
 ): Promise<IdResult> {
-  if (database === (db as unknown as UpdateLeadDb)) return withOrganization(user.organizationId, (tx) => updateLeadCustomer(user, leadCustomerId, input, tx as unknown as UpdateLeadDb));
+  if (database === (db as unknown as UpdateLeadDb)) {
+    await assertOrganizationUserEligible(user.organizationId, input.ownerId, ["ADMIN", "SALES"]);
+    return withOrganization(user.organizationId, (tx) => updateLeadCustomer(user, leadCustomerId, input, tx as unknown as UpdateLeadDb, true));
+  }
   assertCanWriteCrmRecords(user);
   await assertLeadExists(database, user.organizationId, leadCustomerId);
-  await assertActiveOwner(database, user.organizationId, input.ownerId);
+  if (!ownerVerified) await assertActiveOwner(database, user.organizationId, input.ownerId);
 
   return database.leadCustomer.update({
     where: { id: leadCustomerId },
@@ -214,12 +223,16 @@ export async function createContact(
 export async function createActivity(
   user: CrmUser,
   input: ActivityInput,
-  database: CreateActivityDb = db as unknown as CreateActivityDb
+  database: CreateActivityDb = db as unknown as CreateActivityDb,
+  ownerVerified = false
 ): Promise<IdResult> {
-  if (database === (db as unknown as CreateActivityDb)) return withOrganization(user.organizationId, (tx) => createActivity(user, input, tx as unknown as CreateActivityDb));
+  if (database === (db as unknown as CreateActivityDb)) {
+    await assertOrganizationUserEligible(user.organizationId, input.ownerId, ["ADMIN", "SALES"]);
+    return withOrganization(user.organizationId, (tx) => createActivity(user, input, tx as unknown as CreateActivityDb, true));
+  }
   assertCanWriteCrmRecords(user);
   await assertLeadExists(database, user.organizationId, input.leadCustomerId);
-  await assertActiveOwner(database, user.organizationId, input.ownerId);
+  if (!ownerVerified) await assertActiveOwner(database, user.organizationId, input.ownerId);
 
   if (input.branchId) {
     await assertBranchBelongsToLead(database, user.organizationId, input.leadCustomerId, input.branchId);
@@ -267,11 +280,15 @@ export async function completeActivity(
 export async function reassignLeadOwner(
   user: CrmUser,
   input: ReassignmentInput,
-  database: ReassignDb = db as unknown as ReassignDb
+  database: ReassignDb = db as unknown as ReassignDb,
+  ownerVerified = false
 ): Promise<unknown> {
-  if (database === (db as unknown as ReassignDb)) return withOrganization(user.organizationId, (tx) => reassignLeadOwner(user, input, tx as unknown as ReassignDb));
+  if (database === (db as unknown as ReassignDb)) {
+    await assertOrganizationUserEligible(user.organizationId, input.toOwnerId, ["ADMIN", "SALES"]);
+    return withOrganization(user.organizationId, (tx) => reassignLeadOwner(user, input, tx as unknown as ReassignDb, true));
+  }
   assertCanWriteCrmRecords(user);
-  await assertActiveOwner(database, user.organizationId, input.toOwnerId);
+  if (!ownerVerified) await assertActiveOwner(database, user.organizationId, input.toOwnerId);
 
   const lead = await (database.leadCustomer.findFirst ?? database.leadCustomer.findUnique!)({
     where: { id: input.leadCustomerId, organizationId: user.organizationId },

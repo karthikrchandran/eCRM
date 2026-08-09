@@ -1,6 +1,7 @@
 import type { Prisma, User } from "@prisma/client";
 import { db } from "@/server/db";
 import { withOrganization } from "@/server/organizations/with-organization";
+import { listOrganizationUserOptions } from "@/server/organizations/member-options";
 import { calculateOrderPaymentSummary } from "@/server/finance/calculations";
 import { canManageAdminSettings } from "@/server/auth/permissions";
 import type { ReportsUser } from "./types";
@@ -51,7 +52,10 @@ export async function listSalesRepOptions(
   user: ReportsUser,
   database: RepPerformanceDb = db as unknown as RepPerformanceDb
 ): Promise<SalesRepOption[]> {
-  if (database === (db as unknown as RepPerformanceDb)) return withOrganization(user.organizationId, (tx) => listSalesRepOptions(user, tx as unknown as RepPerformanceDb));
+  if (database === (db as unknown as RepPerformanceDb)) {
+    assertAdminOnly(user);
+    return listOrganizationUserOptions(user.organizationId, ["SALES"]);
+  }
   assertAdminOnly(user);
 
   return database.user.findMany({
@@ -78,15 +82,20 @@ function buildBookedAtFilter(filters: RepPerformanceFilters) {
 export async function listRepPerformanceSummaries(
   user: ReportsUser,
   filters: RepPerformanceFilters = {},
-  database: RepPerformanceDb = db as unknown as RepPerformanceDb
+  database: RepPerformanceDb = db as unknown as RepPerformanceDb,
+  preloadedReps?: SalesRepOption[]
 ): Promise<RepPerformanceSummary[]> {
-  if (database === (db as unknown as RepPerformanceDb)) return withOrganization(user.organizationId, (tx) => listRepPerformanceSummaries(user, filters, tx as unknown as RepPerformanceDb));
+  if (database === (db as unknown as RepPerformanceDb)) {
+    const reps = (await listOrganizationUserOptions(user.organizationId, ["SALES"]))
+      .filter((rep) => !filters.ownerId || rep.id === filters.ownerId);
+    return withOrganization(user.organizationId, (tx) => listRepPerformanceSummaries(user, filters, tx as unknown as RepPerformanceDb, reps));
+  }
   assertAdminOnly(user);
 
   const bookedAt = buildBookedAtFilter(filters);
 
   const [reps, orders, targets, incentives] = await Promise.all([
-    database.user.findMany({
+    preloadedReps ? Promise.resolve(preloadedReps) : database.user.findMany({
       where: { active: true, role: "SALES", memberships: { some: { organizationId: user.organizationId, status: "ACTIVE" } }, ...(filters.ownerId ? { id: filters.ownerId } : {}) },
       orderBy: { name: "asc" },
       select: { id: true, name: true, email: true }
