@@ -1,7 +1,7 @@
 export type TenantFixture = {
-  organizationId: string;
-  leadName: string;
-  contactEmail: string;
+  readonly organizationId: string;
+  readonly leadName: string;
+  readonly contactEmail: string;
 };
 
 export function tenantFixture(tenantKey: string): TenantFixture {
