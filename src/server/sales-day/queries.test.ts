@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { loadMyDay, loadMyDayInsights } from "./queries";
 import type { SalesDayUser } from "./permissions";
 
-const salesUser: SalesDayUser = { id: "sales_1", role: "SALES" };
+const salesUser: SalesDayUser = { id: "sales_1", organizationId: "org_test", role: "SALES" };
 const selectedDate = new Date("2026-06-17T10:00:00.000Z");
 
 function task(overrides: Record<string, unknown>) {

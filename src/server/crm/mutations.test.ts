@@ -8,7 +8,7 @@ import {
   reassignLeadOwner
 } from "./mutations";
 
-const actor = { id: "user_sales", role: "SALES" as const };
+const actor = { id: "user_sales", organizationId: "org_test", role: "SALES" as const };
 
 describe("crm mutations", () => {
   it("creates a lead/customer with created and updated actor metadata", async () => {
@@ -31,6 +31,7 @@ describe("crm mutations", () => {
 
     expect(create).toHaveBeenCalledWith({
       data: {
+        organizationId: "org_test",
         name: "Acme Learning Pvt Ltd",
         state: "LEAD",
         ownerId: "user_sales",
@@ -164,6 +165,7 @@ describe("crm mutations", () => {
     });
     expect(createHistory).toHaveBeenCalledWith({
       data: {
+        organizationId: "org_test",
         leadCustomerId: "lead_1",
         fromOwnerId: "user_sales",
         toOwnerId: "user_admin",

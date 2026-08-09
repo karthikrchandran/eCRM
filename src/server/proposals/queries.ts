@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { db } from "@/server/db";
+import { withOrganization } from "@/server/organizations/with-organization";
 import { assertCanViewProposals } from "./permissions";
 import type { ProposalUser } from "./types";
 
@@ -35,7 +36,7 @@ export type ProposalDetailRecord = Prisma.ProposalGetPayload<{ include: typeof p
 type ProposalQueryDb = {
   proposal: {
     findMany: (args: Prisma.ProposalFindManyArgs) => Promise<ProposalDetailRecord[]>;
-    findUnique: (args: Prisma.ProposalFindUniqueArgs) => Promise<ProposalDetailRecord | null>;
+    findFirst: (args: Prisma.ProposalFindFirstArgs) => Promise<ProposalDetailRecord | null>;
   };
 };
 
@@ -43,11 +44,12 @@ export async function listProposalsForOpportunity(
   user: ProposalUser,
   opportunityId: string,
   database: ProposalQueryDb = db as unknown as ProposalQueryDb
-) {
+): Promise<ProposalDetailRecord[]> {
+  if (database === (db as unknown as ProposalQueryDb)) return withOrganization(user.organizationId, (tx) => listProposalsForOpportunity(user, opportunityId, tx as unknown as ProposalQueryDb));
   assertCanViewProposals(user);
 
   return database.proposal.findMany({
-    where: { opportunityId },
+    where: { opportunityId, organizationId: user.organizationId },
     orderBy: [{ sequenceNumber: "desc" }],
     include: proposalInclude
   });
@@ -57,11 +59,12 @@ export async function getProposalDetail(
   user: ProposalUser,
   proposalId: string,
   database: ProposalQueryDb = db as unknown as ProposalQueryDb
-) {
+): Promise<ProposalDetailRecord | null> {
+  if (database === (db as unknown as ProposalQueryDb)) return withOrganization(user.organizationId, (tx) => getProposalDetail(user, proposalId, tx as unknown as ProposalQueryDb));
   assertCanViewProposals(user);
 
-  return database.proposal.findUnique({
-    where: { id: proposalId },
+  return database.proposal.findFirst({
+    where: { id: proposalId, organizationId: user.organizationId },
     include: proposalInclude
   });
 }

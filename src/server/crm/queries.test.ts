@@ -5,6 +5,7 @@ const requester = {
   id: "user_sales",
   name: "Sales User",
   email: "sales@example.com",
+  organizationId: "org_test",
   role: "SALES" as const,
   active: true
 };
@@ -30,7 +31,7 @@ describe("crm queries", () => {
 
     expect(findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: {}
+        where: { organizationId: "org_test" }
       })
     );
   });
@@ -56,6 +57,7 @@ describe("crm queries", () => {
     expect(findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
+          organizationId: "org_test",
           ownerId: "user_admin",
           state: "LEAD",
           OR: [
@@ -104,6 +106,7 @@ describe("crm queries", () => {
     expect(findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
+          organizationId: "org_test",
           OR: [
             { name: { contains: "anita", mode: "insensitive" } },
             { designation: { contains: "anita", mode: "insensitive" } },
@@ -151,7 +154,7 @@ describe("crm queries", () => {
 
     expect(findUnique).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: "contact_1" }
+        where: { id: "contact_1", organizationId: "org_test" }
       })
     );
     expect(result?.leadCustomer.name).toBe("Acme Learning Pvt Ltd");
@@ -201,6 +204,7 @@ describe("crm queries", () => {
     expect(workflowEventFindMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
+          organizationId: "org_test",
           OR: [{ entityId: "lead_1" }, { relatedRecordId: "lead_1" }]
         }
       })

@@ -5,7 +5,7 @@ import {
   type ExportableSharedRecordType,
   SharedRecordExportError
 } from "@/server/shared-records/export";
-import { requireSharedDataApiToken } from "@/server/shared-records/api-auth";
+import { getSharedDataOrganizationId, requireSharedDataApiToken } from "@/server/shared-records/api-auth";
 
 function badRequest(error: string) {
   return Response.json({ error }, { status: 400 });
@@ -52,6 +52,8 @@ export async function GET(request: Request) {
   if (authResponse) {
     return authResponse;
   }
+  const organizationId = getSharedDataOrganizationId();
+  if (!organizationId) return Response.json({ error: "Shared data organization is not configured." }, { status: 500 });
 
   try {
     const searchParams = new URL(request.url).searchParams;
@@ -63,7 +65,7 @@ export async function GET(request: Request) {
       return badRequest("Invalid entityType.");
     }
 
-    const page = await buildSharedRecordExportPage({
+    const page = await buildSharedRecordExportPage(organizationId, {
       entityType: entityTypeParam as ExportableSharedRecordType | undefined,
       cursor,
       limit

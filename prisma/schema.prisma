@@ -309,7 +309,7 @@ model BusinessSettings {
 
 model SharedBusinessRecord {
   id                   String                        @id @default(cuid())
-  organizationId       String?
+  organizationId       String
   entityType           SharedRecordType
   displayName          String
   status               String
@@ -337,9 +337,8 @@ model SharedBusinessRecord {
   versions             SharedBusinessRecordVersion[]
   organization         Organization?                 @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
-  @@unique([entityType, ecrmLegacyId])
-  @@unique([entityType, emailVoiceLegacyId])
-  @@unique([entityType, externalKey])
+  @@unique([organizationId, entityType, ecrmLegacyId])
+  @@unique([organizationId, entityType, emailVoiceLegacyId])
   @@unique([organizationId, entityType, externalKey])
   @@index([organizationId])
   @@index([entityType, status])
@@ -359,7 +358,7 @@ model SharedBusinessRecord {
 
 model SharedBusinessRecordVersion {
   id             String           @id @default(cuid())
-  organizationId String?
+  organizationId String
   recordId       String
   versionNumber  Int
   entityType     SharedRecordType
@@ -384,7 +383,7 @@ model SharedBusinessRecordVersion {
 
 model SharedRecordExportSnapshot {
   id             String                           @id @default(cuid())
-  organizationId String?
+  organizationId String
   entityType     SharedRecordType?
   itemCount      Int                              @default(0)
   createdAt      DateTime                         @default(now())
@@ -400,7 +399,7 @@ model SharedRecordExportSnapshot {
 model SharedRecordExportSnapshotItem {
   snapshotId     String
   position       Int
-  organizationId String?
+  organizationId String
   payload        Json
 
   snapshot     SharedRecordExportSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
@@ -412,7 +411,7 @@ model SharedRecordExportSnapshotItem {
 
 model WorkflowEvent {
   id                String        @id @default(cuid())
-  organizationId    String?
+  organizationId    String
   sourceApp         String
   sourceEventId     String?
   sourceEventType   String
@@ -427,7 +426,7 @@ model WorkflowEvent {
   updatedAt         DateTime      @updatedAt
   organization      Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
-  @@unique([sourceApp, sourceEventId])
+  @@unique([organizationId, sourceApp, sourceEventId])
   @@index([organizationId])
   @@index([sourceApp, occurredAt])
   @@index([entityType, entityId])
@@ -498,7 +497,7 @@ model User {
 
 model LeadCustomer {
   id             String    @id @default(cuid())
-  organizationId String?
+  organizationId String
   name           String
   state          LeadState @default(LEAD)
   industry       String?
@@ -533,7 +532,7 @@ model LeadCustomer {
 
 model Branch {
   id             String   @id @default(cuid())
-  organizationId String?
+  organizationId String
   leadCustomerId String
   name           String
   addressLine1   String?
@@ -563,7 +562,7 @@ model Branch {
 
 model Contact {
   id             String   @id @default(cuid())
-  organizationId String?
+  organizationId String
   leadCustomerId String
   branchId       String?
   name           String
@@ -589,7 +588,7 @@ model Contact {
 
 model Activity {
   id             String         @id @default(cuid())
-  organizationId String?
+  organizationId String
   leadCustomerId String
   branchId       String?
   contactId      String?
@@ -624,7 +623,7 @@ model Activity {
 
 model SalesTask {
   id                String            @id @default(cuid())
-  organizationId    String?
+  organizationId    String
   ownerId           String
   leadCustomerId    String?
   opportunityId     String?
@@ -665,7 +664,7 @@ model SalesTask {
 
 model SalesTextNote {
   id             String   @id @default(cuid())
-  organizationId String?
+  organizationId String
   ownerId        String
   taskId         String?
   leadCustomerId String?
@@ -695,7 +694,7 @@ model SalesTextNote {
 
 model SalesVoiceNote {
   id               String               @id @default(cuid())
-  organizationId   String?
+  organizationId   String
   ownerId          String
   taskId           String?
   leadCustomerId   String?
@@ -735,7 +734,7 @@ model SalesVoiceNote {
 
 model SalesVoiceNoteAction {
   id              String                     @id @default(cuid())
-  organizationId  String?
+  organizationId  String
   voiceNoteId     String
   createdTaskId   String?
   title           String
@@ -759,7 +758,7 @@ model SalesVoiceNoteAction {
 
 model SalesDayReview {
   id             String   @id @default(cuid())
-  organizationId String?
+  organizationId String
   ownerId        String
   reviewDate     DateTime
   notes          String?
@@ -770,14 +769,14 @@ model SalesDayReview {
   items        SalesDayReviewItem[]
   organization Organization?        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
-  @@unique([ownerId, reviewDate])
+  @@unique([organizationId, ownerId, reviewDate])
   @@index([organizationId])
   @@index([ownerId, reviewDate])
 }
 
 model SalesDayReviewItem {
   id             String                   @id @default(cuid())
-  organizationId String?
+  organizationId String
   reviewId       String
   taskId         String
   status         SalesDayReviewItemStatus
@@ -788,14 +787,14 @@ model SalesDayReviewItem {
   task         SalesTask      @relation(fields: [taskId], references: [id], onDelete: Cascade)
   organization Organization?  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
-  @@unique([reviewId, taskId])
+  @@unique([organizationId, reviewId, taskId])
   @@index([organizationId])
   @@index([taskId])
 }
 
 model LeadOwnershipHistory {
   id             String   @id @default(cuid())
-  organizationId String?
+  organizationId String
   leadCustomerId String
   fromOwnerId    String?
   toOwnerId      String
@@ -817,8 +816,8 @@ model LeadOwnershipHistory {
 
 model PipelineStage {
   id             String            @id @default(cuid())
-  organizationId String?
-  name           String            @unique
+  organizationId String
+  name           String
   sortOrder      Int
   kind           PipelineStageKind @default(OPEN)
   active         Boolean           @default(true)
@@ -829,13 +828,14 @@ model PipelineStage {
   organization  Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
   @@index([organizationId])
+  @@unique([organizationId, name])
   @@index([sortOrder])
   @@index([kind])
 }
 
 model Opportunity {
   id                String    @id @default(cuid())
-  organizationId    String?
+  organizationId    String
   leadCustomerId    String
   branchId          String?
   stageId           String
@@ -878,7 +878,7 @@ model Opportunity {
 model OpportunityOwnerSplit {
   opportunityId  String
   userId         String
-  organizationId String?
+  organizationId String
   percent        Int
 
   opportunity  Opportunity   @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
@@ -892,7 +892,7 @@ model OpportunityOwnerSplit {
 
 model SalesTarget {
   id             String   @id @default(cuid())
-  organizationId String?
+  organizationId String
   ownerId        String
   financialYear  Int
   quarter        Int
@@ -905,16 +905,16 @@ model SalesTarget {
   createdBy    User          @relation("SalesTargetCreatedBy", fields: [createdById], references: [id])
   organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
-  @@unique([ownerId, financialYear, quarter])
+  @@unique([organizationId, ownerId, financialYear, quarter])
   @@index([organizationId])
   @@index([financialYear, quarter])
 }
 
 model ProductService {
   id                           String   @id @default(cuid())
-  organizationId               String?
+  organizationId               String
   name                         String
-  code                         String?  @unique
+  code                         String?
   category                     String
   description                  String?
   defaultGstRateBps            Int      @default(1800)
@@ -933,6 +933,7 @@ model ProductService {
   organization      Organization?      @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
   @@index([organizationId])
+  @@unique([organizationId, code])
   @@index([active, sortOrder])
   @@index([category])
   @@index([name])
@@ -940,7 +941,7 @@ model ProductService {
 
 model Proposal {
   id                String         @id @default(cuid())
-  organizationId    String?
+  organizationId    String
   opportunityId     String
   title             String
   sequenceNumber    Int
@@ -974,7 +975,7 @@ model Proposal {
   salesVoiceNotes SalesVoiceNote[]
   organization    Organization?           @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
-  @@unique([opportunityId, sequenceNumber])
+  @@unique([organizationId, opportunityId, sequenceNumber])
   @@index([organizationId])
   @@index([opportunityId])
   @@index([status])
@@ -983,7 +984,7 @@ model Proposal {
 
 model ProposalLineItem {
   id                      String   @id @default(cuid())
-  organizationId          String?
+  organizationId          String
   proposalId              String
   productServiceId        String
   productNameSnapshot     String
@@ -1012,7 +1013,7 @@ model ProposalLineItem {
 
 model ProposalPdfAttachment {
   id               String    @id @default(cuid())
-  organizationId   String?
+  organizationId   String
   proposalId       String
   originalFileName String
   storedFileName   String
@@ -1037,8 +1038,8 @@ model ProposalPdfAttachment {
 
 model Order {
   id              String      @id @default(cuid())
-  organizationId  String?
-  orderNumber     String      @unique
+  organizationId  String
+  orderNumber     String
   proposalId      String      @unique
   opportunityId   String
   leadCustomerId  String
@@ -1081,6 +1082,7 @@ model Order {
   organization    Organization?             @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
   @@index([organizationId])
+  @@unique([organizationId, orderNumber])
   @@index([status])
   @@index([ownerId])
   @@index([leadCustomerId])
@@ -1091,7 +1093,7 @@ model Order {
 
 model OrderLineItem {
   id                            String   @id @default(cuid())
-  organizationId                String?
+  organizationId                String
   orderId                       String
   proposalLineItemId            String   @unique
   productServiceId              String?
@@ -1126,7 +1128,7 @@ model OrderLineItem {
 model OrderOwnerSplitSnapshot {
   orderId        String
   userId         String
-  organizationId String?
+  organizationId String
   percent        Int
 
   order        Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
@@ -1140,8 +1142,8 @@ model OrderOwnerSplitSnapshot {
 
 model ProductionTemplate {
   id             String   @id @default(cuid())
-  organizationId String?
-  key            String   @unique
+  organizationId String
+  key            String
   name           String
   description    String?
   active         Boolean  @default(true)
@@ -1154,12 +1156,13 @@ model ProductionTemplate {
   organization Organization?             @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
   @@index([organizationId])
+  @@unique([organizationId, key])
   @@index([active, sortOrder])
 }
 
 model ProductionTemplateStage {
   id                  String   @id @default(cuid())
-  organizationId      String?
+  organizationId      String
   templateId          String
   key                 String
   name                String
@@ -1174,14 +1177,14 @@ model ProductionTemplateStage {
   stageInstances ProductionStageInstance[]
   organization   Organization?             @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
-  @@unique([templateId, key])
+  @@unique([organizationId, templateId, key])
   @@index([organizationId])
   @@index([templateId, sortOrder])
 }
 
 model ProductionWorkItem {
   id                      String                @id @default(cuid())
-  organizationId          String?
+  organizationId          String
   orderLineItemId         String
   productionTemplateId    String?
   title                   String
@@ -1217,7 +1220,7 @@ model ProductionWorkItem {
 
 model ProductionStageInstance {
   id              String                @id @default(cuid())
-  organizationId  String?
+  organizationId  String
   workItemId      String
   templateStageId String?
   name            String
@@ -1251,7 +1254,7 @@ model ProductionStageInstance {
 
 model ProductionNote {
   id              String   @id @default(cuid())
-  organizationId  String?
+  organizationId  String
   workItemId      String
   stageInstanceId String?
   body            String
@@ -1272,9 +1275,9 @@ model ProductionNote {
 
 model Invoice {
   id             String        @id @default(cuid())
-  organizationId String?
+  organizationId String
   orderId        String
-  invoiceNumber  String        @unique
+  invoiceNumber  String
   invoiceDate    DateTime
   dueDate        DateTime?
   status         InvoiceStatus @default(DRAFT)
@@ -1297,6 +1300,7 @@ model Invoice {
   organization Organization?       @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
   @@index([organizationId])
+  @@unique([organizationId, invoiceNumber])
   @@index([orderId])
   @@index([status])
   @@index([dueDate])
@@ -1305,7 +1309,7 @@ model Invoice {
 
 model Payment {
   id             String      @id @default(cuid())
-  organizationId String?
+  organizationId String
   orderId        String
   paymentDate    DateTime
   amountPaisa    Int
@@ -1329,7 +1333,7 @@ model Payment {
 
 model PaymentAllocation {
   id             String   @id @default(cuid())
-  organizationId String?
+  organizationId String
   paymentId      String
   invoiceId      String
   amountPaisa    Int
@@ -1346,7 +1350,7 @@ model PaymentAllocation {
 
 model CostComponent {
   id              String              @id @default(cuid())
-  organizationId  String?
+  organizationId  String
   orderId         String
   orderLineItemId String?
   category        String
@@ -1384,7 +1388,7 @@ model CostComponent {
 
 model Incentive {
   id                     String          @id @default(cuid())
-  organizationId         String?
+  organizationId         String
   orderId                String          @unique
   grossMarginPaisa       Int
   approvedCostTotalPaisa Int
@@ -1424,7 +1428,7 @@ model Incentive {
 model IncentiveSplit {
   incentiveId    String
   userId         String
-  organizationId String?
+  organizationId String
   percent        Int
   amountPaisa    Int
 

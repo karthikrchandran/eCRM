@@ -1,20 +1,20 @@
 import { describe, expect, it, vi } from "vitest";
 import { getOrderDetail, listOrders, loadAcceptedProposalForBooking } from "./queries";
 
-const sales = { id: "user_sales", role: "SALES" as const };
+const sales = { id: "user_sales", organizationId: "org_test", role: "SALES" as const };
 
 describe("order booking queries", () => {
   it("lists orders with customer, owner, proposal, and line counts", async () => {
     const findMany = vi.fn().mockResolvedValue([{ id: "order_1", orderNumber: "ORD-2026-0001" }]);
 
     await listOrders(sales, {}, {
-      order: { findMany, findUnique: vi.fn() },
+      order: { findMany, findFirst: vi.fn() },
       proposal: { findFirst: vi.fn() }
     });
 
     expect(findMany).toHaveBeenCalledWith({
       orderBy: [{ bookedAt: "desc" }],
-      where: {},
+      where: { organizationId: "org_test" },
       include: expect.any(Object)
     });
   });
@@ -23,13 +23,14 @@ describe("order booking queries", () => {
     const findMany = vi.fn().mockResolvedValue([]);
 
     await listOrders(sales, { financialYear: 2026, quarter: 2 }, {
-      order: { findMany, findUnique: vi.fn() },
+      order: { findMany, findFirst: vi.fn() },
       proposal: { findFirst: vi.fn() }
     });
 
     expect(findMany).toHaveBeenCalledWith({
       orderBy: [{ bookedAt: "desc" }],
       where: {
+        organizationId: "org_test",
         bookedAt: {
           gte: new Date("2026-04-01T00:00:00.000Z"),
           lte: new Date("2026-06-30T23:59:59.999Z")
@@ -40,15 +41,15 @@ describe("order booking queries", () => {
   });
 
   it("loads order detail by id", async () => {
-    const findUnique = vi.fn().mockResolvedValue({ id: "order_1", orderNumber: "ORD-2026-0001" });
+    const findFirst = vi.fn().mockResolvedValue({ id: "order_1", orderNumber: "ORD-2026-0001" });
 
     await getOrderDetail(sales, "order_1", {
-      order: { findMany: vi.fn(), findUnique },
+      order: { findMany: vi.fn(), findFirst },
       proposal: { findFirst: vi.fn() }
     });
 
-    expect(findUnique).toHaveBeenCalledWith({
-      where: { id: "order_1" },
+    expect(findFirst).toHaveBeenCalledWith({
+      where: { id: "order_1", organizationId: "org_test" },
       include: expect.any(Object)
     });
   });
@@ -78,7 +79,7 @@ describe("order booking queries", () => {
     });
 
     expect(findFirst).toHaveBeenCalledWith({
-      where: { id: "proposal_accepted", status: "ACCEPTED" },
+      where: { id: "proposal_accepted", organizationId: "org_test", status: "ACCEPTED" },
       include: expect.any(Object)
     });
     expect(proposal?.opportunity.splits).toHaveLength(1);
@@ -95,7 +96,7 @@ describe("order booking queries", () => {
     });
 
     expect(findFirst).toHaveBeenCalledWith({
-      where: { id: "proposal_draft", status: "ACCEPTED" },
+      where: { id: "proposal_draft", organizationId: "org_test", status: "ACCEPTED" },
       include: expect.any(Object)
     });
     expect(proposal).toBeNull();

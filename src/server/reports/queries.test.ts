@@ -1,8 +1,8 @@
 import { describe, expect, test, vi } from "vitest";
 import { getReportsOverview } from "./queries";
 
-const admin = { id: "admin", email: "admin@example.com", name: "Admin User", role: "ADMIN" as const };
-const sales = { id: "sales", email: "sales@example.com", name: "Sales User", role: "SALES" as const };
+const admin = { id: "admin", email: "admin@example.com", name: "Admin User", organizationId: "org_test", role: "ADMIN" as const };
+const sales = { id: "sales", email: "sales@example.com", name: "Sales User", organizationId: "org_test", role: "SALES" as const };
 
 function createDatabase() {
   return {

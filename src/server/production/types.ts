@@ -2,6 +2,7 @@ import type { OrderStatus, OrganizationRole, ProductionStageStatus } from "@pris
 
 export type ProductionUser = {
   id: string;
+  organizationId: string;
   role: OrganizationRole;
 };
 

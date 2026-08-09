@@ -10,13 +10,13 @@ import {
 } from "./mutations";
 import type { SalesDayUser } from "./permissions";
 
-const salesUser: SalesDayUser = { id: "sales_1", role: "SALES" };
+const salesUser: SalesDayUser = { id: "sales_1", organizationId: "org_test", role: "SALES" };
 
 describe("sales-day mutations", () => {
   it("completes a salesperson's task with completed timestamp", async () => {
     const database = {
       salesTask: {
-        findUnique: vi.fn().mockResolvedValue({ id: "task_1", ownerId: "sales_1" }),
+        findFirst: vi.fn().mockResolvedValue({ id: "task_1", ownerId: "sales_1" }),
         update: vi.fn().mockResolvedValue({ id: "task_1" })
       }
     };
@@ -37,7 +37,7 @@ describe("sales-day mutations", () => {
   it("reopens a completed task and clears completion state", async () => {
     const database = {
       salesTask: {
-        findUnique: vi.fn().mockResolvedValue({ id: "task_1", ownerId: "sales_1" }),
+        findFirst: vi.fn().mockResolvedValue({ id: "task_1", ownerId: "sales_1" }),
         update: vi.fn().mockResolvedValue({ id: "task_1" })
       }
     };
@@ -58,7 +58,7 @@ describe("sales-day mutations", () => {
   it("accepts a draft suggested action by creating one task and marking the action accepted", async () => {
     const database = {
       salesVoiceNoteAction: {
-        findUnique: vi.fn().mockResolvedValue({
+        findFirst: vi.fn().mockResolvedValue({
           id: "action_1",
           status: "DRAFT",
           title: "Send pricing sheet",
@@ -86,6 +86,7 @@ describe("sales-day mutations", () => {
 
     expect(database.salesTask.create).toHaveBeenCalledWith({
       data: {
+        organizationId: "org_test",
         ownerId: "sales_1",
         leadCustomerId: "lead_1",
         opportunityId: "opp_1",
@@ -112,7 +113,7 @@ describe("sales-day mutations", () => {
   it("does not create a second task when accepting an already accepted action", async () => {
     const database = {
       salesVoiceNoteAction: {
-        findUnique: vi.fn().mockResolvedValue({
+        findFirst: vi.fn().mockResolvedValue({
           id: "action_1",
           status: "ACCEPTED",
           createdTaskId: "existing_task",
@@ -138,7 +139,7 @@ describe("sales-day mutations", () => {
         upsert: vi.fn().mockResolvedValue({ id: "item_1" })
       },
       salesTask: {
-        findUnique: vi.fn().mockResolvedValue({
+        findFirst: vi.fn().mockResolvedValue({
           id: "task_1",
           ownerId: "sales_1",
           leadCustomerId: "lead_1",
@@ -184,7 +185,7 @@ describe("sales-day mutations", () => {
   it("rejects mutation attempts for another salesperson's task", async () => {
     const database = {
       salesTask: {
-        findUnique: vi.fn().mockResolvedValue({ id: "task_1", ownerId: "other_sales" }),
+        findFirst: vi.fn().mockResolvedValue({ id: "task_1", ownerId: "other_sales" }),
         update: vi.fn()
       }
     };
@@ -214,6 +215,7 @@ describe("sales-day mutations", () => {
 
     expect(database.salesTextNote.create).toHaveBeenCalledWith({
       data: {
+        organizationId: "org_test",
         body: "Client prefers USD pricing with tax entered manually.",
         ownerId: "sales_1",
         leadCustomerId: "lead_1",
@@ -229,7 +231,7 @@ describe("sales-day mutations", () => {
   it("updates and deletes only notes owned by the signed-in salesperson", async () => {
     const database = {
       salesTextNote: {
-        findUnique: vi.fn().mockResolvedValue({ id: "text_note_1", ownerId: "sales_1" }),
+        findFirst: vi.fn().mockResolvedValue({ id: "text_note_1", ownerId: "sales_1" }),
         update: vi.fn().mockResolvedValue({ id: "text_note_1" }),
         delete: vi.fn().mockResolvedValue({ id: "text_note_1" })
       }

@@ -5,6 +5,7 @@ export type ReportsUser = {
   email: string;
   id: string;
   name: string;
+  organizationId: string;
   role: OrganizationRole;
 };
 

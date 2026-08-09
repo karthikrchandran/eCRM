@@ -2,6 +2,7 @@ import type { OrganizationRole, ProposalStatus } from "@prisma/client";
 
 export type ProposalUser = {
   id: string;
+  organizationId: string;
   role: OrganizationRole;
 };
 

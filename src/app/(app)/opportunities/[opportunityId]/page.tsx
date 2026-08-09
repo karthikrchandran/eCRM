@@ -42,7 +42,7 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
   const { opportunityId } = await params;
   const [opportunity, options, proposals] = await Promise.all([
     getOpportunityDetail(user, opportunityId),
-    listOpportunityFormOptions(),
+    listOpportunityFormOptions(user),
     listProposalsForOpportunity(user, opportunityId)
   ]);
 

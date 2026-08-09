@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { instantiateProductionForOrderLineItem, updateProductionStageStatus } from "./mutations";
 
-const actor = { id: "user_sales", role: "SALES" as const };
+const actor = { id: "user_sales", organizationId: "org_test", role: "SALES" as const };
 
 const orderLineItem = {
   id: "order_line_1",
@@ -43,10 +43,10 @@ describe("production mutations", () => {
 
     const workItem = await instantiateProductionForOrderLineItem(actor, "order_line_1", {
       orderLineItem: {
-        findUnique: vi.fn().mockResolvedValue(orderLineItem)
+        findFirst: vi.fn().mockResolvedValue(orderLineItem)
       },
       productionTemplate: {
-        findUnique: vi.fn().mockResolvedValue(productionTemplate)
+        findFirst: vi.fn().mockResolvedValue(productionTemplate)
       },
       productionWorkItem: {
         findFirst: vi.fn().mockResolvedValue(null),
@@ -67,6 +67,7 @@ describe("production mutations", () => {
     expect(workItem).toEqual({ id: "work_item_1" });
     expect(create).toHaveBeenCalledWith({
       data: {
+        organizationId: "org_test",
         orderLineItemId: "order_line_1",
         productionTemplateId: "template_1",
         title: "ORD-0001 - Custom eLearning module",
@@ -78,6 +79,7 @@ describe("production mutations", () => {
         stageInstances: {
           create: [
             {
+              organizationId: "org_test",
               templateStageId: "template_stage_script",
               name: "Script",
               description: "Write the script",
@@ -86,6 +88,7 @@ describe("production mutations", () => {
               status: "NOT_STARTED"
             },
             {
+              organizationId: "org_test",
               templateStageId: "template_stage_review",
               name: "Review",
               description: null,
@@ -104,8 +107,8 @@ describe("production mutations", () => {
     const create = vi.fn();
 
     const workItem = await instantiateProductionForOrderLineItem(actor, "order_line_1", {
-      orderLineItem: { findUnique: vi.fn() },
-      productionTemplate: { findUnique: vi.fn() },
+      orderLineItem: { findFirst: vi.fn() },
+      productionTemplate: { findFirst: vi.fn() },
       productionWorkItem: {
         findFirst: vi.fn().mockResolvedValue(existing),
         create,
@@ -132,7 +135,7 @@ describe("production mutations", () => {
       { status: "DONE", noteBody: "Script signed off" },
       {
         productionStageInstance: {
-          findUnique: vi.fn().mockResolvedValue({
+          findFirst: vi.fn().mockResolvedValue({
             id: "stage_1",
             workItemId: "work_item_1",
             status: "IN_PROGRESS",
@@ -189,6 +192,7 @@ describe("production mutations", () => {
     });
     expect(noteCreate).toHaveBeenCalledWith({
       data: {
+        organizationId: "org_test",
         workItemId: "work_item_1",
         stageInstanceId: "stage_1",
         body: "Script signed off",
@@ -223,7 +227,7 @@ describe("production mutations", () => {
       { status: "BLOCKED" },
       {
         productionStageInstance: {
-          findUnique: vi.fn().mockResolvedValue({
+          findFirst: vi.fn().mockResolvedValue({
             id: "stage_1",
             workItemId: "work_item_1",
             status: "NOT_STARTED",

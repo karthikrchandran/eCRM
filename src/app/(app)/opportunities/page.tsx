@@ -18,7 +18,7 @@ export default async function OpportunitiesPage({
     followUp: rawSearchParams.followUp,
     view: rawSearchParams.view
   });
-  const optionsPromise = listOpportunityFormOptions();
+  const optionsPromise = listOpportunityFormOptions(user);
 
   if (filters.view === "board") {
     const [options, board, records] = await Promise.all([optionsPromise, listPipelineBoard(user, filters), listOpportunities(user, filters)]);

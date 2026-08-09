@@ -3,6 +3,7 @@ import { listOpportunities, listPipelineBoard } from "./queries";
 
 const requester = {
   id: "user_sales",
+  organizationId: "org_test",
   role: "SALES" as const
 };
 
@@ -21,7 +22,7 @@ describe("opportunity queries", () => {
 
     expect(findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: {}
+        where: { organizationId: "org_test" }
       })
     );
   });

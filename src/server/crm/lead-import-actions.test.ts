@@ -7,7 +7,7 @@ vi.mock("next/cache", () => ({
   revalidatePath: vi.fn()
 }));
 
-const actor = { id: "user_admin", role: "ADMIN" as const };
+const actor = { id: "user_admin", organizationId: "org_test", role: "ADMIN" as const };
 const csvText = `${LEAD_IMPORT_HEADERS.join(",")}\nAcme,LEAD,sales@example.com,,,,,,,,,,,,,,,,,,,,`;
 
 function formData(file: File, intent: "preview" | "import") {

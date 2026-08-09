@@ -3,6 +3,7 @@ import { canViewCompanyRecords } from "@/server/auth/permissions";
 
 export type OpportunityUser = {
   id: string;
+  organizationId: string;
   role: OrganizationRole;
 };
 

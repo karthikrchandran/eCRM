@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/server/auth/current-user";
-import { db } from "@/server/db";
+import { withOrganization } from "@/server/organizations/with-organization";
 import { assertOwnsSalesVoiceNote } from "@/server/sales-day/permissions";
 import { contentTypeForAudio, readVoiceNoteAudio } from "@/server/sales-day/storage";
 
@@ -11,10 +11,12 @@ type RouteContext = {
 export async function GET(_request: Request, context: RouteContext) {
   const user = await requireUser();
   const { voiceNoteId } = await context.params;
-  const note = await db.salesVoiceNote.findUnique({
-    where: { id: voiceNoteId },
-    select: { id: true, ownerId: true, audioStorageKey: true, mimeType: true }
-  });
+  const note = await withOrganization(user.organizationId, (transaction) =>
+    transaction.salesVoiceNote.findFirst({
+      where: { id: voiceNoteId, organizationId: user.organizationId },
+      select: { id: true, ownerId: true, audioStorageKey: true, mimeType: true }
+    })
+  );
 
   if (!note) {
     return NextResponse.json({ error: "Voice note was not found." }, { status: 404 });

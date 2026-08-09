@@ -11,8 +11,8 @@ import {
   updateInvoice
 } from "./mutations";
 
-const admin = { id: "admin", role: "ADMIN" as const };
-const sales = { id: "sales", role: "SALES" as const };
+const admin = { id: "admin", organizationId: "org_test", role: "ADMIN" as const };
+const sales = { id: "sales", organizationId: "org_test", role: "SALES" as const };
 
 const order = {
   id: "order_1",
@@ -91,10 +91,11 @@ describe("finance mutations", () => {
 
     expect(paymentCreate).toHaveBeenCalledWith({
       data: expect.objectContaining({
-        allocations: { create: [{ amountPaisa: 118000, invoiceId: "invoice_1" }] },
+        allocations: { create: [{ amountPaisa: 118000, invoiceId: "invoice_1", organizationId: "org_test" }] },
         amountPaisa: 118000,
         createdById: "admin",
-        orderId: "order_1"
+        orderId: "order_1",
+        organizationId: "org_test"
       })
     });
     expect(invoiceUpdate).toHaveBeenCalledWith({ where: { id: "invoice_1" }, data: { status: "PAID", updatedById: "admin" } });
@@ -104,7 +105,7 @@ describe("finance mutations", () => {
         calculatedAmountPaisa: 5000,
         payableAmountPaisa: 5000,
         status: "READY_FOR_REVIEW",
-        splits: { create: [{ amountPaisa: 5000, percent: 100, userId: "sales" }] }
+        splits: { create: [{ amountPaisa: 5000, percent: 100, userId: "sales", organizationId: "org_test" }] }
       }),
       update: expect.objectContaining({
         calculatedAmountPaisa: 5000,
@@ -245,21 +246,21 @@ describe("finance mutations", () => {
       }
     );
 
-    expect(splitDeleteMany).toHaveBeenCalledWith({ where: { incentiveId: "incentive_1" } });
+    expect(splitDeleteMany).toHaveBeenCalledWith({ where: { incentiveId: "incentive_1", organizationId: "org_test" } });
     expect(splitCreateMany).toHaveBeenCalledWith({
       data: [
-        { amountPaisa: 6000, incentiveId: "incentive_1", percent: 60, userId: "sales_a" },
-        { amountPaisa: 4000, incentiveId: "incentive_1", percent: 40, userId: "sales_b" }
+        { amountPaisa: 6000, incentiveId: "incentive_1", organizationId: "org_test", percent: 60, userId: "sales_a" },
+        { amountPaisa: 4000, incentiveId: "incentive_1", organizationId: "org_test", percent: 40, userId: "sales_b" }
       ]
     });
 
-    await rejectIncentive(admin, "incentive_1", "Margin dispute", { incentive: { update: incentiveUpdate } });
+    await rejectIncentive(admin, "incentive_1", "Margin dispute", { incentive: { findFirst: vi.fn().mockResolvedValue({ id: "incentive_1" }), update: incentiveUpdate } });
     expect(incentiveUpdate).toHaveBeenCalledWith({
       where: { id: "incentive_1" },
       data: expect.objectContaining({ rejectedById: "admin", rejectionReason: "Margin dispute", status: "REJECTED" })
     });
 
-    await markIncentivePaid(admin, "incentive_1", "PAY-1", { incentive: { update: incentiveUpdate } });
+    await markIncentivePaid(admin, "incentive_1", "PAY-1", { incentive: { findFirst: vi.fn().mockResolvedValue({ id: "incentive_1" }), update: incentiveUpdate } });
     expect(incentiveUpdate).toHaveBeenCalledWith({
       where: { id: "incentive_1" },
       data: expect.objectContaining({ paidById: "admin", paymentReference: "PAY-1", status: "PAID" })

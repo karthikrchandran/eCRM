@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { db } from "@/server/db";
+import { withOrganization } from "@/server/organizations/with-organization";
 import { assertCanWriteCrmRecords, type CrmUser } from "./permissions";
 import { createBranch, createContact, createLeadCustomer } from "./mutations";
 import type { BranchInput, ContactInput, LeadCustomerInput } from "./types";
@@ -78,7 +79,7 @@ type OwnerLookupDb = {
 type LeadImportTransactionDb = OwnerLookupDb & {
   leadCustomer: {
     create: (args: Prisma.LeadCustomerCreateArgs) => Promise<IdResult>;
-    findUnique: (args: Prisma.LeadCustomerFindUniqueArgs) => Promise<IdResult | null>;
+    findFirst: (args: Prisma.LeadCustomerFindFirstArgs) => Promise<IdResult | null>;
   };
   branch: {
     create: (args: Prisma.BranchCreateArgs) => Promise<IdResult>;
@@ -302,9 +303,9 @@ function hasContactData(row: LeadImportCsvRow, isPrimary: boolean, primaryRaw: s
   ].some((value) => Boolean(clean(value))) || (isPrimary && Boolean(clean(primaryRaw)));
 }
 
-async function resolveOwner(database: OwnerLookupDb, ownerEmail: string) {
+async function resolveOwner(database: OwnerLookupDb, organizationId: string, ownerEmail: string) {
   return database.user.findFirst({
-    where: { email: ownerEmail, active: true, role: { in: ["ADMIN", "SALES"] } },
+    where: { email: ownerEmail, active: true, role: { in: ["ADMIN", "SALES"] }, memberships: { some: { organizationId, status: "ACTIVE" } } },
     select: { id: true }
   });
 }
@@ -325,7 +326,7 @@ async function prepareRow(
     addZodErrors(rowNumber, ownerEmailResult.error, errors, { "": "ownerEmail" });
   }
 
-  const owner = ownerEmailResult.success ? await resolveOwner(database, ownerEmailResult.data) : null;
+  const owner = ownerEmailResult.success ? await resolveOwner(database, user.organizationId, ownerEmailResult.data) : null;
   if (ownerEmailResult.success && !owner) {
     errors.push({ rowNumber, field: "ownerEmail", reason: "Choose an active Admin or Sales owner." });
   }
@@ -438,6 +439,7 @@ export async function previewLeadImportCsv(
   csvText: string,
   database: LeadImportDatabase = db as unknown as LeadImportDatabase
 ): Promise<LeadImportPreviewResult> {
+  if (database === (db as unknown as LeadImportDatabase)) return withOrganization(user.organizationId, (tx) => previewLeadImportCsv(user, csvText, tx as unknown as LeadImportDatabase));
   assertCanWriteCrmRecords(user);
   const parsed = parseCsv(csvText);
 
@@ -512,7 +514,7 @@ export async function importLeadCsv(
         throw new Error("CSV import requires transaction support.");
       }
 
-      await database.$transaction(async (tx) => {
+      const importRow = async (tx: LeadImportTransactionDb) => {
         const lead = await createLeadCustomer(user, row.lead, tx);
         let branchId: string | undefined;
 
@@ -524,7 +526,12 @@ export async function importLeadCsv(
         if (row.contact) {
           await createContact(user, { ...row.contact, leadCustomerId: lead.id, branchId }, tx);
         }
-      });
+      };
+      if (database === (db as unknown as LeadImportDatabase)) {
+        await withOrganization(user.organizationId, (tx) => importRow(tx as unknown as LeadImportTransactionDb));
+      } else {
+        await database.$transaction(importRow);
+      }
       importedRows += 1;
     } catch (error) {
       errors.push({

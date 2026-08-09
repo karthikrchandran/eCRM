@@ -7,7 +7,7 @@ import {
   type LeadImportDatabase
 } from "./lead-import";
 
-const actor = { id: "user_admin", role: "ADMIN" as const };
+const actor = { id: "user_admin", organizationId: "org_test", role: "ADMIN" as const };
 
 function csv(rows: string[][]) {
   return [LEAD_IMPORT_HEADERS.join(","), ...rows.map((row) => row.map(csvCell).join(","))].join("\n");

@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { listActiveProductServices, listProductServicesForAdmin } from "./queries";
 
-const admin = { id: "user_admin", role: "ADMIN" as const };
-const sales = { id: "user_sales", role: "SALES" as const };
+const admin = { id: "user_admin", organizationId: "org_test", role: "ADMIN" as const };
+const sales = { id: "user_sales", organizationId: "org_test", role: "SALES" as const };
 
 describe("product service queries", () => {
   it("lets Sales read active catalog items for proposal creation", async () => {
@@ -13,7 +13,7 @@ describe("product service queries", () => {
     });
 
     expect(findMany).toHaveBeenCalledWith({
-      where: { active: true },
+      where: { organizationId: "org_test", active: true },
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
       select: expect.any(Object)
     });
@@ -27,6 +27,7 @@ describe("product service queries", () => {
     });
 
     expect(findMany).toHaveBeenCalledWith({
+      where: { organizationId: "org_test" },
       orderBy: [{ active: "desc" }, { sortOrder: "asc" }, { name: "asc" }],
       select: expect.any(Object)
     });

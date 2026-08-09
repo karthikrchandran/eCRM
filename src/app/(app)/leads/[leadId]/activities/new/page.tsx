@@ -7,7 +7,7 @@ import { getLeadCustomerDetail, listCrmOwners } from "@/server/crm/queries";
 export default async function NewActivityPage({ params }: { params: Promise<{ leadId: string }> }) {
   const user = await requireUser();
   const { leadId } = await params;
-  const [lead, owners] = await Promise.all([getLeadCustomerDetail(user, leadId), listCrmOwners()]);
+  const [lead, owners] = await Promise.all([getLeadCustomerDetail(user, leadId), listCrmOwners(user)]);
 
   if (!lead) {
     notFound();

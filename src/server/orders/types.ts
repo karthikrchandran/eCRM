@@ -2,6 +2,7 @@ import type { OrderStatus, OrganizationRole } from "@prisma/client";
 
 export type OrderUser = {
   id: string;
+  organizationId: string;
   role: OrganizationRole;
 };
 

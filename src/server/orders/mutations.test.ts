@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { changeOrderStatus, createOrderFromAcceptedProposal, updateOrderPoMetadata } from "./mutations";
 
-const admin = { id: "user_admin", role: "ADMIN" as const };
+const admin = { id: "user_admin", organizationId: "org_test", role: "ADMIN" as const };
 
 const acceptedProposal = {
   id: "proposal_accepted",
@@ -61,7 +61,7 @@ function createDatabase({
     order: {
       count: vi.fn().mockResolvedValue(0),
       create: vi.fn().mockResolvedValue({ id: "order_1", orderNumber: "ORD-2026-0001" }),
-      findUnique: vi.fn().mockResolvedValue(existingOrder)
+      findFirst: vi.fn().mockResolvedValue(existingOrder)
     },
     proposal: {
       findFirst: vi.fn().mockResolvedValue(proposal)
@@ -129,7 +129,9 @@ describe("order mutations", () => {
         proposalLineItemId: "line_1"
       })
     ]);
-    expect(tx.order.create.mock.calls[0]?.[0].data.splitSnapshots.create).toEqual([{ percent: 100, userId: "user_sales" }]);
+    expect(tx.order.create.mock.calls[0]?.[0].data.splitSnapshots.create).toEqual([
+      { organizationId: "org_test", percent: 100, userId: "user_sales" }
+    ]);
   });
 
   it("updates PO metadata without touching commercial fields", async () => {
@@ -139,7 +141,7 @@ describe("order mutations", () => {
       admin,
       "order_1",
       { poFileSizeBytes: 2048, poNumber: "PO-1001" },
-      { order: { update } }
+      { order: { findFirst: vi.fn().mockResolvedValue({ id: "order_1" }), update } }
     );
 
     expect(update).toHaveBeenCalledWith({
@@ -151,7 +153,9 @@ describe("order mutations", () => {
   it("changes order status", async () => {
     const update = vi.fn().mockResolvedValue({ id: "order_1", status: "IN_PRODUCTION" });
 
-    await changeOrderStatus(admin, "order_1", "IN_PRODUCTION", { order: { update } });
+    await changeOrderStatus(admin, "order_1", "IN_PRODUCTION", {
+      order: { findFirst: vi.fn().mockResolvedValue({ id: "order_1" }), update }
+    });
 
     expect(update).toHaveBeenCalledWith({
       where: { id: "order_1" },

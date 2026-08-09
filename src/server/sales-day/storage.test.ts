@@ -32,6 +32,7 @@ describe("sales-day voice note storage", () => {
     const { saveVoiceNoteAudio } = await import("./storage");
 
     const saved = await saveVoiceNoteAudio({
+      organizationId: "org_test",
       ownerId: "sales_1",
       voiceNoteId: "note_1",
       originalFileName: "note.webm",
@@ -40,20 +41,21 @@ describe("sales-day voice note storage", () => {
       now: new Date("2026-06-23T12:00:00.000Z")
     });
 
-    expect(saved.storageKey).toBe("sales_1/2026-06/note_1.webm");
+    expect(saved.storageKey).toBe("organizations/org_test/sales-voice-notes/sales_1/2026-06/note_1.webm");
     expect(blobPut).not.toHaveBeenCalled();
-    await expect(readFile(path.join(tempDir, "sales_1", "2026-06", "note_1.webm"), "utf8")).resolves.toBe("audio");
+    await expect(readFile(path.join(tempDir, "organizations", "org_test", "sales-voice-notes", "sales_1", "2026-06", "note_1.webm"), "utf8")).resolves.toBe("audio");
   });
 
   it("uses private Vercel Blob storage when BLOB_READ_WRITE_TOKEN is configured", async () => {
     process.env.BLOB_READ_WRITE_TOKEN = "vercel_blob_rw_test";
     blobPut.mockResolvedValue({
-      pathname: "sales_1/2026-06/note_1.webm",
-      url: "https://store.private.blob.vercel-storage.com/sales_1/2026-06/note_1.webm"
+      pathname: "organizations/org_test/sales-voice-notes/sales_1/2026-06/note_1.webm",
+      url: "https://store.private.blob.vercel-storage.com/organizations/org_test/sales-voice-notes/sales_1/2026-06/note_1.webm"
     });
     const { saveVoiceNoteAudio } = await import("./storage");
 
     const saved = await saveVoiceNoteAudio({
+      organizationId: "org_test",
       ownerId: "sales_1",
       voiceNoteId: "note_1",
       originalFileName: "note.webm",
@@ -62,8 +64,8 @@ describe("sales-day voice note storage", () => {
       now: new Date("2026-06-23T12:00:00.000Z")
     });
 
-    expect(saved.storageKey).toBe("vercel-blob:sales_1/2026-06/note_1.webm");
-    expect(blobPut).toHaveBeenCalledWith("sales_1/2026-06/note_1.webm", Buffer.from("audio"), {
+    expect(saved.storageKey).toBe("vercel-blob:organizations/org_test/sales-voice-notes/sales_1/2026-06/note_1.webm");
+    expect(blobPut).toHaveBeenCalledWith("organizations/org_test/sales-voice-notes/sales_1/2026-06/note_1.webm", Buffer.from("audio"), {
       access: "private",
       allowOverwrite: true,
       contentType: "audio/webm"

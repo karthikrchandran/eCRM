@@ -27,7 +27,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ lea
   const { leadId } = await params;
   const [lead, owners, timeline] = await Promise.all([
     getLeadCustomerDetail(user, leadId),
-    listCrmOwners(),
+    listCrmOwners(user),
     getCustomer360Timeline(user, leadId)
   ]);
 

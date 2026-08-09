@@ -48,6 +48,7 @@ describe("upsertSharedRecord", () => {
     };
 
     const result = await upsertSharedRecord(
+      "org_test",
       {
         entityType: "CUSTOMER",
         displayName: "Acme Learning",
@@ -93,6 +94,7 @@ describe("upsertSharedRecord", () => {
 
     await expect(
       upsertSharedRecord(
+        "org_test",
         {
           entityType: "CUSTOMER",
           displayName: "New name",
@@ -112,12 +114,14 @@ describe("upsertSharedRecord", () => {
     });
     expect(database.sharedBusinessRecord.findFirst).toHaveBeenNthCalledWith(1, {
       where: {
+        organizationId: "org_test",
         entityType: "CUSTOMER",
         ecrmLegacyId: "lead_1"
       }
     });
     expect(database.sharedBusinessRecord.findFirst).toHaveBeenNthCalledWith(2, {
       where: {
+        organizationId: "org_test",
         entityType: "CUSTOMER",
         ecrmLegacyId: "lead_1"
       }
@@ -156,6 +160,7 @@ describe("upsertSharedRecord", () => {
     };
 
     const result = await upsertSharedRecord(
+      "org_test",
       {
         entityType: "CUSTOMER",
         displayName: "Linked customer",
@@ -171,6 +176,7 @@ describe("upsertSharedRecord", () => {
     expect(database.sharedBusinessRecord.create).not.toHaveBeenCalled();
     expect(database.sharedBusinessRecord.findFirst).toHaveBeenNthCalledWith(2, {
       where: {
+        organizationId: "org_test",
         entityType: "CUSTOMER",
         emailVoiceLegacyId: "emailvoice_contact_1"
       }
@@ -201,6 +207,7 @@ describe("upsertSharedRecord", () => {
     };
 
     const result = await upsertSharedRecord(
+      "org_test",
       {
         entityType: "LEAD",
         displayName: "Updated external lead",
@@ -215,6 +222,7 @@ describe("upsertSharedRecord", () => {
     expect(database.sharedBusinessRecord.create).not.toHaveBeenCalled();
     expect(database.sharedBusinessRecord.findFirst).toHaveBeenCalledWith({
       where: {
+        organizationId: "org_test",
         entityType: "LEAD",
         externalKey: "emailvoice:lead:123"
       }
@@ -258,6 +266,7 @@ describe("upsertSharedRecord", () => {
     };
 
     const result = await upsertSharedRecord(
+      "org_test",
       {
         entityType: "ORDER",
         displayName: "Updated external order",
@@ -271,6 +280,7 @@ describe("upsertSharedRecord", () => {
     expect(result.created).toBe(false);
     expect(database.sharedBusinessRecord.findFirst).toHaveBeenNthCalledWith(2, {
       where: {
+        organizationId: "org_test",
         entityType: "ORDER",
         externalKey: "external:order:777"
       }

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { createOpportunity, moveOpportunityStage, upsertSalesTarget } from "./mutations";
 
-const actor = { id: "user_sales", role: "SALES" as const };
+const actor = { id: "user_sales", organizationId: "org_test", role: "SALES" as const };
 
 const opportunityInput = {
   leadCustomerId: "lead_1",
@@ -29,7 +29,7 @@ describe("opportunity mutations", () => {
       ],
       {
         user: { findFirst: vi.fn().mockResolvedValue({ id: "user_sales" }) },
-        leadCustomer: { findUnique: vi.fn().mockResolvedValue({ id: "lead_1" }) },
+        leadCustomer: { findFirst: vi.fn().mockResolvedValue({ id: "lead_1" }) },
         branch: { findFirst: vi.fn().mockResolvedValue({ id: "branch_1" }) },
         pipelineStage: { findFirst: vi.fn().mockResolvedValue({ id: "stage_qualified" }) },
         opportunity: { create: opportunityCreate },
@@ -44,6 +44,7 @@ describe("opportunity mutations", () => {
 
     expect(opportunityCreate).toHaveBeenCalledWith({
       data: expect.objectContaining({
+        organizationId: "org_test",
         leadCustomerId: "lead_1",
         branchId: "branch_1",
         stageId: "stage_qualified",
@@ -55,8 +56,8 @@ describe("opportunity mutations", () => {
     });
     expect(splitCreateMany).toHaveBeenCalledWith({
       data: [
-        { opportunityId: "opp_1", userId: "user_sales", percent: 70 },
-        { opportunityId: "opp_1", userId: "user_admin", percent: 30 }
+        { organizationId: "org_test", opportunityId: "opp_1", userId: "user_sales", percent: 70 },
+        { organizationId: "org_test", opportunityId: "opp_1", userId: "user_admin", percent: 30 }
       ]
     });
   });
@@ -69,7 +70,7 @@ describe("opportunity mutations", () => {
         [{ userId: "user_sales", percent: 90 }],
         {
           user: { findFirst: vi.fn().mockResolvedValue({ id: "user_sales" }) },
-          leadCustomer: { findUnique: vi.fn().mockResolvedValue({ id: "lead_1" }) },
+          leadCustomer: { findFirst: vi.fn().mockResolvedValue({ id: "lead_1" }) },
           branch: { findFirst: vi.fn().mockResolvedValue({ id: "branch_1" }) },
           pipelineStage: { findFirst: vi.fn().mockResolvedValue({ id: "stage_qualified" }) },
           opportunity: { create: vi.fn() },
@@ -84,7 +85,7 @@ describe("opportunity mutations", () => {
     await expect(
       createOpportunity(actor, opportunityInput, [], {
         user: { findFirst: vi.fn().mockResolvedValue({ id: "user_sales" }) },
-        leadCustomer: { findUnique: vi.fn().mockResolvedValue({ id: "lead_1" }) },
+        leadCustomer: { findFirst: vi.fn().mockResolvedValue({ id: "lead_1" }) },
         branch: { findFirst: vi.fn().mockResolvedValue(null) },
         pipelineStage: { findFirst: vi.fn().mockResolvedValue({ id: "stage_qualified" }) },
         opportunity: { create: vi.fn() },
@@ -99,7 +100,7 @@ describe("opportunity mutations", () => {
 
     await moveOpportunityStage(actor, "opp_1", "stage_won", {
       pipelineStage: { findFirst: vi.fn().mockResolvedValue({ id: "stage_won" }) },
-      opportunity: { update }
+      opportunity: { findFirst: vi.fn().mockResolvedValue({ id: "opp_1" }), update }
     });
 
     expect(update).toHaveBeenCalledWith({
@@ -127,7 +128,8 @@ describe("opportunity mutations", () => {
 
     expect(upsert).toHaveBeenCalledWith({
       where: {
-        ownerId_financialYear_quarter: {
+        organizationId_ownerId_financialYear_quarter: {
+          organizationId: "org_test",
           ownerId: "user_sales",
           financialYear: 2026,
           quarter: 1
@@ -135,6 +137,7 @@ describe("opportunity mutations", () => {
       },
       update: { targetValueInr: "500000.00" },
       create: {
+        organizationId: "org_test",
         ownerId: "user_sales",
         financialYear: 2026,
         quarter: 1,

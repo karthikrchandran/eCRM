@@ -7,6 +7,7 @@ describe("workflow event service", () => {
     const createMock = vi.fn().mockResolvedValue({ id: "event_1" });
     const salesTaskCreateMock = vi.fn().mockResolvedValue({ id: "task_1" });
     const database = {
+      leadCustomer: { findFirst: vi.fn().mockResolvedValue({ id: "lead_1" }) },
       workflowEvent: {
         create: createMock,
         findMany: vi.fn().mockResolvedValue([])
@@ -17,6 +18,7 @@ describe("workflow event service", () => {
     } as never;
 
     const result = await ingestWorkflowEvent(
+      "org_test",
       {
         sourceApp: "emailvoice",
         sourceEventType: "meeting_booked",
@@ -52,7 +54,7 @@ describe("workflow event service", () => {
       }
     } as never;
 
-    const rows = await listWorkflowEventsForEntity("lead_1", database);
+    const rows = await listWorkflowEventsForEntity("org_test", "lead_1", database);
 
     expect(rows).toHaveLength(2);
     expect(findManyMock).toHaveBeenCalledWith(
@@ -79,6 +81,7 @@ describe("workflow event service", () => {
     } as never;
 
     const result = await ingestWorkflowEvent(
+      "org_test",
       {
         sourceApp: "emailvoice",
         sourceEventId: "scheduling-booked:req_1",

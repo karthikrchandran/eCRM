@@ -8,7 +8,7 @@ import { getOpportunityDetail, listOpportunityFormOptions } from "@/server/oppor
 export default async function EditOpportunityPage({ params }: { params: Promise<{ opportunityId: string }> }) {
   const user = await requireUser();
   const { opportunityId } = await params;
-  const [opportunity, options] = await Promise.all([getOpportunityDetail(user, opportunityId), listOpportunityFormOptions()]);
+  const [opportunity, options] = await Promise.all([getOpportunityDetail(user, opportunityId), listOpportunityFormOptions(user)]);
 
   if (!opportunity) {
     notFound();

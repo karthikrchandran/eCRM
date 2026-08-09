@@ -254,7 +254,7 @@ describe("buildSharedRecordExportPage", () => {
       getExportSnapshotItems
     } = createMemoryExportDatabase(liveRows);
 
-    const page = await buildSharedRecordExportPage({ entityType: "CONTACT", cursor: null, limit: 1 }, database);
+    const page = await buildSharedRecordExportPage("org_test", { entityType: "CONTACT", cursor: null, limit: 1 }, database);
 
     expect(findMany).toHaveBeenCalledTimes(2);
     expect(findMany.mock.calls[0]?.[0]).toMatchObject({
@@ -303,7 +303,7 @@ describe("buildSharedRecordExportPage", () => {
     const { database, liveRows: mutableLiveRows, findMany, deleteExpiredExportSnapshots, getExportSnapshot, getExportSnapshotItems } =
       createMemoryExportDatabase(liveRows);
 
-    const firstPage = await buildSharedRecordExportPage({ entityType: "CONTACT", cursor: null, limit: 2 }, database);
+    const firstPage = await buildSharedRecordExportPage("org_test", { entityType: "CONTACT", cursor: null, limit: 2 }, database);
 
     mutableLiveRows.splice(
       0,
@@ -313,6 +313,7 @@ describe("buildSharedRecordExportPage", () => {
     );
 
     const secondPage = await buildSharedRecordExportPage(
+      "org_test",
       { entityType: "CONTACT", cursor: firstPage.nextCursor, limit: 2 },
       database
     );
@@ -338,7 +339,7 @@ describe("buildSharedRecordExportPage", () => {
       "utf8"
     ).toString("base64url");
 
-    await expect(buildSharedRecordExportPage({ entityType: "CUSTOMER", cursor, limit: 2 }, database)).rejects.toThrow(
+    await expect(buildSharedRecordExportPage("org_test", { entityType: "CUSTOMER", cursor, limit: 2 }, database)).rejects.toThrow(
       "Export cursor stream does not match the requested stream."
     );
   });
@@ -362,7 +363,7 @@ describe("buildSharedRecordExportPage", () => {
       "utf8"
     ).toString("base64url");
 
-    await expect(buildSharedRecordExportPage({ entityType: "CONTACT", cursor, limit: 1 }, database)).rejects.toThrow(
+    await expect(buildSharedRecordExportPage("org_test", { entityType: "CONTACT", cursor, limit: 1 }, database)).rejects.toThrow(
       "Invalid export cursor."
     );
   });
@@ -386,7 +387,7 @@ describe("buildSharedRecordExportPage", () => {
       "utf8"
     ).toString("base64url");
 
-    await expect(buildSharedRecordExportPage({ entityType: "CONTACT", cursor, limit: 1 }, database)).rejects.toThrow(
+    await expect(buildSharedRecordExportPage("org_test", { entityType: "CONTACT", cursor, limit: 1 }, database)).rejects.toThrow(
       "Invalid export cursor."
     );
   });
@@ -402,7 +403,7 @@ describe("buildSharedRecordExportPage", () => {
     ];
     const { database, findMany, createExportSnapshot } = createMemoryExportDatabase(liveRows);
 
-    const page = await buildSharedRecordExportPage({ entityType: "" as never, cursor: null, limit: 1 }, database);
+    const page = await buildSharedRecordExportPage("org_test", { entityType: "" as never, cursor: null, limit: 1 }, database);
 
     expect(findMany.mock.calls[0]?.[0]).toMatchObject({
       where: {

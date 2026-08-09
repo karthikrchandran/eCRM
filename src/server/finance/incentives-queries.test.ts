@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { listIncentives } from "./incentives-queries";
 
-const admin = { id: "admin", role: "ADMIN" as const };
+const admin = { id: "admin", organizationId: "org_test", role: "ADMIN" as const };
 
 describe("incentives queries", () => {
   it("applies owner, status, and quarter filters", async () => {
@@ -18,6 +18,7 @@ describe("incentives queries", () => {
     expect(findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
+          organizationId: "org_test",
           status: "READY_FOR_REVIEW",
           order: {
             bookedAt: {

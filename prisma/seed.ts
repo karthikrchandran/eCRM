@@ -515,7 +515,8 @@ async function main() {
 
   await prisma.salesTarget.upsert({
     where: {
-      ownerId_financialYear_quarter: {
+      organizationId_ownerId_financialYear_quarter: {
+        organizationId: araOrganization.id,
         financialYear: 2026,
         ownerId: sales.id,
         quarter: 1
@@ -704,7 +705,8 @@ async function main() {
 
   await prisma.salesTarget.upsert({
     where: {
-      ownerId_financialYear_quarter: {
+      organizationId_ownerId_financialYear_quarter: {
+        organizationId: araOrganization.id,
         financialYear: 2026,
         ownerId: arjun.id,
         quarter: 1

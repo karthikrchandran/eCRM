@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { db } from "@/server/db";
+import { withOrganization } from "@/server/organizations/with-organization";
 import { assertCanWriteCrmRecords, type CrmUser } from "./permissions";
 import type { ActivityInput, BranchInput, ContactInput, LeadCustomerInput, ReassignmentInput } from "./types";
 
@@ -14,7 +15,8 @@ type OwnerDb = {
 
 type LeadLookupDb = {
   leadCustomer: {
-    findUnique: (args: Prisma.LeadCustomerFindUniqueArgs) => Promise<IdResult | LeadOwnerResult | null>;
+    findFirst?: (args: Prisma.LeadCustomerFindFirstArgs) => Promise<IdResult | LeadOwnerResult | null>;
+    findUnique?: (args: Prisma.LeadCustomerFindUniqueArgs) => Promise<IdResult | LeadOwnerResult | null>;
   };
 };
 
@@ -61,7 +63,8 @@ type CreateActivityDb = OwnerDb &
 
 type CompleteActivityDb = {
   activity: {
-    findUnique: (args: Prisma.ActivityFindUniqueArgs) => Promise<IdResult | null>;
+    findFirst?: (args: Prisma.ActivityFindFirstArgs) => Promise<IdResult | null>;
+    findUnique?: (args: Prisma.ActivityFindUniqueArgs) => Promise<IdResult | null>;
     update: (args: Prisma.ActivityUpdateArgs) => Promise<IdResult>;
   };
 };
@@ -77,18 +80,19 @@ type ReassignTransactionDb = {
 
 type ReassignDb = OwnerDb & {
   leadCustomer: {
-    findUnique: (args: Prisma.LeadCustomerFindUniqueArgs) => Promise<LeadOwnerResult | null>;
+    findFirst?: (args: Prisma.LeadCustomerFindFirstArgs) => Promise<LeadOwnerResult | null>;
+    findUnique?: (args: Prisma.LeadCustomerFindUniqueArgs) => Promise<LeadOwnerResult | null>;
     update: (args: Prisma.LeadCustomerUpdateArgs) => Promise<IdResult>;
   };
   leadOwnershipHistory: {
     create: (args: Prisma.LeadOwnershipHistoryCreateArgs) => Promise<IdResult>;
   };
-  $transaction: (callback: (tx: unknown) => Promise<unknown>) => Promise<unknown>;
+  $transaction?: (callback: (tx: unknown) => Promise<unknown>) => Promise<unknown>;
 };
 
-async function assertActiveOwner(database: OwnerDb, ownerId: string) {
+async function assertActiveOwner(database: OwnerDb, organizationId: string, ownerId: string) {
   const owner = await database.user.findFirst({
-    where: { id: ownerId, active: true, role: { in: ["ADMIN", "SALES"] } },
+    where: { id: ownerId, active: true, role: { in: ["ADMIN", "SALES"] }, memberships: { some: { organizationId, status: "ACTIVE" } } },
     select: { id: true }
   });
 
@@ -97,9 +101,9 @@ async function assertActiveOwner(database: OwnerDb, ownerId: string) {
   }
 }
 
-async function assertLeadExists(database: LeadLookupDb, leadCustomerId: string) {
-  const lead = await database.leadCustomer.findUnique({
-    where: { id: leadCustomerId },
+async function assertLeadExists(database: LeadLookupDb, organizationId: string, leadCustomerId: string) {
+  const lead = await (database.leadCustomer.findFirst ?? database.leadCustomer.findUnique!)({
+    where: { id: leadCustomerId, organizationId },
     select: { id: true }
   });
 
@@ -108,9 +112,9 @@ async function assertLeadExists(database: LeadLookupDb, leadCustomerId: string) 
   }
 }
 
-async function assertBranchBelongsToLead(database: CreateContactDb | CreateActivityDb, leadCustomerId: string, branchId: string) {
+async function assertBranchBelongsToLead(database: CreateContactDb | CreateActivityDb, organizationId: string, leadCustomerId: string, branchId: string) {
   const branch = await database.branch?.findFirst({
-    where: { id: branchId, leadCustomerId },
+    where: { id: branchId, leadCustomerId, organizationId },
     select: { id: true }
   });
 
@@ -119,9 +123,9 @@ async function assertBranchBelongsToLead(database: CreateContactDb | CreateActiv
   }
 }
 
-async function assertContactBelongsToLead(database: CreateActivityDb, leadCustomerId: string, contactId: string) {
+async function assertContactBelongsToLead(database: CreateActivityDb, organizationId: string, leadCustomerId: string, contactId: string) {
   const contact = await database.contact?.findFirst({
-    where: { id: contactId, leadCustomerId },
+    where: { id: contactId, leadCustomerId, organizationId },
     select: { id: true }
   });
 
@@ -134,12 +138,14 @@ export async function createLeadCustomer(
   user: CrmUser,
   input: LeadCustomerInput,
   database: CreateLeadDb = db as unknown as CreateLeadDb
-) {
+): Promise<IdResult> {
+  if (database === (db as unknown as CreateLeadDb)) return withOrganization(user.organizationId, (tx) => createLeadCustomer(user, input, tx as unknown as CreateLeadDb));
   assertCanWriteCrmRecords(user);
-  await assertActiveOwner(database, input.ownerId);
+  await assertActiveOwner(database, user.organizationId, input.ownerId);
 
   return database.leadCustomer.create({
     data: {
+      organizationId: user.organizationId,
       name: input.name,
       state: input.state,
       industry: input.industry,
@@ -157,10 +163,11 @@ export async function updateLeadCustomer(
   leadCustomerId: string,
   input: LeadCustomerInput,
   database: UpdateLeadDb = db as unknown as UpdateLeadDb
-) {
+): Promise<IdResult> {
+  if (database === (db as unknown as UpdateLeadDb)) return withOrganization(user.organizationId, (tx) => updateLeadCustomer(user, leadCustomerId, input, tx as unknown as UpdateLeadDb));
   assertCanWriteCrmRecords(user);
-  await assertLeadExists(database, leadCustomerId);
-  await assertActiveOwner(database, input.ownerId);
+  await assertLeadExists(database, user.organizationId, leadCustomerId);
+  await assertActiveOwner(database, user.organizationId, input.ownerId);
 
   return database.leadCustomer.update({
     where: { id: leadCustomerId },
@@ -180,47 +187,51 @@ export async function createBranch(
   user: CrmUser,
   input: BranchInput,
   database: CreateBranchDb = db as unknown as CreateBranchDb
-) {
+): Promise<IdResult> {
+  if (database === (db as unknown as CreateBranchDb)) return withOrganization(user.organizationId, (tx) => createBranch(user, input, tx as unknown as CreateBranchDb));
   assertCanWriteCrmRecords(user);
-  await assertLeadExists(database, input.leadCustomerId);
+  await assertLeadExists(database, user.organizationId, input.leadCustomerId);
 
-  return database.branch.create({ data: input });
+  return database.branch.create({ data: { ...input, organizationId: user.organizationId } });
 }
 
 export async function createContact(
   user: CrmUser,
   input: ContactInput,
   database: CreateContactDb = db as unknown as CreateContactDb
-) {
+): Promise<IdResult> {
+  if (database === (db as unknown as CreateContactDb)) return withOrganization(user.organizationId, (tx) => createContact(user, input, tx as unknown as CreateContactDb));
   assertCanWriteCrmRecords(user);
-  await assertLeadExists(database, input.leadCustomerId);
+  await assertLeadExists(database, user.organizationId, input.leadCustomerId);
 
   if (input.branchId) {
-    await assertBranchBelongsToLead(database, input.leadCustomerId, input.branchId);
+    await assertBranchBelongsToLead(database, user.organizationId, input.leadCustomerId, input.branchId);
   }
 
-  return database.contact.create({ data: input });
+  return database.contact.create({ data: { ...input, organizationId: user.organizationId } });
 }
 
 export async function createActivity(
   user: CrmUser,
   input: ActivityInput,
   database: CreateActivityDb = db as unknown as CreateActivityDb
-) {
+): Promise<IdResult> {
+  if (database === (db as unknown as CreateActivityDb)) return withOrganization(user.organizationId, (tx) => createActivity(user, input, tx as unknown as CreateActivityDb));
   assertCanWriteCrmRecords(user);
-  await assertLeadExists(database, input.leadCustomerId);
-  await assertActiveOwner(database, input.ownerId);
+  await assertLeadExists(database, user.organizationId, input.leadCustomerId);
+  await assertActiveOwner(database, user.organizationId, input.ownerId);
 
   if (input.branchId) {
-    await assertBranchBelongsToLead(database, input.leadCustomerId, input.branchId);
+    await assertBranchBelongsToLead(database, user.organizationId, input.leadCustomerId, input.branchId);
   }
 
   if (input.contactId) {
-    await assertContactBelongsToLead(database, input.leadCustomerId, input.contactId);
+    await assertContactBelongsToLead(database, user.organizationId, input.leadCustomerId, input.contactId);
   }
 
   return database.activity.create({
     data: {
+      organizationId: user.organizationId,
       ...input,
       createdById: user.id
     }
@@ -231,10 +242,11 @@ export async function completeActivity(
   user: CrmUser,
   activityId: string,
   database: CompleteActivityDb = db as unknown as CompleteActivityDb
-) {
+): Promise<IdResult> {
+  if (database === (db as unknown as CompleteActivityDb)) return withOrganization(user.organizationId, (tx) => completeActivity(user, activityId, tx as unknown as CompleteActivityDb));
   assertCanWriteCrmRecords(user);
-  const activity = await database.activity.findUnique({
-    where: { id: activityId },
+  const activity = await (database.activity.findFirst ?? database.activity.findUnique!)({
+    where: { id: activityId, organizationId: user.organizationId },
     select: { id: true }
   });
 
@@ -256,12 +268,13 @@ export async function reassignLeadOwner(
   user: CrmUser,
   input: ReassignmentInput,
   database: ReassignDb = db as unknown as ReassignDb
-) {
+): Promise<unknown> {
+  if (database === (db as unknown as ReassignDb)) return withOrganization(user.organizationId, (tx) => reassignLeadOwner(user, input, tx as unknown as ReassignDb));
   assertCanWriteCrmRecords(user);
-  await assertActiveOwner(database, input.toOwnerId);
+  await assertActiveOwner(database, user.organizationId, input.toOwnerId);
 
-  const lead = await database.leadCustomer.findUnique({
-    where: { id: input.leadCustomerId },
+  const lead = await (database.leadCustomer.findFirst ?? database.leadCustomer.findUnique!)({
+    where: { id: input.leadCustomerId, organizationId: user.organizationId },
     select: { id: true, ownerId: true }
   });
 
@@ -273,7 +286,7 @@ export async function reassignLeadOwner(
     throw new Error("Choose a different owner for reassignment.");
   }
 
-  return database.$transaction(async (tx) => {
+  const applyReassignment = async (tx: unknown) => {
     const transaction = tx as ReassignTransactionDb;
     const updated = await transaction.leadCustomer.update({
       where: { id: input.leadCustomerId },
@@ -282,6 +295,7 @@ export async function reassignLeadOwner(
 
     await transaction.leadOwnershipHistory.create({
       data: {
+        organizationId: user.organizationId,
         leadCustomerId: input.leadCustomerId,
         fromOwnerId: lead.ownerId,
         toOwnerId: input.toOwnerId,
@@ -291,5 +305,7 @@ export async function reassignLeadOwner(
     });
 
     return updated;
-  });
+  };
+
+  return database.$transaction ? database.$transaction(applyReassignment) : applyReassignment(database);
 }

@@ -5,6 +5,7 @@ import { requireSharedDataApiToken } from "@/server/shared-records/api-auth";
 import { buildSharedRecordExportPage, SharedRecordExportError } from "@/server/shared-records/export";
 
 vi.mock("@/server/shared-records/api-auth", () => ({
+  getSharedDataOrganizationId: vi.fn(() => "org_test"),
   requireSharedDataApiToken: vi.fn()
 }));
 
@@ -38,7 +39,7 @@ describe("shared-record export route", () => {
     const response = await GET(new Request("http://localhost/api/shared-records/export?entityType=%20%20&limit="));
 
     expect(response.status).toBe(200);
-    expect(buildSharedRecordExportPageMock).toHaveBeenCalledWith({
+    expect(buildSharedRecordExportPageMock).toHaveBeenCalledWith("org_test", {
       entityType: undefined,
       cursor: null,
       limit: undefined

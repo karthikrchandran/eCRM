@@ -8,6 +8,7 @@ export type ActionState = {
 
 export type ProductUser = {
   id: string;
+  organizationId: string;
   role: OrganizationRole;
 };
 

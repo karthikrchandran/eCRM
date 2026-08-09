@@ -1,5 +1,6 @@
 import type { Prisma, SalesDayReviewItemStatus, SalesTaskType } from "@prisma/client";
 import { db } from "@/server/db";
+import { withOrganization } from "@/server/organizations/with-organization";
 import {
   assertCanUseSalesWorkspace,
   assertOwnsSalesTextNote,
@@ -24,7 +25,7 @@ type TaskForCarryForward = OwnedRecord & {
 
 type TaskLifecycleDb = {
   salesTask: {
-    findUnique: (args: Prisma.SalesTaskFindUniqueArgs) => Promise<OwnedRecord | null>;
+    findFirst: (args: Prisma.SalesTaskFindFirstArgs) => Promise<OwnedRecord | null>;
     update: (args: Prisma.SalesTaskUpdateArgs) => Promise<IdResult>;
   };
 };
@@ -45,7 +46,7 @@ type CreateTextNoteDb = {
 
 type TextNoteDb = {
   salesTextNote: {
-    findUnique: (args: Prisma.SalesTextNoteFindUniqueArgs) => Promise<OwnedRecord | null>;
+    findFirst: (args: Prisma.SalesTextNoteFindFirstArgs) => Promise<OwnedRecord | null>;
     update: (args: Prisma.SalesTextNoteUpdateArgs) => Promise<IdResult>;
     delete: (args: Prisma.SalesTextNoteDeleteArgs) => Promise<IdResult>;
   };
@@ -68,7 +69,7 @@ type VoiceNoteInput = {
 
 type VoiceNoteDb = {
   salesVoiceNote: {
-    findUnique: (args: Prisma.SalesVoiceNoteFindUniqueArgs) => Promise<OwnedRecord | null>;
+    findFirst: (args: Prisma.SalesVoiceNoteFindFirstArgs) => Promise<OwnedRecord | null>;
     create?: (args: Prisma.SalesVoiceNoteCreateArgs) => Promise<IdResult>;
     update: (args: Prisma.SalesVoiceNoteUpdateArgs) => Promise<IdResult>;
   };
@@ -90,6 +91,9 @@ export type SuggestedVoiceActionInput = {
 };
 
 type SuggestedActionDb = {
+  salesVoiceNote?: {
+    findFirst: (args: Prisma.SalesVoiceNoteFindFirstArgs) => Promise<OwnedRecord | null>;
+  };
   salesVoiceNoteAction: {
     createMany: (args: Prisma.SalesVoiceNoteActionCreateManyArgs) => Promise<{ count: number }>;
   };
@@ -115,7 +119,7 @@ type AcceptActionRecord = {
 
 type AcceptActionDb = {
   salesVoiceNoteAction: {
-    findUnique: (args: Prisma.SalesVoiceNoteActionFindUniqueArgs) => Promise<AcceptActionRecord | null>;
+    findFirst: (args: Prisma.SalesVoiceNoteActionFindFirstArgs) => Promise<AcceptActionRecord | null>;
     update: (args: Prisma.SalesVoiceNoteActionUpdateArgs) => Promise<IdResult>;
   };
   salesTask: {
@@ -131,7 +135,7 @@ type ReviewDb = {
     upsert: (args: Prisma.SalesDayReviewItemUpsertArgs) => Promise<IdResult>;
   };
   salesTask: {
-    findUnique: (args: Prisma.SalesTaskFindUniqueArgs) => Promise<TaskForCarryForward | null>;
+    findFirst: (args: Prisma.SalesTaskFindFirstArgs) => Promise<TaskForCarryForward | null>;
     create: (args: Prisma.SalesTaskCreateArgs) => Promise<IdResult>;
     update: (args: Prisma.SalesTaskUpdateArgs) => Promise<IdResult>;
   };
@@ -146,8 +150,8 @@ function tomorrowMorning(reviewDate: Date) {
 }
 
 async function findOwnedTask(database: TaskLifecycleDb, user: SalesDayUser, taskId: string) {
-  const task = await database.salesTask.findUnique({
-    where: { id: taskId },
+  const task = await database.salesTask.findFirst({
+    where: { id: taskId, organizationId: user.organizationId },
     select: { id: true, ownerId: true }
   });
 
@@ -163,11 +167,13 @@ export async function createSalesTask(
   user: SalesDayUser,
   input: SalesTaskInput,
   database: CreateTaskDb = db as unknown as CreateTaskDb
-) {
+): Promise<IdResult> {
+  if (database === (db as unknown as CreateTaskDb)) return withOrganization(user.organizationId, (tx) => createSalesTask(user, input, tx as unknown as CreateTaskDb));
   assertCanUseSalesWorkspace(user);
 
   return database.salesTask.create({
     data: {
+      organizationId: user.organizationId,
       ownerId: user.id,
       title: input.title,
       description: input.description ?? null,
@@ -189,7 +195,8 @@ export async function updateSalesTask(
   taskId: string,
   input: SalesTaskUpdateInput,
   database: UpdateTaskDb = db as unknown as UpdateTaskDb
-) {
+): Promise<IdResult> {
+  if (database === (db as unknown as UpdateTaskDb)) return withOrganization(user.organizationId, (tx) => updateSalesTask(user, taskId, input, tx as unknown as UpdateTaskDb));
   await findOwnedTask(database, user, taskId);
 
   return database.salesTask.update({
@@ -210,8 +217,8 @@ export async function updateSalesTask(
 }
 
 async function assertOwnedTextNote(database: TextNoteDb, user: SalesDayUser, noteId: string) {
-  const note = await database.salesTextNote.findUnique({
-    where: { id: noteId },
+  const note = await database.salesTextNote.findFirst({
+    where: { id: noteId, organizationId: user.organizationId },
     select: { id: true, ownerId: true }
   });
 
@@ -224,6 +231,7 @@ async function assertOwnedTextNote(database: TextNoteDb, user: SalesDayUser, not
 
 function textNoteData(user: SalesDayUser, input: SalesTextNoteInput) {
   return {
+    organizationId: user.organizationId,
     body: input.body,
     ownerId: user.id,
     leadCustomerId: input.leadCustomerId ?? null,
@@ -238,7 +246,8 @@ export async function createSalesTextNote(
   user: SalesDayUser,
   input: SalesTextNoteInput,
   database: CreateTextNoteDb = db as unknown as CreateTextNoteDb
-) {
+): Promise<IdResult> {
+  if (database === (db as unknown as CreateTextNoteDb)) return withOrganization(user.organizationId, (tx) => createSalesTextNote(user, input, tx as unknown as CreateTextNoteDb));
   assertCanUseSalesWorkspace(user);
 
   return database.salesTextNote.create({
@@ -252,7 +261,8 @@ export async function updateSalesTextNote(
   noteId: string,
   input: SalesTextNoteInput,
   database: TextNoteDb = db as unknown as TextNoteDb
-) {
+): Promise<IdResult> {
+  if (database === (db as unknown as TextNoteDb)) return withOrganization(user.organizationId, (tx) => updateSalesTextNote(user, noteId, input, tx as unknown as TextNoteDb));
   await assertOwnedTextNote(database, user, noteId);
 
   return database.salesTextNote.update({
@@ -273,7 +283,8 @@ export async function deleteSalesTextNote(
   user: SalesDayUser,
   noteId: string,
   database: TextNoteDb = db as unknown as TextNoteDb
-) {
+): Promise<IdResult> {
+  if (database === (db as unknown as TextNoteDb)) return withOrganization(user.organizationId, (tx) => deleteSalesTextNote(user, noteId, tx as unknown as TextNoteDb));
   await assertOwnedTextNote(database, user, noteId);
 
   return database.salesTextNote.delete({
@@ -286,7 +297,8 @@ export async function completeSalesTask(
   user: SalesDayUser,
   taskId: string,
   database: TaskLifecycleDb = db as unknown as TaskLifecycleDb
-) {
+): Promise<IdResult> {
+  if (database === (db as unknown as TaskLifecycleDb)) return withOrganization(user.organizationId, (tx) => completeSalesTask(user, taskId, tx as unknown as TaskLifecycleDb));
   await findOwnedTask(database, user, taskId);
 
   return database.salesTask.update({
@@ -304,7 +316,8 @@ export async function reopenSalesTask(
   user: SalesDayUser,
   taskId: string,
   database: TaskLifecycleDb = db as unknown as TaskLifecycleDb
-) {
+): Promise<IdResult> {
+  if (database === (db as unknown as TaskLifecycleDb)) return withOrganization(user.organizationId, (tx) => reopenSalesTask(user, taskId, tx as unknown as TaskLifecycleDb));
   await findOwnedTask(database, user, taskId);
 
   return database.salesTask.update({
@@ -322,7 +335,8 @@ export async function cancelSalesTask(
   user: SalesDayUser,
   taskId: string,
   database: TaskLifecycleDb = db as unknown as TaskLifecycleDb
-) {
+): Promise<IdResult> {
+  if (database === (db as unknown as TaskLifecycleDb)) return withOrganization(user.organizationId, (tx) => cancelSalesTask(user, taskId, tx as unknown as TaskLifecycleDb));
   await findOwnedTask(database, user, taskId);
 
   return database.salesTask.update({
@@ -341,9 +355,10 @@ export async function carryForwardSalesTask(
   taskId: string,
   nextDueAt: Date,
   database: ReviewDb = db as unknown as ReviewDb
-) {
-  const task = await database.salesTask.findUnique({
-    where: { id: taskId },
+): Promise<IdResult> {
+  if (database === (db as unknown as ReviewDb)) return withOrganization(user.organizationId, (tx) => carryForwardSalesTask(user, taskId, nextDueAt, tx as unknown as ReviewDb));
+  const task = await database.salesTask.findFirst({
+    where: { id: taskId, organizationId: user.organizationId },
     select: {
       id: true,
       ownerId: true,
@@ -366,6 +381,7 @@ export async function carryForwardSalesTask(
 
   const created = await database.salesTask.create({
     data: {
+      organizationId: user.organizationId,
       ownerId: user.id,
       leadCustomerId: task.leadCustomerId,
       opportunityId: task.opportunityId,
@@ -394,7 +410,8 @@ export async function createSalesVoiceNote(
   user: SalesDayUser,
   input: VoiceNoteInput,
   database: VoiceNoteDb = db as unknown as VoiceNoteDb
-) {
+): Promise<IdResult> {
+  if (database === (db as unknown as VoiceNoteDb)) return withOrganization(user.organizationId, (tx) => createSalesVoiceNote(user, input, tx as unknown as VoiceNoteDb));
   assertCanUseSalesWorkspace(user);
 
   if (!database.salesVoiceNote.create) {
@@ -403,6 +420,7 @@ export async function createSalesVoiceNote(
 
   return database.salesVoiceNote.create({
     data: {
+      organizationId: user.organizationId,
       id: input.id,
       ownerId: user.id,
       taskId: input.taskId ?? null,
@@ -422,8 +440,8 @@ export async function createSalesVoiceNote(
 }
 
 async function assertOwnedVoiceNote(database: VoiceNoteDb, user: SalesDayUser, voiceNoteId: string) {
-  const note = await database.salesVoiceNote.findUnique({
-    where: { id: voiceNoteId },
+  const note = await database.salesVoiceNote.findFirst({
+    where: { id: voiceNoteId, organizationId: user.organizationId },
     select: { id: true, ownerId: true }
   });
 
@@ -438,7 +456,8 @@ export async function markVoiceNoteTranscribing(
   user: SalesDayUser,
   voiceNoteId: string,
   database: VoiceNoteDb = db as unknown as VoiceNoteDb
-) {
+): Promise<IdResult> {
+  if (database === (db as unknown as VoiceNoteDb)) return withOrganization(user.organizationId, (tx) => markVoiceNoteTranscribing(user, voiceNoteId, tx as unknown as VoiceNoteDb));
   await assertOwnedVoiceNote(database, user, voiceNoteId);
 
   return database.salesVoiceNote.update({
@@ -453,7 +472,8 @@ export async function saveVoiceNoteTranscript(
   voiceNoteId: string,
   result: TranscriptResult,
   database: VoiceNoteDb = db as unknown as VoiceNoteDb
-) {
+): Promise<IdResult> {
+  if (database === (db as unknown as VoiceNoteDb)) return withOrganization(user.organizationId, (tx) => saveVoiceNoteTranscript(user, voiceNoteId, result, tx as unknown as VoiceNoteDb));
   await assertOwnedVoiceNote(database, user, voiceNoteId);
 
   return database.salesVoiceNote.update({
@@ -475,7 +495,8 @@ export async function markVoiceNoteFailed(
   voiceNoteId: string,
   message: string,
   database: VoiceNoteDb = db as unknown as VoiceNoteDb
-) {
+): Promise<IdResult> {
+  if (database === (db as unknown as VoiceNoteDb)) return withOrganization(user.organizationId, (tx) => markVoiceNoteFailed(user, voiceNoteId, message, tx as unknown as VoiceNoteDb));
   await assertOwnedVoiceNote(database, user, voiceNoteId);
 
   return database.salesVoiceNote.update({
@@ -486,16 +507,25 @@ export async function markVoiceNoteFailed(
 }
 
 export async function createSuggestedActionsForVoiceNote(
+  user: SalesDayUser,
   voiceNoteId: string,
   actions: SuggestedVoiceActionInput[],
   database: SuggestedActionDb = db as unknown as SuggestedActionDb
-) {
+): Promise<{ count: number }> {
+  if (database === (db as unknown as SuggestedActionDb)) return withOrganization(user.organizationId, (tx) => createSuggestedActionsForVoiceNote(user, voiceNoteId, actions, tx as unknown as SuggestedActionDb));
+  const note = await database.salesVoiceNote?.findFirst({
+    where: { id: voiceNoteId, organizationId: user.organizationId, ownerId: user.id },
+    select: { id: true, ownerId: true }
+  });
+  if (database.salesVoiceNote && !note) throw new Error("Voice note was not found.");
+
   if (actions.length === 0) {
     return { count: 0 };
   }
 
   return database.salesVoiceNoteAction.createMany({
     data: actions.map((action) => ({
+      organizationId: user.organizationId,
       voiceNoteId,
       title: action.title,
       description: action.description ?? null,
@@ -510,10 +540,11 @@ export async function acceptSuggestedAction(
   user: SalesDayUser,
   actionId: string,
   database: AcceptActionDb = db as unknown as AcceptActionDb
-) {
+): Promise<IdResult> {
+  if (database === (db as unknown as AcceptActionDb)) return withOrganization(user.organizationId, (tx) => acceptSuggestedAction(user, actionId, tx as unknown as AcceptActionDb));
   assertCanUseSalesWorkspace(user);
-  const action = await database.salesVoiceNoteAction.findUnique({
-    where: { id: actionId },
+  const action = await database.salesVoiceNoteAction.findFirst({
+    where: { id: actionId, organizationId: user.organizationId },
     include: { voiceNote: true }
   });
 
@@ -533,6 +564,7 @@ export async function acceptSuggestedAction(
 
   const createdTask = await database.salesTask.create({
     data: {
+      organizationId: user.organizationId,
       ownerId: action.voiceNote.ownerId,
       leadCustomerId: action.voiceNote.leadCustomerId,
       opportunityId: action.voiceNote.opportunityId,
@@ -562,10 +594,11 @@ export async function rejectSuggestedAction(
   user: SalesDayUser,
   actionId: string,
   database: Pick<AcceptActionDb, "salesVoiceNoteAction"> = db as unknown as Pick<AcceptActionDb, "salesVoiceNoteAction">
-) {
+): Promise<IdResult> {
+  if (database === (db as unknown as Pick<AcceptActionDb, "salesVoiceNoteAction">)) return withOrganization(user.organizationId, (tx) => rejectSuggestedAction(user, actionId, tx as unknown as Pick<AcceptActionDb, "salesVoiceNoteAction">));
   assertCanUseSalesWorkspace(user);
-  const action = await database.salesVoiceNoteAction.findUnique({
-    where: { id: actionId },
+  const action = await database.salesVoiceNoteAction.findFirst({
+    where: { id: actionId, organizationId: user.organizationId },
     include: { voiceNote: true }
   });
 
@@ -596,8 +629,8 @@ async function applyReviewItem(
   } else if (status === "CANCEL") {
     await cancelSalesTask(user, taskId, database);
   } else {
-    const task = await database.salesTask.findUnique({
-      where: { id: taskId },
+    const task = await database.salesTask.findFirst({
+      where: { id: taskId, organizationId: user.organizationId },
       select: { id: true, ownerId: true }
     });
 
@@ -613,12 +646,13 @@ export async function saveEndOfDayReview(
   user: SalesDayUser,
   input: SalesDayReviewInput,
   database: ReviewDb = db as unknown as ReviewDb
-) {
+): Promise<IdResult> {
+  if (database === (db as unknown as ReviewDb)) return withOrganization(user.organizationId, (tx) => saveEndOfDayReview(user, input, tx as unknown as ReviewDb));
   assertCanUseSalesWorkspace(user);
   const reviewDate = normalizeDateToDay(input.reviewDate);
   const review = await database.salesDayReview.upsert({
-    where: { ownerId_reviewDate: { ownerId: user.id, reviewDate } },
-    create: { ownerId: user.id, reviewDate, notes: input.notes ?? null },
+    where: { organizationId_ownerId_reviewDate: { organizationId: user.organizationId, ownerId: user.id, reviewDate } },
+    create: { organizationId: user.organizationId, ownerId: user.id, reviewDate, notes: input.notes ?? null },
     update: { notes: input.notes ?? null },
     select: { id: true }
   });
@@ -626,8 +660,9 @@ export async function saveEndOfDayReview(
   for (const item of input.items) {
     await applyReviewItem(user, item.taskId, item.status, reviewDate, database);
     await database.salesDayReviewItem.upsert({
-      where: { reviewId_taskId: { reviewId: review.id, taskId: item.taskId } },
+      where: { organizationId_reviewId_taskId: { organizationId: user.organizationId, reviewId: review.id, taskId: item.taskId } },
       create: {
+        organizationId: user.organizationId,
         reviewId: review.id,
         taskId: item.taskId,
         status: item.status,

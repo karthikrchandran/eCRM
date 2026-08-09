@@ -26,6 +26,7 @@ const extensionToMime = {
 export type SupportedAudioMimeType = keyof typeof mimeToExtension;
 
 export type SaveVoiceNoteAudioInput = {
+  organizationId: string;
   ownerId: string;
   voiceNoteId: string;
   originalFileName: string;
@@ -85,7 +86,7 @@ export async function saveVoiceNoteAudio(input: SaveVoiceNoteAudioInput) {
   const mimeType = normalizeAudioMimeType(input.mimeType) as SupportedAudioMimeType;
   const extension = extensionForAudio(input, mimeType);
   const storageKey = path
-    .join(safePathSegment(input.ownerId), monthSegment(createdAt), `${safePathSegment(input.voiceNoteId)}.${extension}`)
+    .join("organizations", safePathSegment(input.organizationId), "sales-voice-notes", safePathSegment(input.ownerId), monthSegment(createdAt), `${safePathSegment(input.voiceNoteId)}.${extension}`)
     .replace(/\\/g, "/");
 
   if (isVercelBlobConfigured()) {

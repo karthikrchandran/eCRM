@@ -5,6 +5,7 @@ import { requireSharedDataApiToken } from "@/server/shared-records/api-auth";
 import { ingestWorkflowEvent } from "@/server/workflow-events/service";
 
 vi.mock("@/server/shared-records/api-auth", () => ({
+  getSharedDataOrganizationId: vi.fn(() => "org_test"),
   requireSharedDataApiToken: vi.fn()
 }));
 
@@ -42,6 +43,7 @@ describe("workflow-events route", () => {
     expect(response.status).toBe(201);
     await expect(response.json()).resolves.toEqual({ event: { id: "event_1" } });
     expect(ingestWorkflowEventMock).toHaveBeenCalledWith(
+      "org_test",
       expect.objectContaining({ sourceEventType: "meeting_booked" })
     );
   });

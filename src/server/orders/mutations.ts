@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { db } from "@/server/db";
+import { withOrganization } from "@/server/organizations/with-organization";
 import type { AcceptedProposalForBookingDb } from "./queries";
 import { loadAcceptedProposalForBooking } from "./queries";
 import { assertCanWriteOrders } from "./permissions";
@@ -9,16 +10,17 @@ type OrderBookingTransaction = {
   order: {
     count: (args: Prisma.OrderCountArgs) => Promise<number>;
     create: (args: Prisma.OrderCreateArgs) => Promise<{ id: string; orderNumber: string }>;
-    findUnique: (args: Prisma.OrderFindUniqueArgs) => Promise<{ id: string } | null>;
+    findFirst: (args: Prisma.OrderFindFirstArgs) => Promise<{ id: string } | null>;
   };
 } & AcceptedProposalForBookingDb;
 
-type OrderBookingDb = {
-  $transaction: <T>(callback: (transaction: OrderBookingTransaction) => Promise<T>) => Promise<T>;
+type OrderBookingDb = Partial<OrderBookingTransaction> & {
+  $transaction?: <T>(callback: (transaction: OrderBookingTransaction) => Promise<T>) => Promise<T>;
 };
 
 type OrderUpdateDb = {
   order: {
+    findFirst: (args: Prisma.OrderFindFirstArgs) => Promise<{ id: string } | null>;
     update: (args: Prisma.OrderUpdateArgs) => Promise<{ id: string }>;
   };
 };
@@ -32,18 +34,19 @@ export async function createOrderFromAcceptedProposal(
   user: OrderUser,
   input: OrderBookingInput,
   database: OrderBookingDb = db as unknown as OrderBookingDb
-) {
+): Promise<{ id: string; orderNumber: string }> {
+  if (database === (db as unknown as OrderBookingDb)) return withOrganization(user.organizationId, (tx) => createOrderFromAcceptedProposal(user, input, tx as unknown as OrderBookingDb));
   assertCanWriteOrders(user);
 
-  return database.$transaction(async (transaction) => {
+  const work = async (transaction: OrderBookingTransaction) => {
     const proposal = await loadAcceptedProposalForBooking(user, input.proposalId, transaction);
 
     if (!proposal) {
       throw new Error("Accepted proposal was not found.");
     }
 
-    const existingOrder = await transaction.order.findUnique({
-      where: { proposalId: proposal.id },
+    const existingOrder = await transaction.order.findFirst({
+      where: { proposalId: proposal.id, organizationId: user.organizationId },
       select: { id: true }
     });
 
@@ -51,10 +54,11 @@ export async function createOrderFromAcceptedProposal(
       throw new Error("This proposal already has an order.");
     }
 
-    const sequence = (await transaction.order.count({})) + 1;
+    const sequence = (await transaction.order.count({ where: { organizationId: user.organizationId } })) + 1;
 
     return transaction.order.create({
       data: {
+        organizationId: user.organizationId,
         bookedAt: new Date(),
         branchId: proposal.opportunity.branchId,
         createdById: user.id,
@@ -64,6 +68,7 @@ export async function createOrderFromAcceptedProposal(
         leadCustomerId: proposal.opportunity.leadCustomerId,
         lineItems: {
           create: proposal.lineItems.map((line) => ({
+            organizationId: user.organizationId,
             description: line.description,
             gstOverrideReason: line.gstOverrideReason,
             gstRateBps: line.gstRateBps,
@@ -92,6 +97,7 @@ export async function createOrderFromAcceptedProposal(
         proposalId: proposal.id,
         splitSnapshots: {
           create: proposal.opportunity.splits.map((split) => ({
+            organizationId: user.organizationId,
             percent: split.percent,
             userId: split.userId
           }))
@@ -102,7 +108,8 @@ export async function createOrderFromAcceptedProposal(
         updatedById: user.id
       }
     });
-  });
+  };
+  return database.$transaction ? database.$transaction(work) : work(database as OrderBookingTransaction);
 }
 
 export async function updateOrderPoMetadata(
@@ -110,8 +117,12 @@ export async function updateOrderPoMetadata(
   orderId: string,
   input: PoMetadataInput,
   database: OrderUpdateDb = db as unknown as OrderUpdateDb
-) {
+): Promise<{ id: string }> {
+  if (database === (db as unknown as OrderUpdateDb)) return withOrganization(user.organizationId, (tx) => updateOrderPoMetadata(user, orderId, input, tx as unknown as OrderUpdateDb));
   assertCanWriteOrders(user);
+
+  const existing = await database.order.findFirst({ where: { id: orderId, organizationId: user.organizationId }, select: { id: true } });
+  if (!existing) throw new Error("Order was not found.");
 
   return database.order.update({
     where: { id: orderId },
@@ -133,8 +144,12 @@ export async function changeOrderStatus(
   orderId: string,
   status: OrderStatusValue,
   database: OrderUpdateDb = db as unknown as OrderUpdateDb
-) {
+): Promise<{ id: string }> {
+  if (database === (db as unknown as OrderUpdateDb)) return withOrganization(user.organizationId, (tx) => changeOrderStatus(user, orderId, status, tx as unknown as OrderUpdateDb));
   assertCanWriteOrders(user);
+
+  const existing = await database.order.findFirst({ where: { id: orderId, organizationId: user.organizationId }, select: { id: true } });
+  if (!existing) throw new Error("Order was not found.");
 
   return database.order.update({
     where: { id: orderId },

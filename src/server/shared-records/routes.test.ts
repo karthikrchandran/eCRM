@@ -6,6 +6,7 @@ import { upsertSharedRecord } from "@/server/shared-records/mutations";
 import { listSharedRecords } from "@/server/shared-records/queries";
 
 vi.mock("@/server/shared-records/api-auth", () => ({
+  getSharedDataOrganizationId: vi.fn(() => "org_test"),
   requireSharedDataApiToken: vi.fn()
 }));
 
@@ -63,7 +64,7 @@ describe("shared records route handlers", () => {
     await expect(response.json()).resolves.toMatchObject({
       records: [{ id: "shared_1" }]
     });
-    expect(listSharedRecordsMock).toHaveBeenCalledWith({
+    expect(listSharedRecordsMock).toHaveBeenCalledWith("org_test", {
       entityType: "CUSTOMER",
       q: "acme",
       status: "ACTIVE",

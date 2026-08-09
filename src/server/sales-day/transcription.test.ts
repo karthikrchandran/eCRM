@@ -6,6 +6,7 @@ describe("sales-day voice storage and transcription", () => {
   it("rejects unsupported voice note MIME types before writing audio", async () => {
     await expect(
       saveVoiceNoteAudio({
+        organizationId: "org_test",
         ownerId: "sales_1",
         voiceNoteId: "note_1",
         originalFileName: "note.txt",
@@ -17,6 +18,7 @@ describe("sales-day voice storage and transcription", () => {
 
   it("accepts browser recorder MIME parameters and common mobile audio uploads", async () => {
     const recorded = await saveVoiceNoteAudio({
+      organizationId: "org_test",
       ownerId: "sales_1",
       voiceNoteId: "note_recorded",
       originalFileName: "recording.webm",
@@ -24,6 +26,7 @@ describe("sales-day voice storage and transcription", () => {
       buffer: Buffer.from("recorded audio")
     });
     const uploaded = await saveVoiceNoteAudio({
+      organizationId: "org_test",
       ownerId: "sales_1",
       voiceNoteId: "note_uploaded",
       originalFileName: "upload.m4a",

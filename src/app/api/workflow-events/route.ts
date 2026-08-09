@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { requireSharedDataApiToken } from "@/server/shared-records/api-auth";
+import { getSharedDataOrganizationId, requireSharedDataApiToken } from "@/server/shared-records/api-auth";
 import { ingestWorkflowEvent } from "@/server/workflow-events/service";
 
 const workflowEventSchema = z.object({
@@ -18,6 +18,8 @@ const workflowEventSchema = z.object({
 export async function POST(request: Request) {
   const authResponse = requireSharedDataApiToken(request);
   if (authResponse) return authResponse;
+  const organizationId = getSharedDataOrganizationId();
+  if (!organizationId) return Response.json({ error: "Shared data organization is not configured." }, { status: 500 });
 
   let body: unknown;
   try {
@@ -27,7 +29,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const event = await ingestWorkflowEvent(workflowEventSchema.parse(body));
+    const event = await ingestWorkflowEvent(organizationId, workflowEventSchema.parse(body));
     return Response.json({ event }, { status: 201 });
   } catch (error) {
     if (error instanceof z.ZodError) {

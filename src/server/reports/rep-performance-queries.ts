@@ -1,5 +1,6 @@
 import type { Prisma, User } from "@prisma/client";
 import { db } from "@/server/db";
+import { withOrganization } from "@/server/organizations/with-organization";
 import { calculateOrderPaymentSummary } from "@/server/finance/calculations";
 import { canManageAdminSettings } from "@/server/auth/permissions";
 import type { ReportsUser } from "./types";
@@ -50,10 +51,11 @@ export async function listSalesRepOptions(
   user: ReportsUser,
   database: RepPerformanceDb = db as unknown as RepPerformanceDb
 ): Promise<SalesRepOption[]> {
+  if (database === (db as unknown as RepPerformanceDb)) return withOrganization(user.organizationId, (tx) => listSalesRepOptions(user, tx as unknown as RepPerformanceDb));
   assertAdminOnly(user);
 
   return database.user.findMany({
-    where: { active: true, role: "SALES" },
+    where: { active: true, role: "SALES", memberships: { some: { organizationId: user.organizationId, status: "ACTIVE" } } },
     orderBy: { name: "asc" },
     select: { id: true, name: true, email: true }
   });
@@ -78,18 +80,20 @@ export async function listRepPerformanceSummaries(
   filters: RepPerformanceFilters = {},
   database: RepPerformanceDb = db as unknown as RepPerformanceDb
 ): Promise<RepPerformanceSummary[]> {
+  if (database === (db as unknown as RepPerformanceDb)) return withOrganization(user.organizationId, (tx) => listRepPerformanceSummaries(user, filters, tx as unknown as RepPerformanceDb));
   assertAdminOnly(user);
 
   const bookedAt = buildBookedAtFilter(filters);
 
   const [reps, orders, targets, incentives] = await Promise.all([
     database.user.findMany({
-      where: { active: true, role: "SALES", ...(filters.ownerId ? { id: filters.ownerId } : {}) },
+      where: { active: true, role: "SALES", memberships: { some: { organizationId: user.organizationId, status: "ACTIVE" } }, ...(filters.ownerId ? { id: filters.ownerId } : {}) },
       orderBy: { name: "asc" },
       select: { id: true, name: true, email: true }
     }),
     database.order.findMany({
       where: {
+        organizationId: user.organizationId,
         status: { not: "CANCELLED" },
         ...(bookedAt ? { bookedAt } : {})
       },
@@ -104,6 +108,7 @@ export async function listRepPerformanceSummaries(
     }),
     database.salesTarget.findMany({
       where: {
+        organizationId: user.organizationId,
         ...(filters.financialYear ? { financialYear: filters.financialYear } : {}),
         ...(filters.quarter ? { quarter: filters.quarter } : {})
       },
@@ -111,6 +116,7 @@ export async function listRepPerformanceSummaries(
     }),
     database.incentive.findMany({
       where: {
+        organizationId: user.organizationId,
         ...(bookedAt ? { order: { bookedAt } } : {})
       },
       select: {

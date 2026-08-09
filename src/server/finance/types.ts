@@ -2,6 +2,7 @@ import type { CostComponentStatus, InvoiceStatus, OrganizationRole, PaymentMode 
 
 export type FinanceUser = {
   id: string;
+  organizationId: string;
   role: OrganizationRole;
 };
 

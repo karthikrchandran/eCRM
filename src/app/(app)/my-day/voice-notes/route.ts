@@ -34,6 +34,7 @@ export async function POST(request: Request) {
   let saved;
   try {
     saved = await saveVoiceNoteAudio({
+      organizationId: user.organizationId,
       ownerId: user.id,
       voiceNoteId,
       originalFileName: audio.name || "sales-voice-note.webm",
@@ -61,7 +62,7 @@ export async function POST(request: Request) {
   if (transcript) {
     const transcriptResult = buildTranscriptResult(transcript);
     await saveVoiceNoteTranscript(user, voiceNoteId, transcriptResult);
-    await createSuggestedActionsForVoiceNote(voiceNoteId, transcriptResult.suggestedActions);
+    await createSuggestedActionsForVoiceNote(user, voiceNoteId, transcriptResult.suggestedActions);
   }
 
   return NextResponse.json({

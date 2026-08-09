@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client";
 
-import { db } from "@/server/db";
+import { withOrganization } from "@/server/organizations/with-organization";
 
 import { mapSharedRecordRow } from "./mappers";
 import type { SharedBusinessRecordDto, SharedBusinessRecordRow } from "./types";
@@ -75,7 +75,7 @@ type SharedRecordExportPersistenceClient = {
       entityType: ExportableSharedRecordType | null;
       itemCount: number;
     }>;
-    findUnique: (args: Prisma.SharedRecordExportSnapshotFindUniqueArgs) => Promise<{
+    findFirst: (args: Prisma.SharedRecordExportSnapshotFindFirstArgs) => Promise<{
       id: string;
       entityType: ExportableSharedRecordType | null;
       itemCount: number;
@@ -176,9 +176,11 @@ function ensureCursorMatchesRequestedStream(
 }
 
 function buildExportWhere(
+  organizationId: string,
   entityType: ExportableSharedRecordType | undefined
 ): Prisma.SharedBusinessRecordWhereInput {
   return {
+    organizationId,
     archivedAt: null,
     ...(entityType ? { entityType } : { entityType: { in: [...exportableSharedRecordTypes] } })
   };
@@ -191,6 +193,7 @@ function buildMaterializationCursorWhere(cursor: MaterializationCursor): Prisma.
 }
 
 function createPrismaMaterializationDb(
+  organizationId: string,
   client: SharedRecordExportPersistenceClient
 ): SharedRecordExportMaterializationDb {
   return {
@@ -200,6 +203,7 @@ function createPrismaMaterializationDb(
     async createExportSnapshot({ entityType, expiresAt }) {
       const snapshot = await client.sharedRecordExportSnapshot.create({
         data: {
+          organizationId,
           entityType: entityType ?? null,
           expiresAt
         }
@@ -217,6 +221,7 @@ function createPrismaMaterializationDb(
 
       await client.sharedRecordExportSnapshotItem.createMany({
         data: items.map((item, index) => ({
+          organizationId,
           snapshotId,
           position: startPosition + index,
           payload: item as unknown as Prisma.InputJsonValue
@@ -240,6 +245,7 @@ function createPrismaMaterializationDb(
     async deleteExpiredExportSnapshots(before) {
       await client.sharedRecordExportSnapshot.deleteMany({
         where: {
+          organizationId,
           expiresAt: {
             lt: before
           }
@@ -249,17 +255,16 @@ function createPrismaMaterializationDb(
   };
 }
 
-const prismaSharedRecordExportDb: SharedRecordExportDb = {
-  withSnapshotMaterialization: (callback) =>
-    db.$transaction(
-      async (transaction) => callback(createPrismaMaterializationDb(transaction as unknown as SharedRecordExportPersistenceClient)),
-      {
-        isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead
-      }
-    ),
+function prismaSharedRecordExportDb(
+  organizationId: string,
+  client: SharedRecordExportPersistenceClient
+): SharedRecordExportDb {
+ return {
+  withSnapshotMaterialization: (callback) => callback(createPrismaMaterializationDb(organizationId, client)),
   async deleteExpiredExportSnapshots(before) {
-    await db.sharedRecordExportSnapshot.deleteMany({
+    await client.sharedRecordExportSnapshot.deleteMany({
       where: {
+        organizationId,
         expiresAt: {
           lt: before
         }
@@ -267,8 +272,8 @@ const prismaSharedRecordExportDb: SharedRecordExportDb = {
     });
   },
   async getExportSnapshot(snapshotId) {
-    const snapshot = await db.sharedRecordExportSnapshot.findUnique({
-      where: { id: snapshotId },
+    const snapshot = await client.sharedRecordExportSnapshot.findFirst({
+      where: { id: snapshotId, organizationId },
       select: {
         id: true,
         entityType: true,
@@ -287,8 +292,9 @@ const prismaSharedRecordExportDb: SharedRecordExportDb = {
     };
   },
   async getExportSnapshotItems(snapshotId, offset, limit) {
-    const rows = await db.sharedRecordExportSnapshotItem.findMany({
+    const rows = await client.sharedRecordExportSnapshotItem.findMany({
       where: {
+        organizationId,
         snapshotId,
         position: {
           gte: offset
@@ -300,15 +306,18 @@ const prismaSharedRecordExportDb: SharedRecordExportDb = {
 
     return rows.map((row) => row.payload as unknown as SharedBusinessRecordDto);
   }
-};
+ };
+}
 
 async function materializeSnapshotPage(
   {
     database,
+    organizationId,
     entityType,
     limit
   }: {
     database: SharedRecordExportDb;
+    organizationId: string;
     entityType: ExportableSharedRecordType | undefined;
     limit: number;
   }
@@ -330,7 +339,7 @@ async function materializeSnapshotPage(
     while (true) {
       const rows = await transaction.sharedBusinessRecord.findMany({
         where: {
-          ...buildExportWhere(entityType),
+          ...buildExportWhere(organizationId, entityType),
           ...(cursor ? buildMaterializationCursorWhere(cursor) : {})
         },
         orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
@@ -367,9 +376,23 @@ async function materializeSnapshotPage(
 }
 
 export async function buildSharedRecordExportPage(
+  organizationId: string,
   filters: SharedRecordExportFilters = {},
-  database: SharedRecordExportDb = prismaSharedRecordExportDb
+  database?: SharedRecordExportDb
 ): Promise<{ items: SharedBusinessRecordDto[]; nextCursor: string | null }> {
+  if (!database) {
+    return withOrganization(organizationId, (transaction) =>
+      buildSharedRecordExportPage(
+        organizationId,
+        filters,
+        prismaSharedRecordExportDb(
+          organizationId,
+          transaction as unknown as SharedRecordExportPersistenceClient
+        )
+      )
+    );
+  }
+
   const limit = Math.min(
     Math.max(filters.limit ?? DEFAULT_SHARED_RECORD_EXPORT_PAGE_SIZE, 1),
     MAX_SHARED_RECORD_EXPORT_PAGE_SIZE
@@ -381,6 +404,7 @@ export async function buildSharedRecordExportPage(
   if (!cursor) {
     const { items, snapshot } = await materializeSnapshotPage({
       database,
+      organizationId,
       entityType,
       limit
     });

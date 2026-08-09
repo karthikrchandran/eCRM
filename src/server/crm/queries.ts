@@ -1,5 +1,6 @@
 import type { Prisma, User } from "@prisma/client";
 import { db } from "@/server/db";
+import { withOrganization } from "@/server/organizations/with-organization";
 import { assertCanViewCrmRecords, type CrmUser } from "./permissions";
 import type { ContactFilters, LeadFilters } from "./types";
 
@@ -137,7 +138,8 @@ type QueryDb = {
 
 type ContactDetailDb = {
   contact: {
-    findUnique: (args: Prisma.ContactFindUniqueArgs) => Promise<ContactDetailRecord | null>;
+    findFirst?: (args: Prisma.ContactFindFirstArgs) => Promise<ContactDetailRecord | null>;
+    findUnique?: (args: Prisma.ContactFindUniqueArgs) => Promise<ContactDetailRecord | null>;
   };
 };
 
@@ -236,8 +238,8 @@ type CustomerTimelineDb = {
   };
 };
 
-function buildLeadWhere(filters: LeadFilters): Prisma.LeadCustomerWhereInput {
-  const where: Prisma.LeadCustomerWhereInput = {};
+function buildLeadWhere(organizationId: string, filters: LeadFilters): Prisma.LeadCustomerWhereInput {
+  const where: Prisma.LeadCustomerWhereInput = { organizationId };
 
   if (filters.ownerId) {
     where.ownerId = filters.ownerId;
@@ -278,8 +280,8 @@ function buildLeadWhere(filters: LeadFilters): Prisma.LeadCustomerWhereInput {
   return where;
 }
 
-function buildContactWhere(filters: ContactFilters): Prisma.ContactWhereInput {
-  const where: Prisma.ContactWhereInput = {};
+function buildContactWhere(organizationId: string, filters: ContactFilters): Prisma.ContactWhereInput {
+  const where: Prisma.ContactWhereInput = { organizationId };
 
   if (filters.q) {
     where.OR = [
@@ -299,9 +301,10 @@ export async function listLeadCustomers(
   user: CrmUser,
   filters: LeadFilters,
   database: QueryDb = db as unknown as QueryDb
-) {
+): Promise<{ records: LeadCustomerListRecord[]; owners: CrmOwner[] }> {
+  if (database === (db as unknown as QueryDb)) return withOrganization(user.organizationId, (tx) => listLeadCustomers(user, filters, tx as unknown as QueryDb));
   assertCanViewCrmRecords(user);
-  const where = buildLeadWhere(filters);
+  const where = buildLeadWhere(user.organizationId, filters);
 
   const [records, owners] = await Promise.all([
     database.leadCustomer.findMany({
@@ -310,7 +313,7 @@ export async function listLeadCustomers(
       include: leadListInclude
     }),
     database.user.findMany({
-      where: { active: true, role: { in: ["ADMIN", "SALES"] } },
+      where: { active: true, role: { in: ["ADMIN", "SALES"] }, memberships: { some: { organizationId: user.organizationId, status: "ACTIVE" } } },
       orderBy: { name: "asc" },
       select: crmOwnerSelect
     })
@@ -323,9 +326,10 @@ export async function listContacts(
   user: CrmUser,
   filters: ContactFilters,
   database: QueryDb = db as unknown as QueryDb
-) {
+): Promise<{ records: ContactListRecord[]; owners: CrmOwner[] }> {
+  if (database === (db as unknown as QueryDb)) return withOrganization(user.organizationId, (tx) => listContacts(user, filters, tx as unknown as QueryDb));
   assertCanViewCrmRecords(user);
-  const where = buildContactWhere(filters);
+  const where = buildContactWhere(user.organizationId, filters);
 
   const [records, owners] = await Promise.all([
     database.contact.findMany({
@@ -334,7 +338,7 @@ export async function listContacts(
       include: contactListInclude
     }),
     database.user.findMany({
-      where: { active: true, role: { in: ["ADMIN", "SALES"] } },
+      where: { active: true, role: { in: ["ADMIN", "SALES"] }, memberships: { some: { organizationId: user.organizationId, status: "ACTIVE" } } },
       orderBy: { name: "asc" },
       select: crmOwnerSelect
     })
@@ -359,20 +363,22 @@ export async function getContactDetail(
   user: CrmUser,
   contactId: string,
   database: ContactDetailDb = db as unknown as ContactDetailDb
-) {
+): Promise<ContactDetailRecord | null> {
+  if (database === (db as unknown as ContactDetailDb)) return withOrganization(user.organizationId, (tx) => getContactDetail(user, contactId, tx as unknown as ContactDetailDb));
   assertCanViewCrmRecords(user);
 
-  return database.contact.findUnique({
-    where: { id: contactId },
+  return (database.contact.findFirst ?? database.contact.findUnique!)({
+    where: { id: contactId, organizationId: user.organizationId },
     include: contactDetailInclude
   });
 }
 
-export async function getLeadCustomerDetail(user: CrmUser, leadCustomerId: string) {
+export async function getLeadCustomerDetail(user: CrmUser, leadCustomerId: string, database = db): Promise<LeadCustomerDetail | null> {
+  if (database === db) return withOrganization(user.organizationId, (tx) => getLeadCustomerDetail(user, leadCustomerId, tx as unknown as typeof db));
   assertCanViewCrmRecords(user);
 
-  return db.leadCustomer.findUnique({
-    where: { id: leadCustomerId },
+  return database.leadCustomer.findFirst({
+    where: { id: leadCustomerId, organizationId: user.organizationId },
     include: leadDetailInclude
   });
 }
@@ -402,11 +408,12 @@ export async function getCustomer360Timeline(
   leadCustomerId: string,
   database: CustomerTimelineDb = db as unknown as CustomerTimelineDb
 ): Promise<CustomerTimelineItem[]> {
+  if (database === (db as unknown as CustomerTimelineDb)) return withOrganization(user.organizationId, (tx) => getCustomer360Timeline(user, leadCustomerId, tx as unknown as CustomerTimelineDb));
   assertCanViewCrmRecords(user);
 
   const [activities, salesTasks, textNotes, voiceNotes, workflowEvents, opportunities, proposals, orders] = await Promise.all([
     database.activity.findMany({
-      where: { leadCustomerId },
+      where: { leadCustomerId, organizationId: user.organizationId },
       orderBy: { createdAt: "desc" },
       take: 50,
       select: {
@@ -421,7 +428,7 @@ export async function getCustomer360Timeline(
       }
     }),
     database.salesTask.findMany({
-      where: { leadCustomerId },
+      where: { leadCustomerId, organizationId: user.organizationId },
       orderBy: [{ dueAt: "asc" }, { updatedAt: "desc" }],
       take: 50,
       select: {
@@ -436,13 +443,13 @@ export async function getCustomer360Timeline(
       }
     }),
     database.salesTextNote.findMany({
-      where: { leadCustomerId },
+      where: { leadCustomerId, organizationId: user.organizationId },
       orderBy: { createdAt: "desc" },
       take: 50,
       select: { id: true, body: true, createdAt: true, owner: { select: { id: true, name: true } } }
     }),
     database.salesVoiceNote.findMany({
-      where: { leadCustomerId },
+      where: { leadCustomerId, organizationId: user.organizationId },
       orderBy: { createdAt: "desc" },
       take: 50,
       select: {
@@ -456,6 +463,7 @@ export async function getCustomer360Timeline(
     }),
     database.workflowEvent?.findMany({
       where: {
+        organizationId: user.organizationId,
         OR: [{ entityId: leadCustomerId }, { relatedRecordId: leadCustomerId }]
       },
       orderBy: [{ occurredAt: "desc" }, { createdAt: "desc" }],
@@ -471,7 +479,7 @@ export async function getCustomer360Timeline(
       }
     }) ?? [],
     database.opportunity.findMany({
-      where: { leadCustomerId },
+      where: { leadCustomerId, organizationId: user.organizationId },
       orderBy: { updatedAt: "desc" },
       take: 50,
       select: {
@@ -484,13 +492,13 @@ export async function getCustomer360Timeline(
       }
     }),
     database.proposal.findMany({
-      where: { opportunity: { leadCustomerId } },
+      where: { organizationId: user.organizationId, opportunity: { leadCustomerId } },
       orderBy: { updatedAt: "desc" },
       take: 50,
       select: { id: true, title: true, status: true, totalPaisa: true, currency: true, updatedAt: true }
     }),
     database.order.findMany({
-      where: { leadCustomerId },
+      where: { leadCustomerId, organizationId: user.organizationId },
       orderBy: { bookedAt: "desc" },
       take: 50,
       select: {
@@ -683,34 +691,37 @@ export async function getCustomer360Timeline(
   });
 }
 
-export async function listCrmOwners(): Promise<CrmOwner[]> {
-  return db.user.findMany({
-    where: { active: true, role: { in: ["ADMIN", "SALES"] } },
+export async function listCrmOwners(user: CrmUser, database = db): Promise<CrmOwner[]> {
+  if (database === db) return withOrganization(user.organizationId, (tx) => listCrmOwners(user, tx as unknown as typeof db));
+  return database.user.findMany({
+    where: { active: true, role: { in: ["ADMIN", "SALES"] }, memberships: { some: { organizationId: user.organizationId, status: "ACTIVE" } } },
     orderBy: { name: "asc" },
     select: crmOwnerSelect
   });
 }
 
-export async function listBranchOptions(user: CrmUser, leadCustomerId: string) {
+export async function listBranchOptions(user: CrmUser, leadCustomerId: string, database = db): Promise<Array<{ id: string; name: string; city: string | null; region: string | null }>> {
+  if (database === db) return withOrganization(user.organizationId, (tx) => listBranchOptions(user, leadCustomerId, tx as unknown as typeof db));
   assertCanViewCrmRecords(user);
 
-  return db.branch.findMany({
-    where: { leadCustomerId },
+  return database.branch.findMany({
+    where: { leadCustomerId, organizationId: user.organizationId },
     orderBy: { name: "asc" },
     select: { id: true, name: true, city: true, region: true }
   });
 }
 
-export async function getDashboardFollowUpCounts(user: CrmUser) {
+export async function getDashboardFollowUpCounts(user: CrmUser, database = db): Promise<{ overdue: number; today: number; upcoming: number }> {
+  if (database === db) return withOrganization(user.organizationId, (tx) => getDashboardFollowUpCounts(user, tx as unknown as typeof db));
   assertCanViewCrmRecords(user);
   const now = new Date();
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const startOfTomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
 
   const [overdue, today, upcoming] = await Promise.all([
-    db.activity.count({ where: { status: "OPEN", dueAt: { lt: startOfToday } } }),
-    db.activity.count({ where: { status: "OPEN", dueAt: { gte: startOfToday, lt: startOfTomorrow } } }),
-    db.activity.count({ where: { status: "OPEN", dueAt: { gte: startOfTomorrow } } })
+    database.activity.count({ where: { organizationId: user.organizationId, status: "OPEN", dueAt: { lt: startOfToday } } }),
+    database.activity.count({ where: { organizationId: user.organizationId, status: "OPEN", dueAt: { gte: startOfToday, lt: startOfTomorrow } } }),
+    database.activity.count({ where: { organizationId: user.organizationId, status: "OPEN", dueAt: { gte: startOfTomorrow } } })
   ]);
 
   return { overdue, today, upcoming };

@@ -156,16 +156,16 @@ describe("organization tenancy schema contract", () => {
     expect(block(schema, "model", "User")).toMatch(/\bmemberships\s+OrganizationMembership\[\]/);
   });
 
-  test.each(tenantOwnedModels)("adds nullable expand ownership to %s", (modelName) => {
+  test.each(tenantOwnedModels)("keeps organization ownership required after contract for %s", (modelName) => {
     const model = block(schema, "model", modelName);
-    expect(model).toMatch(/\borganizationId\s+String\?/);
+    expect(model).toMatch(/\borganizationId\s+String\b/);
     expect(model).toMatch(/\borganization\s+Organization\?\s+@relation\(fields: \[organizationId\]/);
     expect(model).toContain("@@index([organizationId])");
   });
 
-  test("declares both legacy and tenant shared external-key uniqueness during expand", () => {
+  test("retains only tenant-scoped shared external-key uniqueness after contract", () => {
     const sharedRecord = block(schema, "model", "SharedBusinessRecord");
-    expect(sharedRecord).toContain("@@unique([entityType, externalKey])");
+    expect(sharedRecord).not.toContain("@@unique([entityType, externalKey])");
     expect(sharedRecord).toContain("@@unique([organizationId, entityType, externalKey])");
   });
 });

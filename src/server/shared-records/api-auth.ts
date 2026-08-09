@@ -14,3 +14,8 @@ export function requireSharedDataApiToken(request: Request): Response | null {
 
   return null;
 }
+
+export function getSharedDataOrganizationId(): string | null {
+  const organizationId = process.env.SHARED_DATA_ORGANIZATION_ID?.trim();
+  return organizationId || null;
+}
