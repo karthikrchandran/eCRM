@@ -11,7 +11,7 @@ export function LoginForm() {
   return (
     <form action={formAction} className="surface mx-auto flex w-full max-w-sm flex-col gap-4 p-6">
       <div>
-        <h1 className="text-2xl font-semibold">Welcome back</h1>
+        <h2 className="text-2xl font-semibold">Welcome back</h2>
         <p className="mt-1 text-sm text-[var(--muted)]">Sign in to continue.</p>
       </div>
 
