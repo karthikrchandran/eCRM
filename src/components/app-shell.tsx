@@ -1,4 +1,4 @@
-import type { UserRole } from "@prisma/client";
+import type { OrganizationRole } from "@prisma/client";
 import Link from "next/link";
 import { logoutAction } from "@/server/auth/actions";
 import { RoleBadge } from "@/components/ui/sales-primitives";
@@ -7,7 +7,7 @@ type AppShellProps = {
   user: {
     name: string;
     email: string;
-    role: UserRole;
+    role: OrganizationRole;
   };
   children: React.ReactNode;
 };

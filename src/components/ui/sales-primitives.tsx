@@ -1,4 +1,4 @@
-import type { UserRole } from "@prisma/client";
+import type { OrganizationRole } from "@prisma/client";
 import { clsx } from "clsx";
 
 type PageHeaderProps = {
@@ -31,8 +31,12 @@ export function PageHeader({ actions, description, eyebrow, title }: PageHeaderP
   );
 }
 
-export function RoleBadge({ role }: { role: UserRole | "ADMIN" | "SALES" }) {
-  const label = role === "ADMIN" ? "Admin" : "Sales";
+export function RoleBadge({ role }: { role: OrganizationRole }) {
+  const label = role
+    .toLowerCase()
+    .split("_")
+    .map((part) => part[0]?.toUpperCase() + part.slice(1))
+    .join(" ");
   const classes =
     role === "ADMIN"
       ? "border-[#bfdbfe] bg-[#eff6ff] text-[var(--brand-navy)]"

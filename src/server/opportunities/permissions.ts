@@ -1,8 +1,9 @@
+import type { OrganizationRole } from "@prisma/client";
 import { canViewCompanyRecords } from "@/server/auth/permissions";
 
 export type OpportunityUser = {
   id: string;
-  role: "ADMIN" | "SALES";
+  role: OrganizationRole;
 };
 
 export function assertCanViewOpportunities(user: OpportunityUser) {

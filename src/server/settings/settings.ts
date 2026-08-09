@@ -1,4 +1,4 @@
-import type { Prisma, UserRole } from "@prisma/client";
+import type { OrganizationRole, Prisma } from "@prisma/client";
 import { canManageAdminSettings, canViewCompanyRecords } from "@/server/auth/permissions";
 import { db } from "@/server/db";
 
@@ -6,7 +6,7 @@ export type SupportedCurrency = "INR" | "USD";
 
 export type SettingsUser = {
   id: string;
-  role: UserRole | "ADMIN" | "SALES";
+  role: OrganizationRole;
 };
 
 export type BusinessSettingsView = {
@@ -21,13 +21,13 @@ type SettingsDb = {
 };
 
 function assertCanViewSettings(user: SettingsUser) {
-  if (!canViewCompanyRecords(user.role as UserRole)) {
+  if (!canViewCompanyRecords(user.role)) {
     throw new Error("You do not have permission to view business settings.");
   }
 }
 
 function assertCanManageSettings(user: SettingsUser) {
-  if (!canManageAdminSettings(user.role as UserRole)) {
+  if (!canManageAdminSettings(user.role)) {
     throw new Error("Only Admin can manage business settings.");
   }
 }

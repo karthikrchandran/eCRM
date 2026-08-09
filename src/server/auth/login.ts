@@ -1,8 +1,8 @@
-import type { UserRole } from "@prisma/client";
+import type { MembershipStatus, OrganizationRole, OrganizationStatus, UserRole } from "@prisma/client";
 import { z } from "zod";
 import { db } from "@/server/db";
 import { verifyPassword as verifyPasswordHash } from "./password";
-import type { SessionUser } from "./session";
+import { membershipSessionVersion, type SessionUser } from "./session";
 
 const SAFE_LOGIN_ERROR = "Invalid email or password.";
 
@@ -27,6 +27,16 @@ type LoginUserRecord = {
   passwordHash: string;
   role: UserRole;
   active: boolean;
+  memberships: Array<{
+    id: string;
+    organizationId: string;
+    role: OrganizationRole;
+    status: MembershipStatus;
+    updatedAt: Date;
+    organization: {
+      status: OrganizationStatus;
+    };
+  }>;
 };
 
 type LoginDependencies = {
@@ -35,7 +45,46 @@ type LoginDependencies = {
 };
 
 async function findUserByEmail(email: string) {
-  return db.user.findUnique({ where: { email } });
+  return db.user.findUnique({
+    where: { email },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      passwordHash: true,
+      role: true,
+      active: true,
+      memberships: {
+        where: {
+          status: "ACTIVE",
+          organization: { status: "ACTIVE" }
+        },
+        select: {
+          id: true,
+          organizationId: true,
+          role: true,
+          status: true,
+          updatedAt: true,
+          organization: {
+            select: { status: true }
+          }
+        },
+        orderBy: [{ updatedAt: "desc" }, { id: "asc" }]
+      }
+    }
+  });
+}
+
+function selectLoginMembership(user: LoginUserRecord) {
+  return user.memberships
+    .filter(
+      (membership) =>
+        membership.status === "ACTIVE" && membership.organization.status === "ACTIVE"
+    )
+    .sort((left, right) => {
+      const newestFirst = right.updatedAt.getTime() - left.updatedAt.getTime();
+      return newestFirst || left.id.localeCompare(right.id);
+    })[0];
 }
 
 export async function authenticateLogin(
@@ -62,12 +111,27 @@ export async function authenticateLogin(
     return { error: SAFE_LOGIN_ERROR };
   }
 
+  const membership = selectLoginMembership(user);
+
+  if (!membership) {
+    return { error: SAFE_LOGIN_ERROR };
+  }
+
+  const sessionVersion = membershipSessionVersion(membership.updatedAt);
+
+  if (!Number.isSafeInteger(sessionVersion) || sessionVersion <= 0) {
+    return { error: SAFE_LOGIN_ERROR };
+  }
+
   return {
     user: {
       id: user.id,
       name: user.name,
       email: user.email,
-      role: user.role
+      organizationId: membership.organizationId,
+      membershipId: membership.id,
+      role: membership.role,
+      sessionVersion
     }
   };
 }

@@ -1,8 +1,8 @@
-import type { OrderStatus, ProductionStageStatus, UserRole } from "@prisma/client";
+import type { OrderStatus, OrganizationRole, ProductionStageStatus } from "@prisma/client";
 
 export type ProductionUser = {
   id: string;
-  role: UserRole;
+  role: OrganizationRole;
 };
 
 export type ProductionStatusValue = ProductionStageStatus;

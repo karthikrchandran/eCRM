@@ -1,11 +1,11 @@
-import type { UserRole } from "@prisma/client";
+import type { OrganizationRole } from "@prisma/client";
 import type { ReportCurrency } from "@/components/reports/report-formatters";
 
 export type ReportsUser = {
   email: string;
   id: string;
   name: string;
-  role: UserRole;
+  role: OrganizationRole;
 };
 
 export type ReportsFilters = {

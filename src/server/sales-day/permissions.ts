@@ -1,9 +1,9 @@
-import type { UserRole } from "@prisma/client";
+import type { OrganizationRole } from "@prisma/client";
 import { canViewCompanyRecords } from "@/server/auth/permissions";
 
 export type SalesDayUser = {
   id: string;
-  role: UserRole;
+  role: OrganizationRole;
 };
 
 export type OwnedSalesDayRecord = {

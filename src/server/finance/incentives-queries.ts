@@ -1,6 +1,7 @@
-import type { IncentiveStatus, Prisma, User } from "@prisma/client";
+import type { IncentiveStatus, Prisma } from "@prisma/client";
 import { db } from "@/server/db";
 import { assertCanViewFinance } from "./permissions";
+import type { FinanceUser } from "./types";
 
 const financeOwnerSelect = {
   id: true,
@@ -64,7 +65,7 @@ function buildBookedAtFilter(filters: IncentiveListFilters) {
 }
 
 export async function listIncentives(
-  user: Pick<User, "id" | "role">,
+  user: FinanceUser,
   filters: IncentiveListFilters = {},
   database: IncentiveQueryDb = db as unknown as IncentiveQueryDb
 ) {

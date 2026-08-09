@@ -1,8 +1,8 @@
-import type { OrderStatus } from "@prisma/client";
+import type { OrderStatus, OrganizationRole } from "@prisma/client";
 
 export type OrderUser = {
   id: string;
-  role: "ADMIN" | "SALES";
+  role: OrganizationRole;
 };
 
 export type ActionState = {

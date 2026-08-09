@@ -1,38 +1,21 @@
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { db } from "@/server/db";
-import { SESSION_COOKIE_NAME, verifySessionToken } from "./session";
+import { getCurrentOrganizationContext } from "@/server/organizations/context";
 
 export async function getCurrentUser() {
-  const cookieStore = await cookies();
-  const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
+  const context = await getCurrentOrganizationContext();
 
-  if (!token) {
-    return null;
-  }
-
-  const session = await verifySessionToken(token);
-
-  if (!session) {
-    return null;
-  }
-
-  const user = await db.user.findUnique({
-    where: { id: session.id },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      role: true,
-      active: true
-    }
-  });
-
-  if (!user?.active) {
-    return null;
-  }
-
-  return user;
+  return context
+    ? {
+        id: context.userId,
+        name: context.name,
+        email: context.email,
+        role: context.role,
+        active: true as const,
+        organizationId: context.organizationId,
+        membershipId: context.membershipId,
+        sessionVersion: context.sessionVersion
+      }
+    : null;
 }
 
 export async function requireUser() {

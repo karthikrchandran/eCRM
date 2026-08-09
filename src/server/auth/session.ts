@@ -9,13 +9,38 @@ const SESSION_AUDIENCE = "ecrm-session";
 const SESSION_MAX_TOKEN_AGE = "8h";
 
 const sessionUserSchema = z.object({
-  id: z.string().min(1),
-  email: z.string().email(),
-  name: z.string().min(1),
-  role: z.enum(["ADMIN", "SALES"])
-});
+  id: z.string().trim().min(1),
+  email: z.string().trim().email(),
+  name: z.string().trim().min(1),
+  organizationId: z.string().trim().min(1),
+  membershipId: z.string().trim().min(1),
+  role: z.enum(["OWNER", "ADMIN", "SALES", "FINANCE", "PRODUCTION", "READ_ONLY"]),
+  sessionVersion: z.number().int().positive()
+}).strict();
+
+const sessionTokenPayloadSchema = sessionUserSchema
+  .extend({
+    iss: z.literal(SESSION_ISSUER),
+    aud: z.literal(SESSION_AUDIENCE),
+    iat: z.number().int(),
+    exp: z.number().int()
+  })
+  .strict()
+  .transform(({ id, email, name, organizationId, membershipId, role, sessionVersion }) => ({
+    id,
+    email,
+    name,
+    organizationId,
+    membershipId,
+    role,
+    sessionVersion
+  }));
 
 export type SessionUser = z.infer<typeof sessionUserSchema>;
+
+export function membershipSessionVersion(updatedAt: Date) {
+  return updatedAt.getTime();
+}
 
 export function shouldUseSecureSessionCookie(appBaseUrl = getServerEnv().APP_BASE_URL) {
   return new URL(appBaseUrl).protocol === "https:";
@@ -46,7 +71,7 @@ export async function verifySessionToken(token: string, secret = getServerEnv().
       requiredClaims: ["exp", "iat"],
       maxTokenAge: SESSION_MAX_TOKEN_AGE
     });
-    return sessionUserSchema.parse(payload);
+    return sessionTokenPayloadSchema.parse(payload);
   } catch {
     return null;
   }
