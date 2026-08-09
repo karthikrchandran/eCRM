@@ -1,5 +1,14 @@
 import bcrypt from "bcryptjs";
-import { OrderStatus, PipelineStageKind, PrismaClient, ProposalStatus, UserRole } from "@prisma/client";
+import {
+  MembershipStatus,
+  OrderStatus,
+  OrganizationRole,
+  OrganizationStatus,
+  PipelineStageKind,
+  PrismaClient,
+  ProposalStatus,
+  UserRole
+} from "@prisma/client";
 import { demoProductionWorkItems, demoProposalLineItems, demoProposalTotals } from "./seed-fixtures";
 
 if (process.env.NODE_ENV === "production") {
@@ -7,6 +16,108 @@ if (process.env.NODE_ENV === "production") {
 }
 
 const prisma = new PrismaClient();
+
+async function ensureAraOrganization() {
+  const organization = await prisma.organization.upsert({
+    where: { key: "ara-global" },
+    update: {
+      deploymentRegion: "ap-south-1",
+      displayName: "ARA Global",
+      legalName: "ARA Global",
+      status: OrganizationStatus.ACTIVE
+    },
+    create: {
+      id: "org_ara_global",
+      deploymentRegion: "ap-south-1",
+      displayName: "ARA Global",
+      key: "ara-global",
+      legalName: "ARA Global",
+      status: OrganizationStatus.ACTIVE
+    }
+  });
+
+  await prisma.organizationSettings.upsert({
+    where: { organizationId: organization.id },
+    update: {
+      currency: "INR",
+      defaultCountry: "India",
+      enabledModules: ["crm", "sales", "pipeline", "proposals", "orders", "production", "finance", "incentives"],
+      financialClosePolicy: { timezone: "Asia/Kolkata" },
+      invoiceConfiguration: { defaultCurrency: "INR" },
+      locale: "en-IN",
+      numberingRules: { invoicePrefix: "ARA", orderPrefix: "ARA" },
+      operationalLimits: {},
+      paymentConfiguration: { defaultPaymentCycleDays: 30 },
+      retentionPolicy: { businessRecordDays: 2555 },
+      taxConfiguration: { taxSystem: "GST" },
+      timezone: "Asia/Kolkata"
+    },
+    create: {
+      id: "org_settings_ara_global",
+      organizationId: organization.id,
+      currency: "INR",
+      defaultCountry: "India",
+      enabledModules: ["crm", "sales", "pipeline", "proposals", "orders", "production", "finance", "incentives"],
+      financialClosePolicy: { timezone: "Asia/Kolkata" },
+      invoiceConfiguration: { defaultCurrency: "INR" },
+      locale: "en-IN",
+      numberingRules: { invoicePrefix: "ARA", orderPrefix: "ARA" },
+      operationalLimits: {},
+      paymentConfiguration: { defaultPaymentCycleDays: 30 },
+      retentionPolicy: { businessRecordDays: 2555 },
+      taxConfiguration: { taxSystem: "GST" },
+      timezone: "Asia/Kolkata"
+    }
+  });
+
+  await prisma.organizationBranding.upsert({
+    where: { organizationId: organization.id },
+    update: {
+      documentFooter: "ARA Global",
+      emailFromName: "ARA Global",
+      primaryColor: "#0F3D5E",
+      productName: "ARA Global eCRM",
+      secondaryColor: "#D4A017"
+    },
+    create: {
+      id: "org_branding_ara_global",
+      organizationId: organization.id,
+      documentFooter: "ARA Global",
+      emailFromName: "ARA Global",
+      primaryColor: "#0F3D5E",
+      productName: "ARA Global eCRM",
+      secondaryColor: "#D4A017"
+    }
+  });
+
+  return organization;
+}
+
+async function ensureAraMembership(input: {
+  organizationId: string;
+  userId: string;
+  legacyRole: UserRole;
+  active: boolean;
+}) {
+  await prisma.organizationMembership.upsert({
+    where: {
+      organizationId_userId: {
+        organizationId: input.organizationId,
+        userId: input.userId
+      }
+    },
+    update: {
+      role: input.legacyRole === UserRole.ADMIN ? OrganizationRole.ADMIN : OrganizationRole.SALES,
+      status: input.active ? MembershipStatus.ACTIVE : MembershipStatus.SUSPENDED
+    },
+    create: {
+      organizationId: input.organizationId,
+      userId: input.userId,
+      role: input.legacyRole === UserRole.ADMIN ? OrganizationRole.ADMIN : OrganizationRole.SALES,
+      status: input.active ? MembershipStatus.ACTIVE : MembershipStatus.SUSPENDED
+    }
+  });
+}
 
 async function resetLocalDemoData() {
   const tables = await prisma.$queryRaw<Array<{ tablename: string }>>`
@@ -180,6 +291,8 @@ async function upsertUser(input: {
 async function main() {
   await resetLocalDemoData();
 
+  const araOrganization = await ensureAraOrganization();
+
   await upsertUser({
     name: "Kavya Iyer",
     email: process.env.SEED_ADMIN_EMAIL ?? "admin@example.com",
@@ -209,9 +322,16 @@ async function main() {
   const sales = await prisma.user.findUniqueOrThrow({ where: { email: salesEmail } });
   const arjun = await prisma.user.findUniqueOrThrow({ where: { email: arjunEmail } });
 
+  await Promise.all([
+    ensureAraMembership({ organizationId: araOrganization.id, userId: admin.id, legacyRole: admin.role, active: admin.active }),
+    ensureAraMembership({ organizationId: araOrganization.id, userId: sales.id, legacyRole: sales.role, active: sales.active }),
+    ensureAraMembership({ organizationId: araOrganization.id, userId: arjun.id, legacyRole: arjun.role, active: arjun.active })
+  ]);
+
   const sampleLead = await prisma.leadCustomer.upsert({
     where: { id: "seed_lead_acme_learning" },
     update: {
+      organizationId: araOrganization.id,
       name: "Northstar Learning Pvt Ltd",
       state: "LEAD",
       industry: "Education",
@@ -222,6 +342,7 @@ async function main() {
     },
     create: {
       id: "seed_lead_acme_learning",
+      organizationId: araOrganization.id,
       name: "Northstar Learning Pvt Ltd",
       state: "LEAD",
       industry: "Education",
@@ -236,6 +357,7 @@ async function main() {
   await prisma.branch.upsert({
     where: { id: "seed_branch_acme_bengaluru" },
     update: {
+      organizationId: araOrganization.id,
       name: "Bengaluru Delivery Office",
       city: "Bengaluru",
       region: "Karnataka",
@@ -244,6 +366,7 @@ async function main() {
     },
     create: {
       id: "seed_branch_acme_bengaluru",
+      organizationId: araOrganization.id,
       leadCustomerId: sampleLead.id,
       name: "Bengaluru Delivery Office",
       city: "Bengaluru",
@@ -256,6 +379,7 @@ async function main() {
   await prisma.contact.upsert({
     where: { id: "seed_contact_acme_anita" },
     update: {
+      organizationId: araOrganization.id,
       name: "Anita Rao",
       designation: "Head of Learning Operations",
       email: "anita.rao@northstar.example",
@@ -264,6 +388,7 @@ async function main() {
     },
     create: {
       id: "seed_contact_acme_anita",
+      organizationId: araOrganization.id,
       leadCustomerId: sampleLead.id,
       branchId: "seed_branch_acme_bengaluru",
       name: "Anita Rao",
@@ -277,6 +402,7 @@ async function main() {
   await prisma.activity.upsert({
     where: { id: "seed_activity_acme_followup" },
     update: {
+      organizationId: araOrganization.id,
       ownerId: sales.id,
       status: "OPEN",
       subject: "Follow up on onboarding module requirements",
@@ -284,6 +410,7 @@ async function main() {
     },
     create: {
       id: "seed_activity_acme_followup",
+      organizationId: araOrganization.id,
       leadCustomerId: sampleLead.id,
       branchId: "seed_branch_acme_bengaluru",
       contactId: "seed_contact_acme_anita",
@@ -299,6 +426,7 @@ async function main() {
   await prisma.leadOwnershipHistory.upsert({
     where: { id: "seed_history_acme_admin_to_sales" },
     update: {
+      organizationId: araOrganization.id,
       fromOwnerId: admin.id,
       toOwnerId: sales.id,
       changedById: admin.id,
@@ -306,6 +434,7 @@ async function main() {
     },
     create: {
       id: "seed_history_acme_admin_to_sales",
+      organizationId: araOrganization.id,
       leadCustomerId: sampleLead.id,
       fromOwnerId: admin.id,
       toOwnerId: sales.id,
@@ -318,6 +447,7 @@ async function main() {
     await prisma.pipelineStage.upsert({
       where: { id: stage.id },
       update: {
+        organizationId: araOrganization.id,
         active: true,
         kind: stage.kind,
         name: stage.name,
@@ -325,7 +455,8 @@ async function main() {
       },
       create: {
         ...stage,
-        active: true
+        active: true,
+        organizationId: araOrganization.id
       }
     });
   }
@@ -333,6 +464,7 @@ async function main() {
   const opportunity = await prisma.opportunity.upsert({
     where: { id: "seed_opportunity_acme_lms_rollout" },
     update: {
+      organizationId: araOrganization.id,
       branchId: "seed_branch_acme_bengaluru",
       estimatedValueInr: "1250000.00",
       lastReachAt: new Date("2026-06-14T10:00:00.000Z"),
@@ -348,6 +480,7 @@ async function main() {
     },
     create: {
       id: "seed_opportunity_acme_lms_rollout",
+      organizationId: araOrganization.id,
       branchId: "seed_branch_acme_bengaluru",
       createdById: admin.id,
       estimatedValueInr: "1250000.00",
@@ -371,8 +504,9 @@ async function main() {
         userId: sales.id
       }
     },
-    update: { percent: 100 },
+    update: { organizationId: araOrganization.id, percent: 100 },
     create: {
+      organizationId: araOrganization.id,
       opportunityId: opportunity.id,
       percent: 100,
       userId: sales.id
@@ -388,9 +522,11 @@ async function main() {
       }
     },
     update: {
+      organizationId: araOrganization.id,
       targetValueInr: "1000000.00"
     },
     create: {
+      organizationId: araOrganization.id,
       createdById: admin.id,
       financialYear: 2026,
       ownerId: sales.id,
@@ -402,6 +538,7 @@ async function main() {
   const arjunLead = await prisma.leadCustomer.upsert({
     where: { id: "seed_lead_zenith_health" },
     update: {
+      organizationId: araOrganization.id,
       name: "Zenith Health Systems",
       state: "CUSTOMER",
       industry: "Healthcare",
@@ -412,6 +549,7 @@ async function main() {
     },
     create: {
       id: "seed_lead_zenith_health",
+      organizationId: araOrganization.id,
       name: "Zenith Health Systems",
       state: "CUSTOMER",
       industry: "Healthcare",
@@ -426,6 +564,7 @@ async function main() {
   await prisma.branch.upsert({
     where: { id: "seed_branch_zenith_mumbai" },
     update: {
+      organizationId: araOrganization.id,
       name: "Mumbai Corporate Office",
       city: "Mumbai",
       region: "Maharashtra",
@@ -434,6 +573,7 @@ async function main() {
     },
     create: {
       id: "seed_branch_zenith_mumbai",
+      organizationId: araOrganization.id,
       leadCustomerId: arjunLead.id,
       name: "Mumbai Corporate Office",
       city: "Mumbai",
@@ -446,6 +586,7 @@ async function main() {
   await prisma.contact.upsert({
     where: { id: "seed_contact_zenith_meera" },
     update: {
+      organizationId: araOrganization.id,
       name: "Meera Shah",
       designation: "VP People Operations",
       email: "meera.shah@zenith-health.example",
@@ -454,6 +595,7 @@ async function main() {
     },
     create: {
       id: "seed_contact_zenith_meera",
+      organizationId: araOrganization.id,
       leadCustomerId: arjunLead.id,
       branchId: "seed_branch_zenith_mumbai",
       name: "Meera Shah",
@@ -467,6 +609,7 @@ async function main() {
   await prisma.activity.upsert({
     where: { id: "seed_activity_zenith_renewal_review" },
     update: {
+      organizationId: araOrganization.id,
       ownerId: arjun.id,
       status: "OPEN",
       subject: "Review compliance-learning renewal scope",
@@ -474,6 +617,7 @@ async function main() {
     },
     create: {
       id: "seed_activity_zenith_renewal_review",
+      organizationId: araOrganization.id,
       leadCustomerId: arjunLead.id,
       branchId: "seed_branch_zenith_mumbai",
       contactId: "seed_contact_zenith_meera",
@@ -489,6 +633,7 @@ async function main() {
   await prisma.leadOwnershipHistory.upsert({
     where: { id: "seed_history_zenith_admin_to_arjun" },
     update: {
+      organizationId: araOrganization.id,
       fromOwnerId: admin.id,
       toOwnerId: arjun.id,
       changedById: admin.id,
@@ -496,6 +641,7 @@ async function main() {
     },
     create: {
       id: "seed_history_zenith_admin_to_arjun",
+      organizationId: araOrganization.id,
       leadCustomerId: arjunLead.id,
       fromOwnerId: admin.id,
       toOwnerId: arjun.id,
@@ -507,6 +653,7 @@ async function main() {
   const arjunOpportunity = await prisma.opportunity.upsert({
     where: { id: "seed_opportunity_zenith_compliance_refresh" },
     update: {
+      organizationId: araOrganization.id,
       branchId: "seed_branch_zenith_mumbai",
       estimatedValueInr: "840000.00",
       lastReachAt: new Date("2026-06-18T12:00:00.000Z"),
@@ -522,6 +669,7 @@ async function main() {
     },
     create: {
       id: "seed_opportunity_zenith_compliance_refresh",
+      organizationId: araOrganization.id,
       branchId: "seed_branch_zenith_mumbai",
       createdById: admin.id,
       estimatedValueInr: "840000.00",
@@ -545,8 +693,9 @@ async function main() {
         userId: arjun.id
       }
     },
-    update: { percent: 100 },
+    update: { organizationId: araOrganization.id, percent: 100 },
     create: {
+      organizationId: araOrganization.id,
       opportunityId: arjunOpportunity.id,
       percent: 100,
       userId: arjun.id
@@ -562,9 +711,11 @@ async function main() {
       }
     },
     update: {
+      organizationId: araOrganization.id,
       targetValueInr: "900000.00"
     },
     create: {
+      organizationId: araOrganization.id,
       createdById: admin.id,
       financialYear: 2026,
       ownerId: arjun.id,
@@ -577,6 +728,7 @@ async function main() {
     await prisma.productService.upsert({
       where: { id: product.id },
       update: {
+        organizationId: araOrganization.id,
         active: true,
         category: product.category,
         code: product.code,
@@ -591,6 +743,7 @@ async function main() {
         ...product,
         active: true,
         createdById: admin.id,
+        organizationId: araOrganization.id,
         updatedById: admin.id
       }
     });
@@ -600,6 +753,7 @@ async function main() {
     await prisma.productionTemplate.upsert({
       where: { id: template.id },
       update: {
+        organizationId: araOrganization.id,
         active: true,
         description: template.description,
         key: template.key,
@@ -608,6 +762,7 @@ async function main() {
       },
       create: {
         id: template.id,
+        organizationId: araOrganization.id,
         active: true,
         description: template.description,
         key: template.key,
@@ -620,6 +775,7 @@ async function main() {
       await prisma.productionTemplateStage.upsert({
         where: { id: stage.id },
         update: {
+          organizationId: araOrganization.id,
           defaultDurationDays: stage.defaultDurationDays,
           key: stage.key,
           name: stage.name,
@@ -629,6 +785,7 @@ async function main() {
         },
         create: {
           id: stage.id,
+          organizationId: araOrganization.id,
           defaultDurationDays: stage.defaultDurationDays,
           key: stage.key,
           name: stage.name,
@@ -643,6 +800,7 @@ async function main() {
   const acceptedProposal = await prisma.proposal.upsert({
     where: { id: "seed_proposal_acme_lms_accepted" },
     update: {
+      organizationId: araOrganization.id,
       assumptions: "Client provides SME availability and branding inputs.",
       commercialSummary: "Accepted commercial proposal for the Northstar LMS modernization seed order flow.",
       currency: "INR",
@@ -662,6 +820,7 @@ async function main() {
     },
     create: {
       id: "seed_proposal_acme_lms_accepted",
+      organizationId: araOrganization.id,
       assumptions: "Client provides SME availability and branding inputs.",
       commercialSummary: "Accepted commercial proposal for the Northstar LMS modernization seed order flow.",
       currency: "INR",
@@ -688,6 +847,7 @@ async function main() {
     await prisma.proposalLineItem.upsert({
       where: { id: lineItem.id },
       update: {
+        organizationId: araOrganization.id,
         description: lineItem.description,
         gstRateBps: lineItem.gstRateBps,
         lineGstPaisa: lineItem.lineGstPaisa,
@@ -702,6 +862,7 @@ async function main() {
       },
       create: {
         id: lineItem.id,
+        organizationId: araOrganization.id,
         description: lineItem.description,
         gstRateBps: lineItem.gstRateBps,
         lineGstPaisa: lineItem.lineGstPaisa,
@@ -721,6 +882,7 @@ async function main() {
   await prisma.proposalPdfAttachment.upsert({
     where: { id: "seed_proposal_pdf_acme_lms_accepted" },
     update: {
+      organizationId: araOrganization.id,
       canvaDesignUrl: "https://www.canva.com/design/seed-acme-lms",
       fileSizeBytes: 204800,
       mimeType: "application/pdf",
@@ -735,6 +897,7 @@ async function main() {
     },
     create: {
       id: "seed_proposal_pdf_acme_lms_accepted",
+      organizationId: araOrganization.id,
       canvaDesignUrl: "https://www.canva.com/design/seed-acme-lms",
       fileSizeBytes: 204800,
       mimeType: "application/pdf",
@@ -751,6 +914,7 @@ async function main() {
   const demoOrder = await prisma.order.upsert({
     where: { proposalId: acceptedProposal.id },
     update: {
+      organizationId: araOrganization.id,
       branchId: "seed_branch_acme_bengaluru",
       bookedAt: new Date("2026-06-17T09:00:00.000Z"),
       currency: "INR",
@@ -766,6 +930,7 @@ async function main() {
     },
     create: {
       id: "seed_order_northstar_multi_service",
+      organizationId: araOrganization.id,
       branchId: "seed_branch_acme_bengaluru",
       bookedAt: new Date("2026-06-17T09:00:00.000Z"),
       createdById: admin.id,
@@ -791,8 +956,9 @@ async function main() {
         userId: sales.id
       }
     },
-    update: { percent: 100 },
+    update: { organizationId: araOrganization.id, percent: 100 },
     create: {
+      organizationId: araOrganization.id,
       orderId: demoOrder.id,
       percent: 100,
       userId: sales.id
@@ -810,6 +976,7 @@ async function main() {
     const orderLineItem = await prisma.orderLineItem.upsert({
       where: { proposalLineItemId: lineItem.id },
       update: {
+        organizationId: araOrganization.id,
         description: lineItem.description,
         gstRateBps: lineItem.gstRateBps,
         lineGstPaisa: lineItem.lineGstPaisa,
@@ -826,6 +993,7 @@ async function main() {
       },
       create: {
         id: workItem.orderLineItemId,
+        organizationId: araOrganization.id,
         description: lineItem.description,
         gstRateBps: lineItem.gstRateBps,
         lineGstPaisa: lineItem.lineGstPaisa,
@@ -862,6 +1030,7 @@ async function main() {
     await prisma.productionWorkItem.upsert({
       where: { id: workItem.id },
       update: {
+        organizationId: araOrganization.id,
         assignedToId: sales.id,
         completedAt,
         dueAt: workItem.dueAt,
@@ -876,6 +1045,7 @@ async function main() {
       },
       create: {
         id: workItem.id,
+        organizationId: araOrganization.id,
         assignedToId: sales.id,
         completedAt,
         createdById: admin.id,
@@ -900,6 +1070,7 @@ async function main() {
       await prisma.productionStageInstance.upsert({
         where: { id: `${workItem.id}_${templateStage.key}` },
         update: {
+          organizationId: araOrganization.id,
           assignedToId: sales.id,
           completedAt: stageCompletedAt,
           completedById: stageCompletedAt ? admin.id : null,
@@ -914,6 +1085,7 @@ async function main() {
         },
         create: {
           id: `${workItem.id}_${templateStage.key}`,
+          organizationId: araOrganization.id,
           assignedToId: sales.id,
           completedAt: stageCompletedAt,
           completedById: stageCompletedAt ? admin.id : null,
