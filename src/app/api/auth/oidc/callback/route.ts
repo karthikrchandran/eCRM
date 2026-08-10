@@ -1,27 +1,13 @@
 import { cookies } from "next/headers";
-import { jwtVerify } from "jose";
 import { getServerEnv } from "@/server/env";
 import { getControlPlaneDb } from "@/server/db";
-import { OidcError, resolveOidcCallback, verifyOidcIdToken } from "@/server/auth/oidc";
+import { OidcError, readOidcTransaction, resolveOidcCallback, verifyOidcIdToken } from "@/server/auth/oidc";
 import { SESSION_COOKIE_NAME, shouldUseSecureSessionCookie, signSession } from "@/server/auth/session";
 import { TX_COOKIE } from "../start/route";
 
-function secret(value: string) {
-  return new TextEncoder().encode(value);
-}
-
 function parseCookie(value: string | undefined) {
   if (!value) throw new OidcError("OIDC transaction is missing.");
-  return jwtVerify(value, secret(getServerEnv().AUTH_SECRET), {
-    issuer: "ecrm-oidc",
-    audience: "ecrm-oidc-transaction",
-    algorithms: ["HS256"]
-  }).then(({ payload }) => {
-    if (typeof payload.state !== "string" || typeof payload.nonce !== "string" || typeof payload.verifier !== "string") {
-      throw new OidcError("OIDC transaction is invalid.");
-    }
-    return { state: payload.state, nonce: payload.nonce, verifier: payload.verifier };
-  }).catch(() => { throw new OidcError("OIDC transaction is invalid or expired."); });
+  return readOidcTransaction(getServerEnv().AUTH_SECRET, value);
 }
 
 export async function GET(request: Request) {

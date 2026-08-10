@@ -1,26 +1,11 @@
 import { randomBytes } from "node:crypto";
-import { SignJWT } from "jose";
 import { getServerEnv } from "@/server/env";
-import { oidcAuthorizeUrl } from "@/server/auth/oidc";
+import { createOidcTransaction, oidcAuthorizeUrl } from "@/server/auth/oidc";
 
 const TX_COOKIE = "ecrm_oidc_tx";
 
-function secret(value: string) {
-  return new TextEncoder().encode(value);
-}
-
 function base64url(value: Uint8Array) {
   return Buffer.from(value).toString("base64url");
-}
-
-async function buildTransaction(env: ReturnType<typeof getServerEnv>, state: string, nonce: string, verifier: string) {
-  return new SignJWT({ state, nonce, verifier })
-    .setProtectedHeader({ alg: "HS256" })
-    .setIssuer("ecrm-oidc")
-    .setAudience("ecrm-oidc-transaction")
-    .setIssuedAt()
-    .setExpirationTime("5m")
-    .sign(secret(env.AUTH_SECRET));
 }
 
 export async function GET() {
@@ -32,7 +17,7 @@ export async function GET() {
   const nonce = base64url(randomBytes(32));
   const verifier = base64url(randomBytes(48));
   const challenge = base64url(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier))));
-  const transaction = await buildTransaction(env, state, nonce, verifier);
+  const transaction = await createOidcTransaction(env.AUTH_SECRET, state, nonce, verifier);
   const response = Response.redirect(oidcAuthorizeUrl({
     issuer: env.OIDC_ISSUER,
     clientId: env.OIDC_CLIENT_ID,

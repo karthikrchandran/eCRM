@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { OidcError, resolveOidcCallback, type OidcCallbackInput } from "./oidc";
+import { createOidcTransaction, OidcError, readOidcTransaction, resolveOidcCallback, type OidcCallbackInput } from "./oidc";
 
 const base: OidcCallbackInput = {
   claims: {
@@ -31,6 +31,14 @@ const activeMembership = {
 };
 
 describe("resolveOidcCallback", () => {
+  it("encrypts the transaction so the PKCE verifier is not readable from the cookie", async () => {
+    const verifier = "pkce-verifier-that-must-not-leak";
+    const token = await createOidcTransaction("replace-with-at-least-32-characters", "state-1", "nonce-1", verifier);
+    expect(token).not.toContain(verifier);
+    expect(() => JSON.parse(Buffer.from(token.split(".")[1]!, "base64url").toString("utf8"))).toThrow();
+    await expect(readOidcTransaction("replace-with-at-least-32-characters", token)).resolves.toMatchObject({ verifier });
+  });
+
   it.each(["bad-state", "bad-nonce", "wrong-issuer", "wrong-audience", "expired"])(
     "rejects %s",
     async (fault) => {

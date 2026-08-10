@@ -1,4 +1,4 @@
-import { createRemoteJWKSet, jwtVerify, type JWTPayload } from "jose";
+import { compactDecrypt, CompactEncrypt, createRemoteJWKSet, jwtVerify, type JWTPayload } from "jose";
 import { z } from "zod";
 import { getControlPlaneDb } from "@/server/db";
 import { membershipSessionVersion, type SessionUser } from "./session";
@@ -7,6 +7,39 @@ export class OidcError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "OidcError";
+  }
+}
+
+const transactionIssuer = "ecrm-oidc";
+const transactionAudience = "ecrm-oidc-transaction";
+
+function secret(value: string) {
+  return new TextEncoder().encode(value);
+}
+
+async function transactionKey(value: string) {
+  const digest = await crypto.subtle.digest("SHA-256", secret(value));
+  return crypto.subtle.importKey("raw", digest, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
+}
+
+export async function createOidcTransaction(secretValue: string, state: string, nonce: string, verifier: string) {
+  const payload = JSON.stringify({ iss: transactionIssuer, aud: transactionAudience, exp: Math.floor(Date.now() / 1000) + 300, state, nonce, verifier });
+  return new CompactEncrypt(new Uint8Array(Buffer.from(payload)))
+    .setProtectedHeader({ alg: "dir", enc: "A256GCM" })
+    .encrypt(await transactionKey(secretValue));
+}
+
+export async function readOidcTransaction(secretValue: string, token: string) {
+  try {
+    const { plaintext } = await compactDecrypt(token, await transactionKey(secretValue));
+    const payload = JSON.parse(new TextDecoder().decode(plaintext)) as Record<string, unknown>;
+    if (payload.iss !== transactionIssuer || payload.aud !== transactionAudience || typeof payload.state !== "string" || typeof payload.nonce !== "string" || typeof payload.verifier !== "string") {
+      throw new Error("invalid transaction");
+    }
+    if (typeof payload.exp !== "number" || payload.exp <= Math.floor(Date.now() / 1000)) throw new Error("expired transaction");
+    return { state: payload.state, nonce: payload.nonce, verifier: payload.verifier };
+  } catch {
+    throw new OidcError("OIDC transaction is invalid or expired.");
   }
 }
 
