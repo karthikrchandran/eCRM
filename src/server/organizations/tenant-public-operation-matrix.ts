@@ -328,14 +328,15 @@ export const tenantPublicOperationMatrix = {
     list: parentManaged(loadMyDayInsights, "aggregate", "End-of-day reviews are managed through My Day"), "direct-id": parentManaged(loadMyDayInsights, "aggregate", "Reviews have no caller-selected identifier; the scoped My Day aggregate is the executable equivalent"),
     search: parentManaged(loadMyDayInsights, "aggregate", "Reviews have no standalone search endpoint"), aggregate: executable(loadMyDayInsights),
     create: executable(saveEndOfDayReview), update: executable(saveEndOfDayReview), delete: noStandaloneDelete(loadMyDayInsights, "aggregate"),
-    "foreign-attachment": executable(saveEndOfDayReview), "nested-include": executable(saveEndOfDayReview), "duplicate-identifier": executable(saveEndOfDayReview)
+    "foreign-attachment": executable(saveEndOfDayReview), "nested-include": parentManaged(saveEndOfDayReview, "create", "The save response exposes the review identity but no nested item collection"), "duplicate-identifier": executable(saveEndOfDayReview)
   }),
   SalesDayReviewItem: defineModel("SalesDayReviewItem", {
     list: parentManaged(saveEndOfDayReview, "nested-include", "Review items are nested under the saved review"),
     "direct-id": parentManaged(saveEndOfDayReview, "nested-include", "Review items have no standalone detail endpoint"),
     search: parentManaged(saveEndOfDayReview, "nested-include", "Review items are discovered through My Day"), aggregate: executable(loadMyDayInsights),
     create: executable(saveEndOfDayReview), update: executable(saveEndOfDayReview), delete: parentManaged(saveEndOfDayReview, "update", "Review items are replaced by the review save operation"),
-    "foreign-attachment": executable(saveEndOfDayReview), "nested-include": executable(saveEndOfDayReview), "duplicate-identifier": executable(saveEndOfDayReview)
+    "foreign-attachment": executable(saveEndOfDayReview), "nested-include": parentManaged(saveEndOfDayReview, "create", "Review items have no standalone returned nested collection"),
+    "duplicate-identifier": parentManaged(saveEndOfDayReview, "create", "Review-item identity is its tenant-specific parent review and task pair, so no cross-organization stable business key exists")
   }),
   PipelineStage: defineModel("PipelineStage", {
     list: executable(listPipelineBoard), "direct-id": executable(moveOpportunityStage), search: executable(listPipelineBoard), aggregate: executable(listPipelineBoard),
@@ -370,7 +371,7 @@ export const tenantPublicOperationMatrix = {
   }),
   ProposalLineItem: defineModel("ProposalLineItem", {
     list: executable(getProposalDetail), "direct-id": parentManaged(getProposalDetail, "nested-include", "Proposal lines are nested under proposal detail"),
-    search: parentManaged(listProposalsForOpportunity, "list", "Proposal lines have no standalone search endpoint"), aggregate: executable(getReportsOverview),
+    search: parentManaged(listProposalsForOpportunity, "list", "Proposal lines have no standalone search endpoint"), aggregate: parentManaged(getProposalDetail, "nested-include", "Reports aggregate booked order lines rather than proposal-line identities"),
     create: executable(createProposal), update: parentManaged(createProposal, "create", "Proposal lines are immutable snapshots created with a proposal"),
     delete: parentManaged(getProposalDetail, "nested-include", "Proposal lines have no standalone delete operation"),
     "foreign-attachment": executable(createProposal), "nested-include": executable(getProposalDetail), "duplicate-identifier": noBusinessIdentifier(getProposalDetail, "nested-include")

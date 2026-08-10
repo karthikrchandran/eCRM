@@ -11,6 +11,7 @@ import {
   type TenantPublicOperationScenario
 } from "./tenant-public-operation-matrix";
 import { tenantOpaqueOwnedRelationships, tenantOwnedRelationships, tenantUserRelationships } from "./tenant-relationships";
+import { hasCreatedRow, hasDuplicateBusinessKey, resultContainsIdentity } from "./tenant-operation-proof";
 
 const controlUrl = process.env.TEST_DATABASE_URL;
 const tenantUrlValue = process.env.TEST_TENANT_DATABASE_URL;
@@ -239,6 +240,7 @@ integration("executable organization A/B adversarial matrix", () => {
         }
         await transaction.salesTextNote.updateMany({ where: { organizationId }, data: { createdAt: new Date("2026-08-09T12:00:00.000Z") } });
         await transaction.salesVoiceNote.updateMany({ where: { organizationId }, data: { createdAt: new Date("2026-08-09T12:00:00.000Z") } });
+        await transaction.sharedRecordExportSnapshot.updateMany({ where: { organizationId }, data: { expiresAt: new Date("2030-01-01T00:00:00.000Z") } });
 
         if (tenantName === "B") {
           const duplicateProposalId = "matrix_duplicate_proposal_B";
@@ -480,6 +482,10 @@ integration("executable organization A/B adversarial matrix", () => {
           } });
         }
 
+        if (suffix === "A" && scenario.category === "create" && scenario.model === "IncentiveSplit") {
+          await transaction.incentiveSplit.deleteMany({ where: { organizationId: orgA, incentiveId: incentiveTarget } });
+        }
+
         const beforeA = await tenantState(scenario.model);
         const beforeB = await controlState(scenario.model);
         let afterA = beforeA;
@@ -596,13 +602,20 @@ integration("executable organization A/B adversarial matrix", () => {
       const fixtureIdentity = (scenario: TenantPublicOperationScenario) => ({
         OpportunityOwnerSplit: userA,
         OrderOwnerSplitSnapshot: userA,
+        OrderLineItem: scenario.exportName === "getReportsOverview" ? "same_OrderLineItem_productNameSnapshot" : completeFixtureId("OrderLineItem", "A"),
+        SalesDayReview: scenario.exportName === "loadMyDayInsights" ? completeFixtureId("SalesTask", "A") : completeFixtureId("SalesDayReview", "A"),
         SalesDayReviewItem: completeFixtureId("SalesTask", "A"),
         SalesTarget: userA,
         SharedRecordExportSnapshot: completeFixtureId("SharedBusinessRecord", "A"),
         SharedRecordExportSnapshotItem: completeFixtureId("SharedBusinessRecord", "A"),
         SharedBusinessRecordVersion: completeFixtureId("SharedBusinessRecord", "A"),
         IncentiveSplit: userA,
-        Incentive: scenario.exportName === "listRepPerformanceSummaries" ? "matrix-a@example.test" : completeFixtureId("Incentive", "A")
+        Incentive: scenario.exportName === "listRepPerformanceSummaries" ? "matrix-a@example.test" : completeFixtureId("Incentive", "A"),
+        Proposal: scenario.exportName === "getReportsOverview" ? '"proposalConversion":{"accepted":0,"total":1}' : completeFixtureId("Proposal", "A"),
+        Invoice: scenario.exportName === "getReportsOverview" ? '"invoiceStatus":[{"count":1,"status":"DRAFT","totalPaisa":100}]' : completeFixtureId("Invoice", "A"),
+        Payment: scenario.exportName === "getReportsOverview" ? '"paymentCount":1' : completeFixtureId("Payment", "A"),
+        PaymentAllocation: scenario.exportName === "getReportsOverview" ? '"collectedPaisa":10' : completeFixtureId("PaymentAllocation", "A"),
+        CostComponent: scenario.exportName === "getReportsOverview" ? '"costLeakagePaisa":1' : completeFixtureId("CostComponent", "A")
       }[scenario.model] ?? (scenario.model === "Activity" && scenario.exportName === "listLeadCustomers"
         ? completeFixtureId("LeadCustomer", "A")
         : completeFixtureId(scenario.model, "A")));
@@ -613,7 +626,49 @@ integration("executable organization A/B adversarial matrix", () => {
         expect(execution.result, `${scenario.model}:${scenario.category}:${scenario.exportName} returned no asserted result`).not.toBeNull();
         expect(execution.result, `${scenario.model}:${scenario.category}:${scenario.exportName} returned no asserted result`).not.toBeUndefined();
         expect(execution.rendered, `${scenario.model}:${scenario.category}:${scenario.exportName} rendered an empty result`).not.toBe("");
+        if (Array.isArray(execution.result)) expect(execution.result.length, `${scenario.model}:${scenario.category} returned an empty array`).toBeGreaterThan(0);
+        if (typeof execution.result === "object" && execution.result && !Array.isArray(execution.result)) {
+          expect(Object.keys(execution.result), `${scenario.model}:${scenario.category} returned an empty object`).not.toHaveLength(0);
+        }
       };
+      const createdRowFragments = (scenario: TenantPublicOperationScenario): string[] => ({
+        SharedBusinessRecord: [`public-${scenario.model}-create`],
+        SharedRecordExportSnapshot: [orgA],
+        SharedRecordExportSnapshotItem: [orgA],
+        WorkflowEvent: [`public-${scenario.model}-create`],
+        LeadCustomer: [`Created ${scenario.model}`],
+        Branch: [`Created ${scenario.model}`],
+        Contact: [`Created ${scenario.model}`],
+        Activity: [`Created ${scenario.model}`],
+        LeadOwnershipHistory: [marker],
+        SalesTask: [`Created ${scenario.model}`],
+        SalesTextNote: [`Created ${scenario.model}`],
+        SalesVoiceNote: [`matrix/${scenario.model}/create/A`],
+        SalesVoiceNoteAction: [marker],
+        SalesDayReview: ["2026-08-10"],
+        SalesDayReviewItem: [completeFixtureId("SalesTask", "A"), "Matrix create"],
+        PipelineStage: ["Matrix isolated create"],
+        Opportunity: [`Created ${scenario.model}`],
+        OpportunityOwnerSplit: [userA],
+        SalesTarget: [userA, '"financialYear": 2026', '"quarter": 4'],
+        ProductService: [`MATRIX-CREATE-${scenario.model}`],
+        Proposal: [`Created ${scenario.model}`],
+        ProposalLineItem: [orgA],
+        ProposalPdfAttachment: [`matrix/${scenario.model}/create/A.pdf`],
+        Order: [orgA],
+        OrderLineItem: [orgA],
+        OrderOwnerSplitSnapshot: [orgA],
+        ProductionTemplate: [`MATRIX-CREATE-${scenario.model}`],
+        ProductionTemplateStage: [`MATRIX-CREATE-${scenario.model}`],
+        ProductionWorkItem: [orgA],
+        ProductionStageInstance: [orgA],
+        ProductionNote: [marker],
+        Invoice: [`MATRIX-CREATE-${scenario.model}`],
+        Payment: [orgA],
+        PaymentAllocation: [orgA],
+        CostComponent: [marker],
+        IncentiveSplit: [userA]
+      }[scenario.model] ?? (() => { throw new Error(`Missing created-row identity for ${scenario.model}.`); })());
       const duplicateKeyAppearsInAState = (model: string, rows: Array<{ row: string }>) => {
         const state = rows.map(({ row }) => row).join("\n");
         switch (model) {
@@ -650,16 +705,9 @@ integration("executable organization A/B adversarial matrix", () => {
           assertBUnchanged(scenario, execution);
           assertNonEmptyResult(scenario, execution);
           const identity = fixtureIdentity(scenario);
-          const returnedOrStoredIdentity = scenario.model === "SalesDayReview" && category === "nested-include"
-            ? execution.afterA.some(({ row }) => {
-                const storedId = (JSON.parse(row) as { id?: string }).id;
-                return Boolean(storedId && execution.rendered.includes(storedId));
-              })
-            : scenario.model === "SalesDayReviewItem" && category === "nested-include"
-              ? execution.afterA.some(({ row }) => row.includes(completeFixtureId("SalesTask", "A")))
-              : category === "aggregate"
-            ? execution.rendered.includes(identity) || execution.beforeA.some(({ row }) => row.includes(identity))
-            : execution.rendered.includes(identity);
+          const returnedOrStoredIdentity = scenario.exportName === "getDashboardFollowUpCounts"
+            ? JSON.stringify(execution.result) === JSON.stringify({ overdue: 0, today: 0, upcoming: 0 })
+            : resultContainsIdentity(execution.result, identity);
           expect(returnedOrStoredIdentity, `${scenario.model}:${category} did not prove its exact A fixture identity in ${execution.rendered}`).toBe(true);
           return "success";
         }
@@ -684,8 +732,7 @@ integration("executable organization A/B adversarial matrix", () => {
           assertNoTenantB(scenario, execution.rendered);
           assertBUnchanged(scenario, execution);
           assertNonEmptyResult(scenario, execution);
-          expect(execution.afterA.length, `${scenario.model}:${scenario.exportName} did not persist A state`).toBeGreaterThan(0);
-          expect(execution.afterA, `${scenario.model}:${scenario.exportName} did not create or materialize A state`).not.toEqual(execution.beforeA);
+          expect(hasCreatedRow(execution.beforeA, execution.afterA, createdRowFragments(scenario)), `${scenario.model}:${scenario.exportName} did not create its declared A row`).toBe(true);
           return "success";
         }
 
@@ -752,6 +799,23 @@ integration("executable organization A/B adversarial matrix", () => {
         assertNoTenantB(scenario, execution.rendered);
         assertBUnchanged(scenario, execution);
         assertNonEmptyResult(scenario, execution);
+        const duplicateFragments = (() => {
+          switch (scenario.model) {
+            case "SharedBusinessRecord":
+            case "WorkflowEvent":
+            case "PipelineStage":
+            case "ProductService":
+            case "ProductionTemplate":
+            case "ProductionTemplateStage":
+            case "Invoice": return ["MATRIX-PUBLIC-DUP"];
+            case "SalesDayReview": return [userA, "2026-08-09"];
+            case "SalesTarget": return [userA, '"financialYear": 2026', '"quarter": 4'];
+            case "Proposal": return [completeFixtureId("Opportunity", "A"), '"sequenceNumber": 2'];
+            case "Order": return ["ORD-2026-0002"];
+            default: throw new Error(`Missing duplicate-key identity for ${scenario.model}.`);
+          }
+        })();
+        expect(hasDuplicateBusinessKey(execution.beforeA, execution.afterA, execution.beforeB, duplicateFragments), `${scenario.model} did not create the same business key in tenant A while B retained it`).toBe(true);
         expect(duplicateKeyAppearsInAState(scenario.model, execution.afterA), `${scenario.model} did not persist the same business key in tenant A`).toBe(true);
         return "duplicate";
       };
@@ -795,6 +859,6 @@ integration("executable organization A/B adversarial matrix", () => {
       counts[outcome] = (counts[outcome] ?? 0) + 1;
       return counts;
     }, {});
-    expect(outcomeCounts).toEqual({ success: 183, denied: 58, duplicate: 12, "na-equivalent": 127 });
+    expect(outcomeCounts).toEqual({ success: 180, denied: 58, duplicate: 11, "na-equivalent": 131 });
   }, 60_000);
 });

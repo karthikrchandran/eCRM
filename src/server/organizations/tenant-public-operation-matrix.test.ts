@@ -34,7 +34,7 @@ describe("public tenant isolation operation matrix", () => {
     expect(scenarios.reduce<Record<string, number>>((counts, scenario) => {
       counts[scenario.expectedOutcome] = (counts[scenario.expectedOutcome] ?? 0) + 1;
       return counts;
-    }, {})).toEqual({ success: 183, denied: 58, duplicate: 12, "na-equivalent": 127 });
+    }, {})).toEqual({ success: 180, denied: 58, duplicate: 11, "na-equivalent": 131 });
 
     for (const [modelName, matrix] of Object.entries(tenantPublicOperationMatrix)) {
       expect(Object.keys(matrix)).toEqual(expect.arrayContaining([...tenantIsolationCategories]));
