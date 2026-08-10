@@ -12,7 +12,8 @@ import {
 const excludedTenantModels = new Set([
   "OrganizationMembership",
   "OrganizationSettings",
-  "OrganizationBranding"
+  "OrganizationBranding",
+  "OrganizationInstallation"
 ]);
 
 const ownedModels = Prisma.dmmf.datamodel.models
