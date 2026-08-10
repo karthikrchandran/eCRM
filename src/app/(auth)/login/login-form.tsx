@@ -5,7 +5,7 @@ import { loginAction, type LoginState } from "@/server/auth/actions";
 
 const initialState: LoginState = {};
 
-export function LoginForm() {
+export function LoginForm({ oidcEnabled = false }: { oidcEnabled?: boolean }) {
   const [state, formAction, pending] = useActionState(loginAction, initialState);
 
   return (
@@ -51,6 +51,12 @@ export function LoginForm() {
       >
         {pending ? "Signing in..." : "Sign in"}
       </button>
+
+      {oidcEnabled ? (
+        <a className="crm-button crm-button-secondary text-center" href="/api/auth/oidc/start">
+          Continue with company identity
+        </a>
+      ) : null}
     </form>
   );
 }

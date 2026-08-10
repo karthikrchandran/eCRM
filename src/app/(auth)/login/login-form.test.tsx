@@ -44,4 +44,13 @@ describe("LoginForm", () => {
     expect(screen.getByText("Sign in to continue.")).toBeVisible();
     expect(screen.queryByText(/ARA|eCRM|SignalLoop/i)).not.toBeInTheDocument();
   });
+
+  it("offers centralized identity only when enabled", () => {
+    render(<LoginForm oidcEnabled />);
+
+    expect(screen.getByRole("link", { name: "Continue with company identity" })).toHaveAttribute(
+      "href",
+      "/api/auth/oidc/start"
+    );
+  });
 });

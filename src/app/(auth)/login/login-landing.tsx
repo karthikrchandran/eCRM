@@ -15,7 +15,7 @@ const capabilities = [
   }
 ] as const;
 
-export function LoginLanding() {
+export function LoginLanding({ oidcEnabled = false }: { oidcEnabled?: boolean }) {
   return (
     <main className="min-h-screen overflow-hidden bg-[#07111f] text-white">
       <section className="relative isolate grid min-h-screen lg:grid-cols-[minmax(0,1fr)_28rem]">
@@ -57,7 +57,7 @@ export function LoginLanding() {
         </div>
 
         <aside className="flex items-center justify-center bg-white/[0.96] px-5 py-8 text-[var(--foreground)] shadow-[-16px_0_40px_rgb(2_12_27_/_0.32)] backdrop-blur">
-          <LoginForm />
+          <LoginForm oidcEnabled={oidcEnabled} />
         </aside>
       </section>
     </main>
