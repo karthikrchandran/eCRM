@@ -457,7 +457,7 @@ model User {
   id           String   @id @default(cuid())
   name         String
   email        String   @unique
-  passwordHash String
+  passwordHash String?
   role         UserRole @default(SALES)
   active       Boolean  @default(true)
   createdAt    DateTime @default(now())
@@ -512,6 +512,22 @@ model User {
   salesVoiceNotes             SalesVoiceNote[]          @relation("SalesVoiceNoteOwner")
   salesDayReviews             SalesDayReview[]          @relation("SalesDayReviewOwner")
   memberships                 OrganizationMembership[]
+  identities                  UserIdentity[]
+}
+
+model UserIdentity {
+  id            String   @id @default(cuid())
+  userId        String
+  issuer        String   @db.VarChar(512)
+  subject       String   @db.VarChar(255)
+  emailSnapshot String   @db.VarChar(320)
+  createdAt     DateTime @default(now())
+  lastLoginAt   DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([issuer, subject], map: "UserIdentity_issuer_subject_key")
+  @@index([userId])
 }
 
 model LeadCustomer {

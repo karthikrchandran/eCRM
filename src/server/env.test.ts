@@ -20,7 +20,15 @@ describe("getServerEnv", () => {
       CONTROL_PLANE_DATABASE_URL: "postgresql://ecrm_control@localhost:54329/ecrm?schema=public",
       TENANT_DATABASE_URL: "postgresql://ecrm_runtime@localhost:54329/ecrm?schema=public",
       AUTH_SECRET: "replace-with-at-least-32-characters",
-      APP_BASE_URL: "http://localhost:3000"
+      APP_BASE_URL: "http://localhost:3000",
+      AUTH_MODE: "local-test",
+      OIDC_ISSUER: undefined,
+      OIDC_CLIENT_ID: undefined,
+      OIDC_CLIENT_SECRET: undefined,
+      OIDC_REDIRECT_URI: undefined,
+      OIDC_AUDIENCE: undefined,
+      OIDC_SCOPES: "openid profile email",
+      OIDC_JWKS_URI: undefined
     });
   });
 

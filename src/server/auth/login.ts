@@ -24,7 +24,7 @@ type LoginUserRecord = {
   id: string;
   name: string;
   email: string;
-  passwordHash: string;
+  passwordHash: string | null;
   role: UserRole;
   active: boolean;
   memberships: Array<{
@@ -76,7 +76,7 @@ export async function authenticateLogin(
   const verifyPassword = dependencies.verifyPassword ?? verifyPasswordHash;
   const user = await lookupUser(parsed.data.email.toLowerCase());
 
-  if (!user?.active) {
+  if (!user?.active || !user.passwordHash) {
     return { error: SAFE_LOGIN_ERROR };
   }
 
