@@ -65,6 +65,7 @@ describe("finance mutations", () => {
     const invoiceUpdate = vi.fn().mockResolvedValue({ id: "invoice_1" });
     const incentiveUpsert = vi.fn().mockResolvedValue({ id: "incentive_1" });
     const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([{ allowed: true }]),
       incentive: { upsert: incentiveUpsert },
       invoice: { update: invoiceUpdate },
       order: {
@@ -149,6 +150,7 @@ describe("finance mutations", () => {
     const costCreate = vi.fn().mockResolvedValue({ id: "cost_1" });
     const incentiveUpsert = vi.fn().mockResolvedValue({ id: "incentive_1" });
     const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([{ allowed: true }]),
       costComponent: { create: costCreate },
       incentive: { upsert: incentiveUpsert },
       order: {
@@ -193,6 +195,7 @@ describe("finance mutations", () => {
     const costUpdate = vi.fn().mockResolvedValue({ id: "cost_1" });
     const incentiveUpsert = vi.fn().mockResolvedValue({ id: "incentive_1" });
     const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([{ allowed: true }]),
       costComponent: {
         findUnique: vi.fn().mockResolvedValue({ id: "cost_1", orderId: "order_1" }),
         update: costUpdate
@@ -213,6 +216,37 @@ describe("finance mutations", () => {
       })
     });
     expect(incentiveUpsert).toHaveBeenCalled();
+  });
+
+  test.each(["cross-organization", "revoked", "inactive"])(
+    "rolls back automatic incentive recalculation for a %s recipient",
+    async () => {
+      const incentiveUpsert = vi.fn();
+      const tx = {
+        $queryRaw: vi.fn().mockResolvedValue([{ allowed: false }]),
+        incentive: { upsert: incentiveUpsert },
+        invoice: { update: vi.fn() },
+        order: { findUnique: vi.fn().mockResolvedValue(order) },
+        payment: { create: vi.fn().mockResolvedValue({ id: "payment_denied" }) }
+      };
+      const database = { $transaction: vi.fn(async (callback) => callback(tx)) };
+
+      await expect(recordPayment(admin, {
+        allocations: [], amountPaisa: 1, mode: "BANK_TRANSFER", orderId: "order_1",
+        paymentDate: new Date("2026-08-02")
+      }, database as never)).rejects.toThrow("Organization member was not found.");
+      expect(incentiveUpsert).not.toHaveBeenCalled();
+    }
+  );
+
+  test.each([
+    ["reject", (database: unknown) => rejectIncentive(admin, "incentive_B", "Denied", database as never)],
+    ["paid", (database: unknown) => markIncentivePaid(admin, "incentive_B", "PAY-X", database as never)]
+  ])("returns uniform not-found for %s when scoped lookup is null", async (_name, mutate) => {
+    const update = vi.fn();
+    await expect(mutate({ incentive: { findFirst: vi.fn().mockResolvedValue(null), update } }))
+      .rejects.toThrow("Incentive was not found.");
+    expect(update).not.toHaveBeenCalled();
   });
 
   test("rejects an invoice target from another organization before update", async () => {

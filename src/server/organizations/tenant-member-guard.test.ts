@@ -17,7 +17,8 @@ describe("transaction-local tenant member guard", () => {
     const executable = sql.split("\n").filter((line) => !line.trimStart().startsWith("--")).join("\n");
     expect(executable).toContain("SECURITY DEFINER");
     expect(executable).toContain("SET search_path = pg_catalog, public");
-    expect(executable).toContain("FOR KEY SHARE");
+    expect(executable).toContain("FOR SHARE");
+    expect(executable).not.toContain("FOR KEY SHARE");
     expect(executable).toContain("current_setting('app.organization_id', true)");
     expect(executable).toContain("membership.status = 'ACTIVE'");
     expect(executable).toContain("organization.status = 'ACTIVE'");

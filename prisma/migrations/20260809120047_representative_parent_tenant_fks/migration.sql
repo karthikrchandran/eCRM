@@ -25,33 +25,30 @@ CREATE UNIQUE INDEX IF NOT EXISTS "ProductionTemplate_organizationId_id_key" ON 
 CREATE UNIQUE INDEX IF NOT EXISTS "Invoice_organizationId_id_key" ON "Invoice"("organizationId", id);
 CREATE UNIQUE INDEX IF NOT EXISTS "SharedBusinessRecord_organizationId_id_key" ON "SharedBusinessRecord"("organizationId", id);
 
-ALTER TABLE "Branch"
-  ADD CONSTRAINT "Branch_organizationId_leadCustomerId_fkey"
-  FOREIGN KEY ("organizationId", "leadCustomerId") REFERENCES "LeadCustomer"("organizationId", id)
-  ON UPDATE CASCADE ON DELETE CASCADE;
-ALTER TABLE "SalesTextNote"
-  ADD CONSTRAINT "SalesTextNote_organizationId_taskId_fkey"
-  FOREIGN KEY ("organizationId", "taskId") REFERENCES "SalesTask"("organizationId", id)
-  ON UPDATE CASCADE ON DELETE SET NULL ("taskId");
-ALTER TABLE "Proposal"
-  ADD CONSTRAINT "Proposal_organizationId_opportunityId_fkey"
-  FOREIGN KEY ("organizationId", "opportunityId") REFERENCES "Opportunity"("organizationId", id)
-  ON UPDATE CASCADE ON DELETE CASCADE;
-ALTER TABLE "ProposalLineItem"
-  ADD CONSTRAINT "ProposalLineItem_organizationId_productServiceId_fkey"
-  FOREIGN KEY ("organizationId", "productServiceId") REFERENCES "ProductService"("organizationId", id)
-  ON UPDATE CASCADE ON DELETE RESTRICT;
-ALTER TABLE "ProductionTemplateStage"
-  ADD CONSTRAINT "ProductionTemplateStage_organizationId_templateId_fkey"
-  FOREIGN KEY ("organizationId", "templateId") REFERENCES "ProductionTemplate"("organizationId", id)
-  ON UPDATE CASCADE ON DELETE CASCADE;
-ALTER TABLE "PaymentAllocation"
-  ADD CONSTRAINT "PaymentAllocation_organizationId_invoiceId_fkey"
-  FOREIGN KEY ("organizationId", "invoiceId") REFERENCES "Invoice"("organizationId", id)
-  ON UPDATE CASCADE ON DELETE CASCADE;
-ALTER TABLE "SharedBusinessRecordVersion"
-  ADD CONSTRAINT "SharedBusinessRecordVersion_organizationId_recordId_fkey"
-  FOREIGN KEY ("organizationId", "recordId") REFERENCES "SharedBusinessRecord"("organizationId", id)
-  ON UPDATE CASCADE ON DELETE CASCADE;
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'Branch_organizationId_leadCustomerId_fkey') THEN
+    ALTER TABLE "Branch" ADD CONSTRAINT "Branch_organizationId_leadCustomerId_fkey" FOREIGN KEY ("organizationId", "leadCustomerId") REFERENCES "LeadCustomer"("organizationId", id) ON UPDATE CASCADE ON DELETE CASCADE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'SalesTextNote_organizationId_taskId_fkey') THEN
+    ALTER TABLE "SalesTextNote" ADD CONSTRAINT "SalesTextNote_organizationId_taskId_fkey" FOREIGN KEY ("organizationId", "taskId") REFERENCES "SalesTask"("organizationId", id) ON UPDATE CASCADE ON DELETE SET NULL ("taskId");
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'Proposal_organizationId_opportunityId_fkey') THEN
+    ALTER TABLE "Proposal" ADD CONSTRAINT "Proposal_organizationId_opportunityId_fkey" FOREIGN KEY ("organizationId", "opportunityId") REFERENCES "Opportunity"("organizationId", id) ON UPDATE CASCADE ON DELETE CASCADE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ProposalLineItem_organizationId_productServiceId_fkey') THEN
+    ALTER TABLE "ProposalLineItem" ADD CONSTRAINT "ProposalLineItem_organizationId_productServiceId_fkey" FOREIGN KEY ("organizationId", "productServiceId") REFERENCES "ProductService"("organizationId", id) ON UPDATE CASCADE ON DELETE RESTRICT;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ProductionTemplateStage_organizationId_templateId_fkey') THEN
+    ALTER TABLE "ProductionTemplateStage" ADD CONSTRAINT "ProductionTemplateStage_organizationId_templateId_fkey" FOREIGN KEY ("organizationId", "templateId") REFERENCES "ProductionTemplate"("organizationId", id) ON UPDATE CASCADE ON DELETE CASCADE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'PaymentAllocation_organizationId_invoiceId_fkey') THEN
+    ALTER TABLE "PaymentAllocation" ADD CONSTRAINT "PaymentAllocation_organizationId_invoiceId_fkey" FOREIGN KEY ("organizationId", "invoiceId") REFERENCES "Invoice"("organizationId", id) ON UPDATE CASCADE ON DELETE CASCADE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'SharedBusinessRecordVersion_organizationId_recordId_fkey') THEN
+    ALTER TABLE "SharedBusinessRecordVersion" ADD CONSTRAINT "SharedBusinessRecordVersion_organizationId_recordId_fkey" FOREIGN KEY ("organizationId", "recordId") REFERENCES "SharedBusinessRecord"("organizationId", id) ON UPDATE CASCADE ON DELETE CASCADE;
+  END IF;
+END;
+$$;
 
 COMMIT;

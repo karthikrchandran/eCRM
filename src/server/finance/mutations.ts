@@ -41,6 +41,7 @@ type InvoiceCreateDb = FinanceOrderRead & {
 };
 
 type FinanceTransaction = FinanceOrderRead & {
+  $queryRaw<T>(query: TemplateStringsArray, ...values: unknown[]): Promise<T>;
   costComponent: {
     create: (args: Prisma.CostComponentCreateArgs) => Promise<{ id: string }>;
     findFirst?: (args: Prisma.CostComponentFindFirstArgs) => Promise<{ id: string; orderId: string } | null>;
@@ -132,6 +133,9 @@ async function recalculateIncentiveForOrder(transaction: FinanceTransaction, org
   const status = paymentSummary.fullyPaid ? "READY_FOR_REVIEW" : "NOT_READY";
   const readinessReason = paymentSummary.fullyPaid ? null : "Order is not fully paid.";
   const recipientSplits = order.splitSnapshots.length ? order.splitSnapshots : [{ percent: 100, userId: order.ownerId }];
+  for (const userId of new Set(recipientSplits.map((split) => split.userId))) {
+    await assertTenantMember(transaction, userId, ["ADMIN", "SALES"]);
+  }
   const splits = calculateIncentiveSplits(calculatedAmountPaisa, recipientSplits);
 
   return transaction.incentive.upsert({
@@ -418,7 +422,7 @@ export async function rejectIncentive(
   if (database === (db as unknown as IncentiveStatusDb)) return withOrganization(user.organizationId, (tx) => rejectIncentive(user, incentiveId, reason, tx as unknown as IncentiveStatusDb));
   assertCanManageFinance(user);
 
-  const existing = await database.incentive.findFirst?.({ where: { id: incentiveId, organizationId: user.organizationId }, select: { id: true } }) ?? { id: incentiveId };
+  const existing = await database.incentive.findFirst?.({ where: { id: incentiveId, organizationId: user.organizationId }, select: { id: true } }) ?? null;
   if (!existing) throw new Error("Incentive was not found.");
 
   return database.incentive.update({
@@ -441,7 +445,7 @@ export async function markIncentivePaid(
   if (database === (db as unknown as IncentiveStatusDb)) return withOrganization(user.organizationId, (tx) => markIncentivePaid(user, incentiveId, paymentReference, tx as unknown as IncentiveStatusDb));
   assertCanManageFinance(user);
 
-  const existing = await database.incentive.findFirst?.({ where: { id: incentiveId, organizationId: user.organizationId }, select: { id: true } }) ?? { id: incentiveId };
+  const existing = await database.incentive.findFirst?.({ where: { id: incentiveId, organizationId: user.organizationId }, select: { id: true } }) ?? null;
   if (!existing) throw new Error("Incentive was not found.");
 
   return database.incentive.update({

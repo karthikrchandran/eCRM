@@ -1,17 +1,50 @@
 import type { Prisma } from "@prisma/client";
 import { db } from "@/server/db";
+import { assertTenantMember } from "@/server/organizations/tenant-member-guard";
 import { withOrganization } from "@/server/organizations/with-organization";
 import { buildSearchText, mapSharedRecordRow } from "./mappers";
 import { sharedRecordUpsertSchema } from "./validators";
 import type { SharedBusinessRecordRow, SharedRecordMutationResult, SharedRecordUpsertInput } from "./types";
 
 type SharedRecordMutationDb = {
+  $queryRaw?<T>(query: TemplateStringsArray, ...values: unknown[]): Promise<T>;
+  contact?: { findFirst: (args: Prisma.ContactFindFirstArgs) => Promise<{ id: string } | null> };
+  leadCustomer?: { findFirst: (args: Prisma.LeadCustomerFindFirstArgs) => Promise<{ id: string } | null> };
+  opportunity?: { findFirst: (args: Prisma.OpportunityFindFirstArgs) => Promise<{ id: string } | null> };
   sharedBusinessRecord: {
     create: (args: Prisma.SharedBusinessRecordCreateArgs) => Promise<SharedBusinessRecordRow>;
     findFirst: (args: Prisma.SharedBusinessRecordFindFirstArgs) => Promise<SharedBusinessRecordRow | null>;
     update: (args: Prisma.SharedBusinessRecordUpdateArgs) => Promise<SharedBusinessRecordRow>;
   };
 };
+
+async function validateSemanticRelationships(
+  organizationId: string,
+  input: SharedRecordUpsertInput,
+  database: SharedRecordMutationDb
+) {
+  if (input.ownerId) {
+    if (!database.$queryRaw) throw new Error("Organization member was not found.");
+    await assertTenantMember(database as Required<Pick<SharedRecordMutationDb, "$queryRaw">>, input.ownerId);
+  }
+
+  const lookups: Array<Promise<{ id: string } | null> | undefined> = [];
+  if (input.relatedLeadId) {
+    lookups.push(database.leadCustomer?.findFirst({ where: { id: input.relatedLeadId, organizationId }, select: { id: true } }));
+  }
+  if (input.relatedCustomerId) {
+    lookups.push(database.leadCustomer?.findFirst({ where: { id: input.relatedCustomerId, organizationId }, select: { id: true } }));
+  }
+  if (input.relatedContactId) {
+    lookups.push(database.contact?.findFirst({ where: { id: input.relatedContactId, organizationId }, select: { id: true } }));
+  }
+  if (input.relatedOpportunityId) {
+    lookups.push(database.opportunity?.findFirst({ where: { id: input.relatedOpportunityId, organizationId }, select: { id: true } }));
+  }
+  if (lookups.length && (await Promise.all(lookups)).some((row) => !row)) {
+    throw new Error("Related record was not found.");
+  }
+}
 
 function toRecordData(organizationId: string, input: SharedRecordUpsertInput) {
   const searchText = buildSearchText({
@@ -103,6 +136,7 @@ export async function upsertSharedRecord(
     return withOrganization(organizationId, (tx) => upsertSharedRecord(organizationId, rawInput, tx as unknown as SharedRecordMutationDb));
   }
   const input = sharedRecordUpsertSchema.parse(rawInput) as SharedRecordUpsertInput;
+  await validateSemanticRelationships(organizationId, input, database);
   if (input.parentId) {
     const parent = await database.sharedBusinessRecord.findFirst({
       where: { id: input.parentId, organizationId }

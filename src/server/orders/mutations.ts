@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { db } from "@/server/db";
+import { assertTenantMember } from "@/server/organizations/tenant-member-guard";
 import { withOrganization } from "@/server/organizations/with-organization";
 import type { AcceptedProposalForBookingDb } from "./queries";
 import { loadAcceptedProposalForBooking } from "./queries";
@@ -7,6 +8,7 @@ import { assertCanWriteOrders } from "./permissions";
 import type { OrderBookingInput, OrderStatusValue, OrderUser, PoMetadataInput } from "./types";
 
 type OrderBookingTransaction = {
+  $queryRaw<T>(query: TemplateStringsArray, ...values: unknown[]): Promise<T>;
   order: {
     count: (args: Prisma.OrderCountArgs) => Promise<number>;
     create: (args: Prisma.OrderCreateArgs) => Promise<{ id: string; orderNumber: string }>;
@@ -43,6 +45,14 @@ export async function createOrderFromAcceptedProposal(
 
     if (!proposal) {
       throw new Error("Accepted proposal was not found.");
+    }
+
+    const copiedOwnerIds = new Set([
+      proposal.opportunity.ownerId,
+      ...proposal.opportunity.splits.map((split) => split.userId)
+    ]);
+    for (const ownerId of copiedOwnerIds) {
+      await assertTenantMember(transaction, ownerId, ["OWNER", "ADMIN", "SALES"]);
     }
 
     const existingOrder = await transaction.order.findFirst({

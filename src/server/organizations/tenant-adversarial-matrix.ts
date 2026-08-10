@@ -117,7 +117,6 @@ export const tenantIsolationMatrix = {
     ...domainMatrix("workflow"),
     update: reviewedNotApplicable("workflow", "update", "Workflow events are append-only; direct-ID denial is the equivalent boundary.", "direct-id"),
     delete: reviewedNotApplicable("workflow", "delete", "Workflow events are append-only; list isolation is the equivalent boundary.", "list"),
-    "foreign-attachment": reviewedNotApplicable("workflow", "foreign-attachment", "Workflow related identifiers are opaque metadata without a database foreign key; direct-ID denial is equivalent.", "direct-id"),
     "nested-include": reviewedNotApplicable("workflow", "nested-include", "Workflow events expose no nested child relation; list isolation is equivalent.", "list")
   }
 } satisfies Record<TenantIsolationDomain, TenantIsolationDomainMatrix>;

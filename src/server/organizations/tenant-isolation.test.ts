@@ -147,7 +147,7 @@ describe("shared integration isolation", () => {
     });
     expect(database.leadCustomer.findFirst).toHaveBeenCalledWith({
       where: { id: "lead_B", organizationId: "org_A" },
-      select: { id: true, ownerId: true }
+      select: { id: true }
     });
     expect(database.workflowEvent.create).not.toHaveBeenCalled();
     expect(database.salesTask.create).not.toHaveBeenCalled();

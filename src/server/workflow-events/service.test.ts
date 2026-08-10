@@ -1,13 +1,17 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ingestWorkflowEvent, listWorkflowEventsForEntity } from "./service";
 
 describe("workflow event service", () => {
+  afterEach(() => delete process.env.WORKFLOW_AUTOMATION_USER_ID);
+
   it("persists workflow events and creates a CRM follow-up task for meeting bookings", async () => {
+    process.env.WORKFLOW_AUTOMATION_USER_ID = "automation_1";
     const createMock = vi.fn().mockResolvedValue({ id: "event_1" });
     const salesTaskCreateMock = vi.fn().mockResolvedValue({ id: "task_1" });
     const database = {
       $queryRaw: vi.fn().mockResolvedValue([{ allowed: true }]),
+      contact: { findFirst: vi.fn().mockResolvedValue({ id: "contact_1" }) },
       leadCustomer: { findFirst: vi.fn().mockResolvedValue({ id: "lead_1", ownerId: "sales_1" }) },
       workflowEvent: {
         create: createMock,
@@ -40,7 +44,7 @@ describe("workflow event service", () => {
         data: expect.objectContaining({
           title: "Follow-up from EmailVoice meeting",
           leadCustomerId: "lead_1",
-          ownerId: "sales_1",
+          ownerId: "automation_1",
           type: "FOLLOW_UP",
           source: "CRM"
         })
@@ -49,6 +53,7 @@ describe("workflow event service", () => {
   });
 
   it.each(["foreign", "inactive", "missing"])("rejects a %s lead actor before creating event or task", async () => {
+    process.env.WORKFLOW_AUTOMATION_USER_ID = "bad_actor";
     const database = {
       $queryRaw: vi.fn().mockResolvedValue([{ allowed: false }]),
       workflowEvent: { create: vi.fn(), findFirst: vi.fn().mockResolvedValue(null) },
@@ -62,6 +67,51 @@ describe("workflow event service", () => {
     }, database as never)).rejects.toThrow("Organization member was not found.");
     expect(database.workflowEvent.create).not.toHaveBeenCalled();
     expect(database.salesTask.create).not.toHaveBeenCalled();
+  });
+
+  it("fails closed before persisting when the automation actor is not configured", async () => {
+    const database = {
+      workflowEvent: { create: vi.fn() },
+      leadCustomer: { findFirst: vi.fn().mockResolvedValue({ id: "lead_1", ownerId: "sales_1" }) },
+      salesTask: { create: vi.fn() }
+    };
+    await expect(ingestWorkflowEvent("org_A", {
+      sourceApp: "emailvoice", sourceEventType: "meeting_booked", entityType: "ACTIVITY",
+      relatedRecordType: "LEAD", relatedRecordId: "lead_1", summary: "Meeting"
+    }, database as never)).rejects.toThrow("Workflow automation actor is not configured.");
+    expect(database.workflowEvent.create).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["entity", { entityType: "OPPORTUNITY", entityId: "opportunity_B" }, "opportunity"],
+    ["related", { relatedRecordType: "CONTACT", relatedRecordId: "contact_B" }, "contact"]
+  ] as const)("rejects a tenant-B %s workflow attachment", async (_label, attachment, delegate) => {
+    const database = {
+      [delegate]: { findFirst: vi.fn().mockResolvedValue(null) },
+      workflowEvent: { create: vi.fn(), findFirst: vi.fn().mockResolvedValue(null) }
+    };
+    await expect(ingestWorkflowEvent("org_A", {
+      sourceApp: "emailvoice",
+      sourceEventId: `foreign-${_label}`,
+      sourceEventType: "sync",
+      entityType: "EXTERNAL",
+      summary: "Foreign attachment",
+      ...attachment
+    }, database as never)).rejects.toThrow("Related record was not found.");
+    expect(database.workflowEvent.create).not.toHaveBeenCalled();
+  });
+
+  it("requires unknown external workflow identifiers to be source-namespaced", async () => {
+    const database = { workflowEvent: { create: vi.fn(), findFirst: vi.fn().mockResolvedValue(null) } };
+    await expect(ingestWorkflowEvent("org_A", {
+      sourceApp: "emailvoice",
+      sourceEventId: "external-unscoped",
+      sourceEventType: "sync",
+      entityType: "EXTERNAL_CONTACT",
+      entityId: "tenant_B_guessable_id",
+      summary: "Unscoped external identifier"
+    }, database as never)).rejects.toThrow("External workflow identifiers must be source-namespaced.");
+    expect(database.workflowEvent.create).not.toHaveBeenCalled();
   });
 
   it("lists workflow events for an entity by most recent first", async () => {

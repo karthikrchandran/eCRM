@@ -52,12 +52,15 @@ const acceptedProposal = {
 
 function createDatabase({
   existingOrder = null,
+  memberAllowed = true,
   proposal = acceptedProposal
 }: {
   existingOrder?: { id: string } | null;
+  memberAllowed?: boolean;
   proposal?: typeof acceptedProposal | null;
 } = {}) {
   const tx = {
+    $queryRaw: vi.fn().mockResolvedValue([{ allowed: memberAllowed }]),
     order: {
       count: vi.fn().mockResolvedValue(0),
       create: vi.fn().mockResolvedValue({ id: "order_1", orderNumber: "ORD-2026-0001" }),
@@ -90,6 +93,15 @@ describe("order mutations", () => {
     await expect(createOrderFromAcceptedProposal(admin, { proposalId: "proposal_accepted" }, database)).rejects.toThrow(
       "This proposal already has an order."
     );
+  });
+
+  it("rejects a copied opportunity owner or split whose membership was revoked before booking", async () => {
+    const { database, tx } = createDatabase({ memberAllowed: false });
+
+    await expect(createOrderFromAcceptedProposal(admin, { proposalId: "proposal_accepted" }, database))
+      .rejects.toThrow("Organization member was not found.");
+
+    expect(tx.order.create).not.toHaveBeenCalled();
   });
 
   it("creates an order with proposal totals, line snapshots, template keys, and owner split snapshots", async () => {

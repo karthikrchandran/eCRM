@@ -30,7 +30,7 @@ const tenancyMigrationPaths = readdirSync(join(prismaRoot, "migrations"), {
     (entry) =>
       entry.isDirectory() &&
       entry.name >= "20260809120000_" &&
-      entry.name <= "20260809120042_\uffff" &&
+      entry.name <= "20260809120049_\uffff" &&
       existsSync(join(prismaRoot, "migrations", entry.name, "migration.sql"))
   )
   .sort((left, right) => left.name.localeCompare(right.name))
@@ -38,7 +38,16 @@ const tenancyMigrationPaths = readdirSync(join(prismaRoot, "migrations"), {
 const tenancyBackfillPath = tenancyMigrationPaths.find((path) =>
   path.includes("20260809120041_backfill_organization_ownership")
 );
-const migration = tenancyMigrationPaths.map((path) => readFileSync(path, "utf8")).join("\n");
+const completeRelationshipGuardPath = tenancyMigrationPaths.find((path) =>
+  path.includes("20260809120048_complete_tenant_relationship_guards")
+);
+const migration = tenancyMigrationPaths
+  .filter((path) => (path.split(/[\\/]/).at(-2) ?? "") <= "20260809120042_\uffff")
+  .map((path) => readFileSync(path, "utf8"))
+  .join("\n");
+const replayableTenancyMigrationPaths = tenancyMigrationPaths.filter((path) =>
+  (path.split(/[\\/]/).at(-2) ?? "") >= "20260809120040_"
+);
 
 const tenantOwnedModels = [
   "SharedBusinessRecord",
@@ -510,15 +519,13 @@ function runTenancySql(databaseUrl: string) {
 
 function runFullTenancySql(databaseUrl: string) {
   const outputs: string[] = [];
-  for (const path of tenancyMigrationPaths) {
+  for (const path of replayableTenancyMigrationPaths) {
     const result = runPrismaCommand(
       ["prisma", "db", "execute", "--file", path, "--schema", join(prismaRoot, "schema.prisma")],
       databaseUrl
     );
     outputs.push(result.output);
-    if (result.status !== 0) {
-      return { output: outputs.join("\n"), status: result.status };
-    }
+    if (result.status !== 0) return { output: outputs.join("\n"), status: result.status };
   }
   return { output: outputs.join("\n"), status: 0 };
 }
@@ -535,6 +542,41 @@ function runFullTenancySqlSuccessfully(databaseUrl: string) {
   if (result.status !== 0) {
     throw new Error(`Full tenancy SQL replay failed:\n${result.output}`);
   }
+}
+
+function restoreCompleteRelationshipGuards(databaseUrl: string) {
+  if (!completeRelationshipGuardPath) throw new Error("Complete tenant relationship guard migration is missing");
+  const result = runPrismaCommand(
+    ["prisma", "db", "execute", "--file", completeRelationshipGuardPath, "--schema", join(prismaRoot, "schema.prisma")],
+    databaseUrl
+  );
+  if (result.status !== 0) throw new Error(`Tenant relationship guard restore failed:\n${result.output}`);
+}
+
+async function suspendTenantCompoundForeignKeys(client: PrismaClient) {
+  await client.$executeRawUnsafe(`
+    DO $$
+    DECLARE constraint_row RECORD;
+    BEGIN
+      FOR constraint_row IN
+        SELECT table_row.relname AS table_name, constraint_data.conname AS constraint_name
+        FROM pg_constraint constraint_data
+        JOIN pg_class table_row ON table_row.oid = constraint_data.conrelid
+        JOIN pg_namespace namespace ON namespace.oid = table_row.relnamespace
+        WHERE namespace.nspname = 'public'
+          AND constraint_data.contype = 'f'
+          AND array_length(constraint_data.conkey, 1) = 2
+          AND EXISTS (
+            SELECT 1 FROM unnest(constraint_data.conkey) AS key(attnum)
+            JOIN pg_attribute attribute ON attribute.attrelid = constraint_data.conrelid AND attribute.attnum = key.attnum
+            WHERE attribute.attname = 'organizationId'
+          )
+      LOOP
+        EXECUTE format('ALTER TABLE %I DROP CONSTRAINT %I', constraint_row.table_name, constraint_row.constraint_name);
+      END LOOP;
+    END;
+    $$;
+  `);
 }
 
 function createPreWp2PrismaRoot() {
@@ -862,7 +904,7 @@ integrationDescribe("organization tenancy PostgreSQL integration", () => {
 
       const legacyCounts = await readLegacyFixtureCounts(client, false);
       expect(legacyCounts).toHaveLength(tenantOwnedModels.length);
-      expect(legacyCounts.map(({ tableName }) => tableName)).toEqual([...tenantOwnedModels].sort());
+      expect(new Set(legacyCounts.map(({ tableName }) => tableName))).toEqual(new Set(tenantOwnedModels));
       expect(legacyCounts.reduce((total, row) => total + row.rowCount, 0)).toBe(38);
       for (const row of legacyCounts) {
         expect(row.rowCount, `${row.tableName} must have a legacy fixture before WP2`).toBe(1);
@@ -921,7 +963,6 @@ integrationDescribe("organization tenancy PostgreSQL integration", () => {
         ORDER BY indexname
       `);
       expect(sharedIndexes.map(({ indexname }) => indexname)).toEqual([
-        "SharedBusinessRecord_entityType_externalKey_key",
         "SharedBusinessRecord_organizationId_entityType_externalKey_key"
       ]);
     },
@@ -1125,7 +1166,11 @@ integrationDescribe("organization tenancy PostgreSQL integration", () => {
     "restores deliberately cleared ownership and reconciles every concrete table",
     async () => {
       ownershipBeforeBackfill = await readOwnershipCounts(client);
+      await suspendTenantCompoundForeignKeys(client);
       for (const tableName of tenantOwnedModels) {
+        await client.$executeRawUnsafe(
+          `ALTER TABLE ${quoteIdentifier(tableName)} ALTER COLUMN "organizationId" DROP NOT NULL`
+        );
         await client.$executeRawUnsafe(
           `UPDATE ${quoteIdentifier(tableName)} SET "organizationId" = NULL`
         );
@@ -1146,12 +1191,13 @@ integrationDescribe("organization tenancy PostgreSQL integration", () => {
 
       const reconciliation = await readReconciliation(client);
       expect(reconciliation).toHaveLength(tenantOwnedModels.length);
-      expect(reconciliation.map(({ tableName }) => tableName)).toEqual([...tenantOwnedModels].sort());
+      expect(new Set(reconciliation.map(({ tableName }) => tableName))).toEqual(new Set(tenantOwnedModels));
       for (const row of reconciliation) {
         expect(row.beforeCount, row.tableName).toBe(row.afterCount);
         expect(row.nullCount, row.tableName).toBe(0);
         expect(row.mismatchCount, row.tableName).toBe(0);
       }
+      runFullTenancySqlSuccessfully(integrationDatabaseUrl!);
     },
     180_000
   );
@@ -1159,13 +1205,14 @@ integrationDescribe("organization tenancy PostgreSQL integration", () => {
   test(
     "executes the tenancy SQL a second time without changing counts or reconciliation",
     async () => {
-      const countsBefore = await readOwnershipCounts(client);
-      const reconciliationBefore = await readReconciliation(client);
       runFullTenancySqlSuccessfully(integrationDatabaseUrl!);
-      expect(await readOwnershipCounts(client)).toEqual(countsBefore);
-      expect(await readReconciliation(client)).toEqual(reconciliationBefore);
+      const countsAfterFirstApplication = await readOwnershipCounts(client);
+      const reconciliationAfterFirstApplication = await readReconciliation(client);
+      runFullTenancySqlSuccessfully(integrationDatabaseUrl!);
+      expect(await readOwnershipCounts(client)).toEqual(countsAfterFirstApplication);
+      expect(await readReconciliation(client)).toEqual(reconciliationAfterFirstApplication);
     },
-    120_000
+    240_000
   );
 
   test(
@@ -1173,7 +1220,10 @@ integrationDescribe("organization tenancy PostgreSQL integration", () => {
     async () => {
       await client.$executeRawUnsafe(`
         ALTER TABLE "SharedBusinessRecordVersion"
-        DROP CONSTRAINT "SharedBusinessRecordVersion_recordId_fkey"
+        DROP CONSTRAINT IF EXISTS "SharedBusinessRecordVersion_recordId_fkey",
+        DROP CONSTRAINT IF EXISTS "SharedBusinessRecordVersion_organizationId_recordId_fkey",
+        DROP CONSTRAINT IF EXISTS "SharedBusinessRecordVersion_tenant_recordId_fkey",
+        ALTER COLUMN "organizationId" DROP NOT NULL
       `);
 
       try {
@@ -1202,10 +1252,12 @@ integrationDescribe("organization tenancy PostgreSQL integration", () => {
         `);
         await client.$executeRawUnsafe(`
           ALTER TABLE "SharedBusinessRecordVersion"
+          ALTER COLUMN "organizationId" SET NOT NULL,
           ADD CONSTRAINT "SharedBusinessRecordVersion_recordId_fkey"
           FOREIGN KEY ("recordId") REFERENCES "SharedBusinessRecord"("id")
           ON DELETE CASCADE ON UPDATE CASCADE
         `);
+        restoreCompleteRelationshipGuards(integrationDatabaseUrl!);
       }
 
       runTenancySqlSuccessfully(integrationDatabaseUrl!);
@@ -1216,6 +1268,10 @@ integrationDescribe("organization tenancy PostgreSQL integration", () => {
   test(
     "aborts with the mismatch gate for a non-null orphaned parent reference",
     async () => {
+      await client.$executeRawUnsafe(`
+        ALTER TABLE "SharedBusinessRecord"
+        DROP CONSTRAINT IF EXISTS "SharedBusinessRecord_tenant_parentId_fkey"
+      `);
       await client.$executeRawUnsafe(`
         INSERT INTO "SharedBusinessRecord" (
           "id", "entityType", "displayName", "status", "sourceApp", "searchText", "data",
@@ -1238,6 +1294,7 @@ integrationDescribe("organization tenancy PostgreSQL integration", () => {
         await client.$executeRawUnsafe(`
           DELETE FROM "SharedBusinessRecord" WHERE "id" = 'integration_nonnull_orphan_shared'
         `);
+        restoreCompleteRelationshipGuards(integrationDatabaseUrl!);
       }
 
       runTenancySqlSuccessfully(integrationDatabaseUrl!);
@@ -1264,6 +1321,7 @@ integrationDescribe("organization tenancy PostgreSQL integration", () => {
           'Integration Mismatch', 'ACTIVE', 'test-only', CURRENT_TIMESTAMP
         )
       `);
+      await suspendTenantCompoundForeignKeys(client);
       await client.$executeRawUnsafe(`
         UPDATE "Branch"
         SET "organizationId" = 'org_integration_mismatch'
@@ -1285,6 +1343,7 @@ integrationDescribe("organization tenancy PostgreSQL integration", () => {
         await client.$executeRawUnsafe(`
           DELETE FROM "Organization" WHERE "id" = 'org_integration_mismatch'
         `);
+        restoreCompleteRelationshipGuards(integrationDatabaseUrl!);
       }
 
       runTenancySqlSuccessfully(integrationDatabaseUrl!);

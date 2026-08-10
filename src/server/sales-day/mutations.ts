@@ -1,5 +1,6 @@
 import type { Prisma, SalesDayReviewItemStatus, SalesTaskType } from "@prisma/client";
 import { db } from "@/server/db";
+import { assertTenantMember } from "@/server/organizations/tenant-member-guard";
 import { withOrganization } from "@/server/organizations/with-organization";
 import {
   assertCanUseSalesWorkspace,
@@ -12,10 +13,13 @@ import type { SalesDayReviewInput, SalesTaskInput, SalesTaskUpdateInput, SalesTe
 
 type IdResult = { id: string };
 type OwnedRecord = { id: string; ownerId: string };
+type TenantMemberDb = {
+  $queryRaw?<T>(query: TemplateStringsArray, ...values: unknown[]): Promise<T>;
+};
 type RelatedRecordModel = {
   findFirst: (args: { where: { id: string; organizationId: string }; select: { id: true } }) => Promise<{ id: string } | null>;
 };
-type RelatedRecordsDb = {
+type RelatedRecordsDb = TenantMemberDb & {
   leadCustomer?: RelatedRecordModel;
   opportunity?: RelatedRecordModel;
   proposal?: RelatedRecordModel;
@@ -33,7 +37,7 @@ type TaskForCarryForward = OwnedRecord & {
   priority: "LOW" | "MEDIUM" | "HIGH" | "URGENT";
 };
 
-type TaskLifecycleDb = {
+type TaskLifecycleDb = TenantMemberDb & {
   salesTask: {
     findFirst: (args: Prisma.SalesTaskFindFirstArgs) => Promise<OwnedRecord | null>;
     update: (args: Prisma.SalesTaskUpdateArgs) => Promise<IdResult>;
@@ -100,7 +104,7 @@ export type SuggestedVoiceActionInput = {
   confidenceLabel?: string | null;
 };
 
-type SuggestedActionDb = {
+type SuggestedActionDb = TenantMemberDb & {
   salesVoiceNote?: {
     findFirst: (args: Prisma.SalesVoiceNoteFindFirstArgs) => Promise<OwnedRecord | null>;
   };
@@ -127,7 +131,7 @@ type AcceptActionRecord = {
   };
 };
 
-type AcceptActionDb = {
+type AcceptActionDb = TenantMemberDb & {
   salesVoiceNoteAction: {
     findFirst: (args: Prisma.SalesVoiceNoteActionFindFirstArgs) => Promise<AcceptActionRecord | null>;
     update: (args: Prisma.SalesVoiceNoteActionUpdateArgs) => Promise<IdResult>;
@@ -137,7 +141,7 @@ type AcceptActionDb = {
   };
 };
 
-type ReviewDb = {
+type ReviewDb = TenantMemberDb & {
   salesDayReview: {
     upsert: (args: Prisma.SalesDayReviewUpsertArgs) => Promise<IdResult>;
   };
@@ -157,6 +161,11 @@ function normalizeDateToDay(date: Date) {
 
 function tomorrowMorning(reviewDate: Date) {
   return new Date(Date.UTC(reviewDate.getUTCFullYear(), reviewDate.getUTCMonth(), reviewDate.getUTCDate() + 1, 9));
+}
+
+async function assertActiveSalesDayOwner(database: TenantMemberDb, userId: string) {
+  if (!database.$queryRaw) throw new Error("Organization member was not found.");
+  await assertTenantMember(database as Required<Pick<TenantMemberDb, "$queryRaw">>, userId, ["OWNER", "ADMIN", "SALES"]);
 }
 
 type RelatedRecordInput = {
@@ -196,6 +205,7 @@ async function findOwnedTask(database: TaskLifecycleDb, user: SalesDayUser, task
     throw new Error("My Day task was not found.");
   }
 
+  await assertActiveSalesDayOwner(database, task.ownerId);
   assertOwnsSalesTask(user, task);
   return task;
 }
@@ -207,6 +217,7 @@ export async function createSalesTask(
 ): Promise<IdResult> {
   if (database === (db as unknown as CreateTaskDb)) return withOrganization(user.organizationId, (tx) => createSalesTask(user, input, tx as unknown as CreateTaskDb));
   assertCanUseSalesWorkspace(user);
+  await assertActiveSalesDayOwner(database, user.id);
   await assertRelatedRecords(database, user.organizationId, input);
 
   return database.salesTask.create({
@@ -265,6 +276,7 @@ async function assertOwnedTextNote(database: TextNoteDb, user: SalesDayUser, not
     throw new Error("Typed note was not found.");
   }
 
+  await assertActiveSalesDayOwner(database, note.ownerId);
   assertOwnsSalesTextNote(user, note);
 }
 
@@ -288,6 +300,7 @@ export async function createSalesTextNote(
 ): Promise<IdResult> {
   if (database === (db as unknown as CreateTextNoteDb)) return withOrganization(user.organizationId, (tx) => createSalesTextNote(user, input, tx as unknown as CreateTextNoteDb));
   assertCanUseSalesWorkspace(user);
+  await assertActiveSalesDayOwner(database, user.id);
   await assertRelatedRecords(database, user.organizationId, input);
 
   return database.salesTextNote.create({
@@ -419,6 +432,7 @@ export async function carryForwardSalesTask(
   }
 
   assertOwnsSalesTask(user, task);
+  await assertActiveSalesDayOwner(database, user.id);
 
   const created = await database.salesTask.create({
     data: {
@@ -454,6 +468,7 @@ export async function createSalesVoiceNote(
 ): Promise<IdResult> {
   if (database === (db as unknown as VoiceNoteDb)) return withOrganization(user.organizationId, (tx) => createSalesVoiceNote(user, input, tx as unknown as VoiceNoteDb));
   assertCanUseSalesWorkspace(user);
+  await assertActiveSalesDayOwner(database, user.id);
   await assertRelatedRecords(database, user.organizationId, input);
 
   if (!database.salesVoiceNote.create) {
@@ -491,6 +506,7 @@ async function assertOwnedVoiceNote(database: VoiceNoteDb, user: SalesDayUser, v
     throw new Error("Voice note was not found.");
   }
 
+  await assertActiveSalesDayOwner(database, note.ownerId);
   assertOwnsSalesVoiceNote(user, note);
 }
 
@@ -560,6 +576,7 @@ export async function createSuggestedActionsForVoiceNote(
     select: { id: true, ownerId: true }
   });
   if (database.salesVoiceNote && !note) throw new Error("Voice note was not found.");
+  if (note) await assertActiveSalesDayOwner(database, note.ownerId);
 
   if (actions.length === 0) {
     return { count: 0 };
@@ -595,6 +612,7 @@ export async function acceptSuggestedAction(
   }
 
   assertOwnsSalesVoiceNote(user, action.voiceNote);
+  await assertActiveSalesDayOwner(database, action.voiceNote.ownerId);
 
   if (action.status === "ACCEPTED" && action.createdTaskId) {
     return { id: action.createdTaskId };
@@ -635,9 +653,9 @@ export async function acceptSuggestedAction(
 export async function rejectSuggestedAction(
   user: SalesDayUser,
   actionId: string,
-  database: Pick<AcceptActionDb, "salesVoiceNoteAction"> = db as unknown as Pick<AcceptActionDb, "salesVoiceNoteAction">
+  database: TenantMemberDb & Pick<AcceptActionDb, "salesVoiceNoteAction"> = db as unknown as TenantMemberDb & Pick<AcceptActionDb, "salesVoiceNoteAction">
 ): Promise<IdResult> {
-  if (database === (db as unknown as Pick<AcceptActionDb, "salesVoiceNoteAction">)) return withOrganization(user.organizationId, (tx) => rejectSuggestedAction(user, actionId, tx as unknown as Pick<AcceptActionDb, "salesVoiceNoteAction">));
+  if (database === (db as unknown as TenantMemberDb & Pick<AcceptActionDb, "salesVoiceNoteAction">)) return withOrganization(user.organizationId, (tx) => rejectSuggestedAction(user, actionId, tx as unknown as TenantMemberDb & Pick<AcceptActionDb, "salesVoiceNoteAction">));
   assertCanUseSalesWorkspace(user);
   const action = await database.salesVoiceNoteAction.findFirst({
     where: { id: actionId, organizationId: user.organizationId },
@@ -649,6 +667,7 @@ export async function rejectSuggestedAction(
   }
 
   assertOwnsSalesVoiceNote(user, action.voiceNote);
+  await assertActiveSalesDayOwner(database, action.voiceNote.ownerId);
 
   return database.salesVoiceNoteAction.update({
     where: { id: actionId },
@@ -691,6 +710,7 @@ export async function saveEndOfDayReview(
 ): Promise<IdResult> {
   if (database === (db as unknown as ReviewDb)) return withOrganization(user.organizationId, (tx) => saveEndOfDayReview(user, input, tx as unknown as ReviewDb));
   assertCanUseSalesWorkspace(user);
+  await assertActiveSalesDayOwner(database, user.id);
   const reviewDate = normalizeDateToDay(input.reviewDate);
   const review = await database.salesDayReview.upsert({
     where: { organizationId_ownerId_reviewDate: { organizationId: user.organizationId, ownerId: user.id, reviewDate } },

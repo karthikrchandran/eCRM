@@ -293,4 +293,43 @@ describe("upsertSharedRecord", () => {
       })
     });
   });
+
+  it.each([
+    ["relatedLeadId", "leadCustomer"],
+    ["relatedCustomerId", "leadCustomer"],
+    ["relatedContactId", "contact"],
+    ["relatedOpportunityId", "opportunity"]
+  ] as const)("rejects a tenant-B semantic %s", async (field, delegate) => {
+    const database = {
+      [delegate]: { findFirst: vi.fn().mockResolvedValue(null) },
+      sharedBusinessRecord: { create: vi.fn(), findFirst: vi.fn(), update: vi.fn() }
+    };
+
+    await expect(upsertSharedRecord("org_A", {
+      entityType: "CUSTOMER",
+      displayName: "Cross tenant",
+      status: "ACTIVE",
+      sourceApp: "ecrm",
+      externalKey: "cross-tenant",
+      [field]: "tenant_B_id"
+    }, database as never)).rejects.toThrow("Related record was not found.");
+    expect(database.sharedBusinessRecord.create).not.toHaveBeenCalled();
+  });
+
+  it("rejects an inactive or tenant-B semantic ownerId", async () => {
+    const database = {
+      $queryRaw: vi.fn().mockResolvedValue([{ allowed: false }]),
+      sharedBusinessRecord: { create: vi.fn(), findFirst: vi.fn(), update: vi.fn() }
+    };
+
+    await expect(upsertSharedRecord("org_A", {
+      entityType: "CUSTOMER",
+      displayName: "Cross tenant",
+      status: "ACTIVE",
+      sourceApp: "ecrm",
+      externalKey: "cross-tenant-owner",
+      ownerId: "tenant_B_user"
+    }, database as never)).rejects.toThrow("Organization member was not found.");
+    expect(database.sharedBusinessRecord.create).not.toHaveBeenCalled();
+  });
 });

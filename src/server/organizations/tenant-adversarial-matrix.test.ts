@@ -82,9 +82,7 @@ describe("organization A/B adversarial matrix inventory", () => {
     expect(tenantIsolationMatrix.reports.create).toMatchObject({
       kind: "reviewed-na", equivalentOperation: "aggregate"
     });
-    expect(tenantIsolationMatrix.workflow["foreign-attachment"]).toMatchObject({
-      kind: "reviewed-na", equivalentOperation: "direct-id"
-    });
+    expect(tenantIsolationMatrix.workflow["foreign-attachment"]).toMatchObject({ kind: "executable" });
     for (const domain of requiredDomains) {
       for (const category of requiredCategories) {
         const scenario = tenantIsolationMatrix[domain][category];

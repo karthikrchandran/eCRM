@@ -32,7 +32,7 @@ BEGIN
       NULLIF(allowed_roles_csv, '') IS NULL
       OR membership.role::TEXT = ANY(string_to_array(allowed_roles_csv, ','))
     )
-  FOR KEY SHARE OF account, membership, organization;
+  FOR SHARE OF account, membership, organization;
 
   RETURN FOUND;
 END;

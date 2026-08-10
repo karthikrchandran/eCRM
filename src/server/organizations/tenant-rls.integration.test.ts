@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { assertTenantMember } from "./tenant-member-guard";
+import { tenantOpaqueOwnedRelationships, tenantOwnedRelationships, tenantUserRelationships } from "./tenant-relationships";
 import { withOrganization } from "./with-organization";
 
 const testDatabaseUrl = process.env.TEST_DATABASE_URL;
@@ -66,10 +67,20 @@ integration("PostgreSQL tenant RLS", () => {
       { id: "rls_membership_A", organizationId: "rls_org_A", userId: "rls_user_A", role: "SALES", status: "ACTIVE" },
       { id: "rls_membership_B", organizationId: "rls_org_B", userId: "rls_user_B", role: "SALES", status: "ACTIVE" }
     ] });
-    await database.leadCustomer.createMany({ data: [
-      { id: "rls_lead_A", organizationId: "rls_org_A", name: "Same Shape", ownerId: "rls_user_A", createdById: "rls_user_A", updatedById: "rls_user_A" },
-      { id: "rls_lead_B", organizationId: "rls_org_B", name: "Same Shape", ownerId: "rls_user_B", createdById: "rls_user_B", updatedById: "rls_user_B" }
-    ] });
+    for (const fixture of [
+      { id: "rls_lead_A", organizationId: "rls_org_A", ownerId: "rls_user_A" },
+      { id: "rls_lead_B", organizationId: "rls_org_B", ownerId: "rls_user_B" }
+    ]) {
+      await database.$transaction(async (transaction) => {
+        await transaction.$executeRaw`SELECT set_config('app.organization_id', ${fixture.organizationId}, true)`;
+        await transaction.leadCustomer.create({ data: {
+          ...fixture,
+          name: "Same Shape",
+          createdById: fixture.ownerId,
+          updatedById: fixture.ownerId
+        } });
+      });
+    }
   });
 
   afterAll(async () => {
@@ -133,6 +144,56 @@ integration("PostgreSQL tenant RLS", () => {
       WHERE schemaname = 'public' AND indexname = ANY(${[...legacyGlobalBusinessIndexes]}::text[])
     `;
     expect(legacyIndexes).toEqual([]);
+  });
+
+  it("catalog-proves every tenant parent edge and User foreign key guard", async () => {
+    const foreignKeys = await database.$queryRaw<Array<{
+      child_table: string;
+      definition: string;
+      parent_table: string;
+      validated: boolean;
+    }>>`
+      SELECT child.relname AS child_table,
+             parent.relname AS parent_table,
+             pg_get_constraintdef(constraint_row.oid) AS definition,
+             constraint_row.convalidated AS validated
+      FROM pg_constraint constraint_row
+      JOIN pg_class child ON child.oid = constraint_row.conrelid
+      JOIN pg_class parent ON parent.oid = constraint_row.confrelid
+      JOIN pg_namespace namespace ON namespace.oid = child.relnamespace
+      WHERE namespace.nspname = 'public' AND constraint_row.contype = 'f'
+    `;
+
+    for (const relation of [...tenantOwnedRelationships, ...tenantOpaqueOwnedRelationships]) {
+      const expectedColumns = `FOREIGN KEY ("organizationId", "${relation.childField}")`;
+      const expectedParent = `REFERENCES "${relation.parent}"("organizationId", id)`;
+      expect(foreignKeys.some((foreignKey) =>
+        foreignKey.child_table === relation.child
+        && foreignKey.parent_table === relation.parent
+        && foreignKey.validated
+        && foreignKey.definition.includes(expectedColumns)
+        && foreignKey.definition.includes(expectedParent)
+      ), `${relation.child}.${relation.childField} must have a validated compound tenant FK`).toBe(true);
+    }
+
+    const memberTriggers = await database.$queryRaw<Array<{
+      table_name: string;
+      trigger_name: string;
+    }>>`
+      SELECT table_row.relname AS table_name, trigger_row.tgname AS trigger_name
+      FROM pg_trigger trigger_row
+      JOIN pg_class table_row ON table_row.oid = trigger_row.tgrelid
+      JOIN pg_proc function_row ON function_row.oid = trigger_row.tgfoid
+      JOIN pg_namespace namespace ON namespace.oid = table_row.relnamespace
+      WHERE namespace.nspname = 'public'
+        AND NOT trigger_row.tgisinternal
+        AND function_row.proname = 'assert_tenant_user_fk'
+    `;
+    expect(memberTriggers).toHaveLength(tenantUserRelationships.length);
+    for (const relation of tenantUserRelationships) {
+      const expectedTrigger = `${relation.child}_tenant_member_${relation.childField}_trg`.slice(0, 63);
+      expect(memberTriggers).toContainEqual({ table_name: relation.child, trigger_name: expectedTrigger });
+    }
   });
 
   it("denies direct authentication and control-plane table access", async () => {
@@ -246,6 +307,45 @@ integration("PostgreSQL tenant RLS", () => {
         } });
       }, tenantDatabase)).rejects.toThrow("Organization member was not found.");
       expect(await database.leadCustomer.findUnique({ where: { id: "rls_revoked_write" } })).toBeNull();
+    } finally {
+      await database.organizationMembership.update({
+        where: { id: "rls_membership_A" },
+        data: { status: "ACTIVE" }
+      });
+    }
+  });
+
+  it("holds a conflicting membership lock until the tenant transaction ends", async () => {
+    let releaseGuard!: () => void;
+    const guardedWorkMayFinish = new Promise<void>((resolve) => { releaseGuard = resolve; });
+    let guardAcquired!: () => void;
+    const guardIsHoldingLocks = new Promise<void>((resolve) => { guardAcquired = resolve; });
+
+    const guardedTransaction = withOrganization("rls_org_A", async (transaction) => {
+      await assertTenantMember(transaction, "rls_user_A", ["SALES"]);
+      guardAcquired();
+      await guardedWorkMayFinish;
+    }, tenantDatabase);
+
+    await guardIsHoldingLocks;
+    let revocationSettled = false;
+    const revocation = database.organizationMembership.update({
+      where: { id: "rls_membership_A" },
+      data: { status: "REVOKED" }
+    }).then(() => { revocationSettled = true; });
+
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(revocationSettled).toBe(false);
+
+    releaseGuard();
+    await guardedTransaction;
+    await revocation;
+    expect(revocationSettled).toBe(true);
+
+    try {
+      await expect(withOrganization("rls_org_A", (transaction) =>
+        assertTenantMember(transaction, "rls_user_A", ["SALES"]), tenantDatabase
+      )).rejects.toThrow("Organization member was not found.");
     } finally {
       await database.organizationMembership.update({
         where: { id: "rls_membership_A" },
