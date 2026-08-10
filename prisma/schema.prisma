@@ -240,6 +240,41 @@ model Organization {
   costComponents                  CostComponent[]
   incentives                      Incentive[]
   incentiveSplits                 IncentiveSplit[]
+  installations                   OrganizationInstallation[]
+}
+
+model OrganizationInstallation {
+  id                 String   @id @default(cuid())
+  installationId     String   @unique
+  organizationId     String
+  tenantKey          String
+  productCode        String
+  status             String   @default("ACTIVE")
+  keyVersion         Int
+  publicKey          String
+  lastAppliedVersion Int      @default(0)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  organization Organization                 @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  replayReceipts IntegrationReplayReceipt[]
+
+  @@unique([organizationId, installationId])
+  @@index([tenantKey, productCode])
+}
+
+model IntegrationReplayReceipt {
+  id             String   @id @default(cuid())
+  installationId String
+  jti            String
+  projectionVersion Int
+  expiresAt      DateTime
+  createdAt      DateTime @default(now())
+
+  installation OrganizationInstallation @relation(fields: [installationId], references: [installationId], onDelete: Cascade)
+
+  @@unique([installationId, jti])
+  @@index([expiresAt])
 }
 
 model OrganizationMembership {
