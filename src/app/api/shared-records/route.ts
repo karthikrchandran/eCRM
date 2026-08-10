@@ -64,6 +64,8 @@ export async function PATCH(request: Request) {
   if (authResponse) {
     return authResponse;
   }
+  const organizationId = getSharedDataOrganizationId();
+  if (!organizationId) return Response.json({ error: "Shared data organization is not configured." }, { status: 500 });
 
   let body: unknown;
   try {
@@ -73,7 +75,7 @@ export async function PATCH(request: Request) {
   }
 
   try {
-    const event = await import("@/server/workflow-events/service").then((module) => module.ingestWorkflowEvent(body as never));
+    const event = await import("@/server/workflow-events/service").then((module) => module.ingestWorkflowEvent(organizationId, body as never));
     return Response.json({ event }, { status: 201 });
   } catch (error) {
     if (error instanceof ZodError) {
