@@ -1,6 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { z } from "zod";
-import { db } from "@/server/db";
+import { tenantBoundary as db } from "@/server/organizations/tenant-boundary";
 import { withOrganization } from "@/server/organizations/with-organization";
 import { assertCanWriteCrmRecords, type CrmUser } from "./permissions";
 import { createBranch, createContact, createLeadCustomer } from "./mutations";

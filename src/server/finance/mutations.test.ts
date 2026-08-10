@@ -92,7 +92,7 @@ describe("finance mutations", () => {
 
     expect(paymentCreate).toHaveBeenCalledWith({
       data: expect.objectContaining({
-        allocations: { create: [{ amountPaisa: 118000, invoiceId: "invoice_1", organizationId: "org_test" }] },
+        allocations: { create: [{ amountPaisa: 118000, invoiceId: "invoice_1" }] },
         amountPaisa: 118000,
         createdById: "admin",
         orderId: "order_1",
@@ -101,12 +101,12 @@ describe("finance mutations", () => {
     });
     expect(invoiceUpdate).toHaveBeenCalledWith({ where: { id: "invoice_1" }, data: { status: "PAID", updatedById: "admin" } });
     expect(incentiveUpsert).toHaveBeenCalledWith({
-      where: { orderId: "order_1" },
+      where: { organizationId_orderId: { organizationId: "org_test", orderId: "order_1" } },
       create: expect.objectContaining({
         calculatedAmountPaisa: 5000,
         payableAmountPaisa: 5000,
         status: "READY_FOR_REVIEW",
-        splits: { create: [{ amountPaisa: 5000, percent: 100, userId: "sales", organizationId: "org_test" }] }
+        splits: { create: [{ amountPaisa: 5000, percent: 100, userId: "sales" }] }
       }),
       update: expect.objectContaining({
         calculatedAmountPaisa: 5000,
@@ -173,7 +173,7 @@ describe("finance mutations", () => {
       data: expect.objectContaining({ amountPaisa: 20000, createdById: "admin", status: "DRAFT", updatedById: "admin" })
     });
     expect(incentiveUpsert).toHaveBeenCalledWith({
-      where: { orderId: "order_1" },
+      where: { organizationId_orderId: { organizationId: "org_test", orderId: "order_1" } },
       create: expect.objectContaining({ calculatedAmountPaisa: 4000, grossMarginPaisa: 80000 }),
       update: expect.objectContaining({ calculatedAmountPaisa: 4000, grossMarginPaisa: 80000 })
     });

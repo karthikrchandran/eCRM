@@ -80,7 +80,6 @@ describe("production mutations", () => {
         stageInstances: {
           create: [
             {
-              organizationId: "org_test",
               templateStageId: "template_stage_script",
               name: "Script",
               description: "Write the script",
@@ -89,7 +88,6 @@ describe("production mutations", () => {
               status: "NOT_STARTED"
             },
             {
-              organizationId: "org_test",
               templateStageId: "template_stage_review",
               name: "Review",
               description: null,

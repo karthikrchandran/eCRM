@@ -16,7 +16,7 @@ vi.mock("next/headers", () => ({
 }));
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidatePath }));
 vi.mock("@/server/db", () => ({
-  db: { organizationMembership: { findFirst: mocks.findFirst } }
+  getControlPlaneDb: () => ({ organizationMembership: { findFirst: mocks.findFirst } })
 }));
 vi.mock("@/server/auth/session", () => ({
   SESSION_COOKIE_NAME: "ecrm_session",

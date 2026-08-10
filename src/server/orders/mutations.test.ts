@@ -142,7 +142,7 @@ describe("order mutations", () => {
       })
     ]);
     expect(tx.order.create.mock.calls[0]?.[0].data.splitSnapshots.create).toEqual([
-      { organizationId: "org_test", percent: 100, userId: "user_sales" }
+      { percent: 100, userId: "user_sales" }
     ]);
   });
 

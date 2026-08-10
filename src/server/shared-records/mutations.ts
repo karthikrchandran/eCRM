@@ -1,5 +1,5 @@
 import type { Prisma } from "@prisma/client";
-import { db } from "@/server/db";
+import { tenantBoundary as db } from "@/server/organizations/tenant-boundary";
 import { assertTenantMember } from "@/server/organizations/tenant-member-guard";
 import { withOrganization } from "@/server/organizations/with-organization";
 import { buildSearchText, mapSharedRecordRow } from "./mappers";

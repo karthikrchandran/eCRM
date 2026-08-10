@@ -1,5 +1,5 @@
 import type { OrderStatus, Prisma, ProductionStageStatus } from "@prisma/client";
-import { db } from "@/server/db";
+import { tenantBoundary as db } from "@/server/organizations/tenant-boundary";
 import { assertTenantMember } from "@/server/organizations/tenant-member-guard";
 import { assertOrganizationUserEligible } from "@/server/organizations/member-options";
 import { withOrganization } from "@/server/organizations/with-organization";
@@ -275,7 +275,6 @@ export async function instantiateProductionForOrderLineItem(
         stageInstances: {
           create:
             productionTemplate?.stages.map((stage) => ({
-              organizationId: user.organizationId,
               description: stage.description,
               name: stage.name,
               required: stage.required,

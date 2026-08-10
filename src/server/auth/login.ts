@@ -1,6 +1,6 @@
 import type { MembershipStatus, OrganizationRole, OrganizationStatus, UserRole } from "@prisma/client";
 import { z } from "zod";
-import { db } from "@/server/db";
+import { getControlPlaneDb } from "@/server/db";
 import { verifyPassword as verifyPasswordHash } from "./password";
 import { membershipSessionVersion, type SessionUser } from "./session";
 
@@ -45,7 +45,7 @@ type LoginDependencies = {
 };
 
 async function findUserByEmail(email: string) {
-  return db.user.findUnique({
+  return getControlPlaneDb().user.findUnique({
     where: { email },
     select: {
       id: true,

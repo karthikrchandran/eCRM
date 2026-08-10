@@ -6,9 +6,10 @@ import {
   tenantUserRelationships
 } from "./tenant-relationships";
 import { withOrganization } from "./with-organization";
+import { validateDisposableDatabaseUrls } from "./disposable-database";
 
 const ownerUrl = process.env.TEST_DATABASE_URL;
-const tenantUrl = process.env.TEST_TENANT_DATABASE_URL ?? process.env.TENANT_DATABASE_URL;
+const tenantUrl = process.env.TEST_TENANT_DATABASE_URL;
 const integration = describe.runIf(Boolean(ownerUrl && tenantUrl));
 
 const organizations = {
@@ -69,8 +70,9 @@ function scalarValue(modelName: string, fieldName: string, fieldType: string, su
 
 integration("complete tenant relationship enforcement", () => {
   if (!ownerUrl || !tenantUrl) return;
-  const ownerDatabase = new PrismaClient({ datasourceUrl: ownerUrl });
-  const tenantDatabase = new PrismaClient({ datasourceUrl: tenantUrl });
+  const safeUrls = validateDisposableDatabaseUrls(ownerUrl, tenantUrl);
+  const ownerDatabase = new PrismaClient({ datasourceUrl: safeUrls.ownerUrl });
+  const tenantDatabase = new PrismaClient({ datasourceUrl: safeUrls.tenantUrl });
   const order = insertionOrder();
   const ids = new Map<string, string>();
 

@@ -165,6 +165,24 @@ describe("workflow event service", () => {
     expect(salesTaskCreateMock).not.toHaveBeenCalled();
   });
 
+  it("refetches the winning event after a concurrent idempotency conflict", async () => {
+    const winner = { id: "event_winner", sourceApp: "emailvoice", sourceEventId: "request_1" };
+    const database = {
+      workflowEvent: {
+        findFirst: vi.fn().mockResolvedValueOnce(null).mockResolvedValueOnce(winner),
+        create: vi.fn().mockRejectedValue(Object.assign(new Error("unique"), { code: "P2002" }))
+      },
+      salesTask: { create: vi.fn() }
+    };
+
+    await expect(ingestWorkflowEvent("org_A", {
+      sourceApp: "emailvoice", sourceEventId: "request_1", sourceEventType: "sync",
+      entityType: "EXTERNAL", summary: "Concurrent event"
+    }, database as never)).resolves.toBe(winner);
+    expect(database.workflowEvent.findFirst).toHaveBeenCalledTimes(2);
+    expect(database.salesTask.create).not.toHaveBeenCalled();
+  });
+
   it.each([
     ["type without an identifier", { relatedRecordType: "LEAD" }],
     ["a tenant-B identifier without a type", { relatedRecordId: "lead_B" }]

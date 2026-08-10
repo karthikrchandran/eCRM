@@ -10,13 +10,14 @@ afterEach(() => {
 
 describe("getServerEnv", () => {
   it("parses required server environment and defaults the app base URL", () => {
-    process.env.DATABASE_URL = "postgresql://ecrm:ecrm@localhost:54329/ecrm?schema=public";
+    delete process.env.DATABASE_URL;
+    process.env.CONTROL_PLANE_DATABASE_URL = "postgresql://ecrm_control@localhost:54329/ecrm?schema=public";
     process.env.TENANT_DATABASE_URL = "postgresql://ecrm_runtime@localhost:54329/ecrm?schema=public";
     process.env.AUTH_SECRET = "replace-with-at-least-32-characters";
     delete process.env.APP_BASE_URL;
 
     expect(getServerEnv()).toEqual({
-      DATABASE_URL: "postgresql://ecrm:ecrm@localhost:54329/ecrm?schema=public",
+      CONTROL_PLANE_DATABASE_URL: "postgresql://ecrm_control@localhost:54329/ecrm?schema=public",
       TENANT_DATABASE_URL: "postgresql://ecrm_runtime@localhost:54329/ecrm?schema=public",
       AUTH_SECRET: "replace-with-at-least-32-characters",
       APP_BASE_URL: "http://localhost:3000"
@@ -24,7 +25,7 @@ describe("getServerEnv", () => {
   });
 
   it("rejects auth secrets shorter than 32 characters", () => {
-    process.env.DATABASE_URL = "postgresql://ecrm:ecrm@localhost:54329/ecrm?schema=public";
+    process.env.CONTROL_PLANE_DATABASE_URL = "postgresql://ecrm_control@localhost:54329/ecrm?schema=public";
     process.env.TENANT_DATABASE_URL = "postgresql://ecrm_runtime@localhost:54329/ecrm?schema=public";
     process.env.AUTH_SECRET = "short";
     process.env.APP_BASE_URL = "http://localhost:3000";
@@ -32,25 +33,17 @@ describe("getServerEnv", () => {
     expect(() => getServerEnv()).toThrow();
   });
 
-  it.each([
-    ["missing", undefined],
-    ["empty", ""],
-    ["blank", "   "]
-  ])("rejects %s database URLs", (_label, databaseUrl) => {
-    if (databaseUrl === undefined) {
-      delete process.env.DATABASE_URL;
-    } else {
-      process.env.DATABASE_URL = databaseUrl;
-    }
+  it("does not require or expose the schema-owner migration URL at runtime", () => {
+    delete process.env.DATABASE_URL;
+    process.env.CONTROL_PLANE_DATABASE_URL = "postgresql://ecrm_control@localhost:54329/ecrm?schema=public";
     process.env.AUTH_SECRET = "replace-with-at-least-32-characters";
     process.env.TENANT_DATABASE_URL = "postgresql://ecrm_runtime@localhost:54329/ecrm?schema=public";
     process.env.APP_BASE_URL = "http://localhost:3000";
-
-    expect(() => getServerEnv()).toThrow();
+    expect(getServerEnv()).not.toHaveProperty("DATABASE_URL");
   });
 
   it("rejects invalid app base URLs", () => {
-    process.env.DATABASE_URL = "postgresql://ecrm:ecrm@localhost:54329/ecrm?schema=public";
+    process.env.CONTROL_PLANE_DATABASE_URL = "postgresql://ecrm_control@localhost:54329/ecrm?schema=public";
     process.env.TENANT_DATABASE_URL = "postgresql://ecrm_runtime@localhost:54329/ecrm?schema=public";
     process.env.AUTH_SECRET = "replace-with-at-least-32-characters";
     process.env.APP_BASE_URL = "not-a-url";
@@ -63,7 +56,7 @@ describe("getServerEnv", () => {
     ["empty", ""],
     ["blank", "   "]
   ])("rejects %s tenant database URLs", (_label, tenantDatabaseUrl) => {
-    process.env.DATABASE_URL = "postgresql://ecrm:ecrm@localhost:54329/ecrm?schema=public";
+    process.env.CONTROL_PLANE_DATABASE_URL = "postgresql://ecrm_control@localhost:54329/ecrm?schema=public";
     if (tenantDatabaseUrl === undefined) {
       delete process.env.TENANT_DATABASE_URL;
     } else {
@@ -74,4 +67,16 @@ describe("getServerEnv", () => {
 
     expect(() => getServerEnv()).toThrow();
   });
+
+  it.each([["missing", undefined], ["empty", ""], ["blank", "   "]])(
+    "rejects %s control-plane database URLs",
+    (_label, controlUrl) => {
+      process.env.DATABASE_URL = "postgresql://schema_owner@localhost:54329/ecrm?schema=public";
+      process.env.TENANT_DATABASE_URL = "postgresql://tenant@localhost:54329/ecrm?schema=public";
+      process.env.AUTH_SECRET = "replace-with-at-least-32-characters";
+      if (controlUrl === undefined) delete process.env.CONTROL_PLANE_DATABASE_URL;
+      else process.env.CONTROL_PLANE_DATABASE_URL = controlUrl;
+      expect(() => getServerEnv()).toThrow();
+    }
+  );
 });

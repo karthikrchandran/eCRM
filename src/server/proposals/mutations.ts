@@ -1,6 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { isSafeExternalUrl } from "@/lib/safe-external-url";
-import { db } from "@/server/db";
+import { tenantBoundary as db } from "@/server/organizations/tenant-boundary";
 import { withOrganization } from "@/server/organizations/with-organization";
 import type { SupportedCurrency } from "@/server/settings/settings";
 import { calculateProposalTotals } from "./calculations";
@@ -152,7 +152,6 @@ export async function createProposal(
           }
 
           return {
-            organizationId: user.organizationId,
             productServiceId: line.productServiceId,
             productNameSnapshot: product.name,
             productCategorySnapshot: product.category,

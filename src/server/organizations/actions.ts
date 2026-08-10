@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { z } from "zod";
-import { db } from "@/server/db";
+import { getControlPlaneDb } from "@/server/db";
 import {
   SESSION_COOKIE_NAME,
   shouldUseSecureSessionCookie,
@@ -36,7 +36,7 @@ export async function switchOrganizationAction(
     return { error: SWITCH_ERROR };
   }
 
-  const membership = await db.organizationMembership.findFirst({
+  const membership = await getControlPlaneDb().organizationMembership.findFirst({
     where: {
       organizationId: parsedOrganizationId.data,
       userId: currentContext.userId,

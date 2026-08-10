@@ -1,5 +1,5 @@
 import type { Prisma } from "@prisma/client";
-import { db } from "@/server/db";
+import { tenantBoundary as db } from "@/server/organizations/tenant-boundary";
 import { assertTenantMember } from "@/server/organizations/tenant-member-guard";
 import { withOrganization } from "@/server/organizations/with-organization";
 import type { AcceptedProposalForBookingDb } from "./queries";
@@ -78,7 +78,6 @@ export async function createOrderFromAcceptedProposal(
         leadCustomerId: proposal.opportunity.leadCustomerId,
         lineItems: {
           create: proposal.lineItems.map((line) => ({
-            organizationId: user.organizationId,
             description: line.description,
             gstOverrideReason: line.gstOverrideReason,
             gstRateBps: line.gstRateBps,
@@ -107,7 +106,6 @@ export async function createOrderFromAcceptedProposal(
         proposalId: proposal.id,
         splitSnapshots: {
           create: proposal.opportunity.splits.map((split) => ({
-            organizationId: user.organizationId,
             percent: split.percent,
             userId: split.userId
           }))

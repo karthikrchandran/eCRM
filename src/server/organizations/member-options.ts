@@ -1,5 +1,5 @@
 import type { OrganizationRole, Prisma } from "@prisma/client";
-import { db } from "@/server/db";
+import { getControlPlaneDb } from "@/server/db";
 
 type MemberOptionDb = {
   organizationMembership: {
@@ -12,7 +12,7 @@ type MemberOptionDb = {
 export async function listOrganizationUserOptions(
   organizationId: string,
   roles: OrganizationRole[],
-  database: MemberOptionDb = db as unknown as MemberOptionDb
+  database: MemberOptionDb = getControlPlaneDb() as unknown as MemberOptionDb
 ) {
   const memberships = await database.organizationMembership.findMany({
     where: {
@@ -32,7 +32,7 @@ export async function assertOrganizationUserEligible(
   organizationId: string,
   userId: string,
   roles: OrganizationRole[],
-  database = db
+  database = getControlPlaneDb()
 ) {
   const membership = await database.organizationMembership.findFirst({
     where: { organizationId, userId, status: "ACTIVE", role: { in: roles }, user: { active: true } },

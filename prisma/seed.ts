@@ -914,7 +914,7 @@ async function main() {
   });
 
   const demoOrder = await prisma.order.upsert({
-    where: { proposalId: acceptedProposal.id },
+    where: { organizationId_proposalId: { organizationId: araOrganization.id, proposalId: acceptedProposal.id } },
     update: {
       organizationId: araOrganization.id,
       branchId: "seed_branch_acme_bengaluru",
@@ -976,7 +976,7 @@ async function main() {
     }
 
     const orderLineItem = await prisma.orderLineItem.upsert({
-      where: { proposalLineItemId: lineItem.id },
+      where: { organizationId_proposalLineItemId: { organizationId: araOrganization.id, proposalLineItemId: lineItem.id } },
       update: {
         organizationId: araOrganization.id,
         description: lineItem.description,

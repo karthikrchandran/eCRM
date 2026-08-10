@@ -13,7 +13,12 @@ const expected = Prisma.dmmf.datamodel.models.flatMap((model) =>
   tenantModels.has(model.name)
     ? model.fields
       .filter((field) => field.kind === "object" && field.relationFromFields?.length && tenantModels.has(field.type))
-      .map((field) => `${model.name}.${field.relationFromFields!.join(",")}->${field.type}.${field.relationToFields!.join(",")}`)
+      .filter((field) => !(model.name === "SharedBusinessRecord" && field.relationFromFields?.includes("parentId")))
+      .map((field) => {
+        const fromFields = field.relationFromFields!.filter((name) => name !== "organizationId");
+        const toFields = field.relationToFields!.filter((name) => name !== "organizationId");
+        return `${model.name}.${fromFields.join(",")}->${field.type}.${toFields.join(",")}`;
+      })
     : []
 ).sort();
 
@@ -26,6 +31,30 @@ const expectedUserRelationships = Prisma.dmmf.datamodel.models.flatMap((model) =
 ).sort();
 
 describe("tenant-owned relationship inventory", () => {
+  it("models every tenant-owned relation as an organization compound contract", () => {
+    const schema = readFileSync(path.join(process.cwd(), "prisma/schema.prisma"), "utf8");
+    for (const relationship of tenantOwnedRelationships) {
+      const child = Prisma.dmmf.datamodel.models.find((model) => model.name === relationship.child)!;
+      const relation = child.fields.find((field) =>
+        field.kind === "object" && field.type === relationship.parent && field.relationFromFields?.includes(relationship.childField));
+      expect(relation?.relationFromFields, `${relationship.child}.${relationship.childField}`).toEqual([
+        "organizationId",
+        relationship.childField
+      ]);
+      expect(relation?.relationToFields, `${relationship.child}.${relationship.childField}`).toEqual([
+        "organizationId",
+        "id"
+      ]);
+
+      const parent = Prisma.dmmf.datamodel.models.find((model) => model.name === relationship.parent)!;
+      expect(parent.uniqueIndexes.some((index) => index.fields.join(",") === "organizationId,id"), relationship.parent)
+        .toBe(true);
+
+      const mappedName = `${relationship.child}_tenant_${relationship.childField}_fkey`.slice(0, 63);
+      expect(schema, mappedName).toContain(`map: "${mappedName}"`);
+    }
+  });
+
   it("enumerates every owned parent relation exactly once", () => {
     const actual = tenantOwnedRelationships.map(({ child, childField, parent, parentField }) =>
       `${child}.${childField}->${parent}.${parentField}`).sort();

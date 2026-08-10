@@ -1,5 +1,5 @@
 import type { Prisma } from "@prisma/client";
-import { db } from "@/server/db";
+import { tenantBoundary as db } from "@/server/organizations/tenant-boundary";
 import { assertTenantMember } from "@/server/organizations/tenant-member-guard";
 import { withOrganization } from "@/server/organizations/with-organization";
 
@@ -133,8 +133,10 @@ export async function ingestWorkflowEvent(
     }
   }
 
-  const event = await database.workflowEvent.create({
-    data: {
+  let event: WorkflowEventRecord;
+  try {
+    event = await database.workflowEvent.create({
+      data: {
       organizationId,
       sourceApp: input.sourceApp,
       sourceEventId: input.sourceEventId ?? null,
@@ -146,8 +148,18 @@ export async function ingestWorkflowEvent(
       summary: input.summary,
       payload: (input.payload ?? {}) as Prisma.InputJsonValue,
       occurredAt: input.occurredAt ?? new Date()
+      }
+    });
+  } catch (error) {
+    if ((error as { code?: string }).code !== "P2002" || !input.sourceEventId || !database.workflowEvent.findFirst) {
+      throw error;
     }
-  });
+    const winner = await database.workflowEvent.findFirst({
+      where: { organizationId, sourceApp: input.sourceApp, sourceEventId: input.sourceEventId }
+    });
+    if (!winner) throw error;
+    return winner;
+  }
 
   if (input.sourceEventType === "meeting_booked" && database.salesTask && isLeadRelated(input.relatedRecordType, input.relatedRecordId)) {
     await database.salesTask.create({

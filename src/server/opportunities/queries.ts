@@ -1,5 +1,5 @@
 import type { PipelineStage, Prisma, User } from "@prisma/client";
-import { db } from "@/server/db";
+import { tenantBoundary as db } from "@/server/organizations/tenant-boundary";
 import { withOrganization } from "@/server/organizations/with-organization";
 import { listOrganizationUserOptions } from "@/server/organizations/member-options";
 import { assertCanViewOpportunities, type OpportunityUser } from "./permissions";

@@ -5,7 +5,7 @@ import type {
 } from "@prisma/client";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { db } from "@/server/db";
+import { getControlPlaneDb } from "@/server/db";
 import {
   SESSION_COOKIE_NAME,
   membershipSessionVersion,
@@ -48,7 +48,7 @@ type OrganizationContextDependencies = {
 };
 
 async function findMembershipById(membershipId: string) {
-  return db.organizationMembership.findUnique({
+  return getControlPlaneDb().organizationMembership.findUnique({
     where: { id: membershipId },
     select: {
       id: true,

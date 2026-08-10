@@ -1,5 +1,5 @@
 import type { CostComponentStatus, IncentiveStatus, InvoiceStatus, Prisma } from "@prisma/client";
-import { db } from "@/server/db";
+import { tenantBoundary as db } from "@/server/organizations/tenant-boundary";
 import { assertTenantMember } from "@/server/organizations/tenant-member-guard";
 import { withOrganization } from "@/server/organizations/with-organization";
 import {
@@ -139,7 +139,7 @@ async function recalculateIncentiveForOrder(transaction: FinanceTransaction, org
   const splits = calculateIncentiveSplits(calculatedAmountPaisa, recipientSplits);
 
   return transaction.incentive.upsert({
-    where: { orderId: order.id },
+    where: { organizationId_orderId: { organizationId, orderId: order.id } },
     create: {
       organizationId,
       approvedCostTotalPaisa,
@@ -149,7 +149,7 @@ async function recalculateIncentiveForOrder(transaction: FinanceTransaction, org
       payableAmountPaisa: calculatedAmountPaisa,
       readinessReason,
       status,
-      splits: { create: splits.map((split) => ({ ...split, organizationId })) }
+      splits: { create: splits }
     },
     update: {
       approvedCostTotalPaisa,
@@ -160,7 +160,7 @@ async function recalculateIncentiveForOrder(transaction: FinanceTransaction, org
       status,
       splits: {
         deleteMany: {},
-        create: splits.map((split) => ({ ...split, organizationId }))
+        create: splits
       }
     }
   });
@@ -245,7 +245,7 @@ export async function recordPayment(user: FinanceUser, input: PaymentInput, data
     const payment = await transaction.payment.create({
       data: {
         organizationId: user.organizationId,
-        allocations: { create: input.allocations.map((allocation) => ({ ...allocation, organizationId: user.organizationId })) },
+        allocations: { create: input.allocations },
         amountPaisa: input.amountPaisa,
         createdById: user.id,
         mode: input.mode,

@@ -1,6 +1,6 @@
 import type { OrganizationRole, Prisma } from "@prisma/client";
 import { canManageAdminSettings, canViewCompanyRecords } from "@/server/auth/permissions";
-import { db } from "@/server/db";
+import { getControlPlaneDb } from "@/server/db";
 
 export type SupportedCurrency = "INR" | "USD";
 
@@ -34,7 +34,7 @@ function assertCanManageSettings(user: SettingsUser) {
 
 export async function getBusinessSettings(
   user: SettingsUser,
-  database: SettingsDb = db as unknown as SettingsDb
+  database: SettingsDb = getControlPlaneDb() as unknown as SettingsDb
 ): Promise<BusinessSettingsView> {
   assertCanViewSettings(user);
 
@@ -49,7 +49,7 @@ export async function getBusinessSettings(
 export async function updateBusinessSettings(
   user: SettingsUser,
   input: BusinessSettingsView,
-  database: SettingsDb = db as unknown as SettingsDb
+  database: SettingsDb = getControlPlaneDb() as unknown as SettingsDb
 ) {
   assertCanManageSettings(user);
 

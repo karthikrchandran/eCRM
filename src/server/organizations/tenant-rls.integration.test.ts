@@ -3,9 +3,10 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { assertTenantMember } from "./tenant-member-guard";
 import { tenantOpaqueOwnedRelationships, tenantOwnedRelationships, tenantUserRelationships } from "./tenant-relationships";
 import { withOrganization } from "./with-organization";
+import { validateDisposableDatabaseUrls } from "./disposable-database";
 
 const testDatabaseUrl = process.env.TEST_DATABASE_URL;
-const testTenantDatabaseUrl = process.env.TEST_TENANT_DATABASE_URL ?? process.env.TENANT_DATABASE_URL;
+const testTenantDatabaseUrl = process.env.TEST_TENANT_DATABASE_URL;
 const integration = describe.runIf(Boolean(testDatabaseUrl && testTenantDatabaseUrl));
 const ownedTables = [
   "SharedBusinessRecord", "SharedBusinessRecordVersion", "SharedRecordExportSnapshot",
@@ -36,17 +37,10 @@ const legacyGlobalBusinessIndexes = [
 
 integration("PostgreSQL tenant RLS", () => {
   if (!testDatabaseUrl || !testTenantDatabaseUrl) return;
-  const databaseName = new URL(testDatabaseUrl).pathname.slice(1);
-  const tenantDatabaseName = new URL(testTenantDatabaseUrl).pathname.slice(1);
-  if (!/(test|wp4|disposable)/i.test(databaseName)) {
-    throw new Error("TEST_DATABASE_URL must name an explicitly disposable test database.");
-  }
-  if (tenantDatabaseName !== databaseName) {
-    throw new Error("The tenant test URL must target the same disposable database as TEST_DATABASE_URL.");
-  }
+  const safeUrls = validateDisposableDatabaseUrls(testDatabaseUrl, testTenantDatabaseUrl);
 
-  const database = new PrismaClient({ datasourceUrl: testDatabaseUrl });
-  const tenantUrl = new URL(testTenantDatabaseUrl);
+  const database = new PrismaClient({ datasourceUrl: safeUrls.ownerUrl });
+  const tenantUrl = new URL(safeUrls.tenantUrl);
   tenantUrl.searchParams.set("connection_limit", "1");
   const tenantDatabase = new PrismaClient({ datasourceUrl: tenantUrl.toString() });
 

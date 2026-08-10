@@ -307,6 +307,21 @@ model BusinessSettings {
   updatedAt       DateTime     @updatedAt
 }
 
+// Durable migration audit artifact. Runtime code must never access it.
+model OrganizationTenancyMigrationReconciliation {
+  migrationKey String
+  tableName    String
+  beforeCount  BigInt
+  afterCount   BigInt   @default(0)
+  nullCount    BigInt   @default(0)
+  mismatchCount BigInt  @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @default(now())
+
+  @@id([migrationKey, tableName])
+  @@ignore
+}
+
 model SharedBusinessRecord {
   id                   String                        @id @default(cuid())
   organizationId       String
@@ -335,10 +350,13 @@ model SharedBusinessRecord {
   createdAt            DateTime                      @default(now())
   updatedAt            DateTime                      @updatedAt
   versions             SharedBusinessRecordVersion[]
+  parent               SharedBusinessRecord?          @relation("SharedRecordParent", fields: [organizationId, parentId], references: [organizationId, id], onDelete: NoAction, onUpdate: NoAction, map: "SharedBusinessRecord_tenant_parentId_fkey")
+  children             SharedBusinessRecord[]          @relation("SharedRecordParent")
   organization         Organization?                 @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
+  @@unique([organizationId, id])
   @@unique([organizationId, entityType, ecrmLegacyId])
-  @@unique([organizationId, entityType, emailVoiceLegacyId])
+  @@unique([organizationId, entityType, emailVoiceLegacyId], map: "SharedBusinessRecord_organizationId_entityType_emailVoiceLegacy")
   @@unique([organizationId, entityType, externalKey])
   @@index([organizationId])
   @@index([entityType, status])
@@ -371,7 +389,7 @@ model SharedBusinessRecordVersion {
   snapshot       Json
   changedFields  Json?
 
-  record       SharedBusinessRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  record       SharedBusinessRecord @relation(fields: [organizationId, recordId], references: [organizationId, id], onDelete: Cascade, map: "SharedBusinessRecordVersion_tenant_recordId_fkey")
   organization Organization?        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
   @@unique([recordId, versionNumber])
@@ -391,6 +409,7 @@ model SharedRecordExportSnapshot {
   items          SharedRecordExportSnapshotItem[]
   organization   Organization?                    @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
+  @@unique([organizationId, id])
   @@index([organizationId])
   @@index([createdAt])
   @@index([expiresAt])
@@ -402,7 +421,7 @@ model SharedRecordExportSnapshotItem {
   organizationId String
   payload        Json
 
-  snapshot     SharedRecordExportSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+  snapshot     SharedRecordExportSnapshot @relation(fields: [organizationId, snapshotId], references: [organizationId, id], onDelete: Cascade, map: "SharedRecordExportSnapshotItem_tenant_snapshotId_fkey")
   organization Organization?              @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
   @@id([snapshotId, position])
@@ -523,6 +542,7 @@ model LeadCustomer {
   salesVoiceNotes  SalesVoiceNote[]
   organization     Organization?          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
+  @@unique([organizationId, id])
   @@index([organizationId])
   @@index([ownerId])
   @@index([state])
@@ -548,13 +568,14 @@ model Branch {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  leadCustomer  LeadCustomer  @relation(fields: [leadCustomerId], references: [id], onDelete: Cascade)
+  leadCustomer  LeadCustomer  @relation(fields: [organizationId, leadCustomerId], references: [organizationId, id], onDelete: Cascade, map: "Branch_tenant_leadCustomerId_fkey")
   contacts      Contact[]
   activities    Activity[]
   opportunities Opportunity[]
   orders        Order[]
   organization  Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
+  @@unique([organizationId, id])
   @@index([organizationId])
   @@index([leadCustomerId])
   @@index([city])
@@ -574,11 +595,12 @@ model Contact {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  leadCustomer LeadCustomer  @relation(fields: [leadCustomerId], references: [id], onDelete: Cascade)
-  branch       Branch?       @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  leadCustomer LeadCustomer  @relation(fields: [organizationId, leadCustomerId], references: [organizationId, id], onDelete: Cascade, map: "Contact_tenant_leadCustomerId_fkey")
+  branch       Branch?       @relation(fields: [organizationId, branchId], references: [organizationId, id], onDelete: SetNull, map: "Contact_tenant_branchId_fkey")
   activities   Activity[]
   organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
+  @@unique([organizationId, id])
   @@index([organizationId])
   @@index([leadCustomerId])
   @@index([branchId])
@@ -605,9 +627,9 @@ model Activity {
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
 
-  leadCustomer LeadCustomer  @relation(fields: [leadCustomerId], references: [id], onDelete: Cascade)
-  branch       Branch?       @relation(fields: [branchId], references: [id], onDelete: SetNull)
-  contact      Contact?      @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  leadCustomer LeadCustomer  @relation(fields: [organizationId, leadCustomerId], references: [organizationId, id], onDelete: Cascade, map: "Activity_tenant_leadCustomerId_fkey")
+  branch       Branch?       @relation(fields: [organizationId, branchId], references: [organizationId, id], onDelete: SetNull, map: "Activity_tenant_branchId_fkey")
+  contact      Contact?      @relation(fields: [organizationId, contactId], references: [organizationId, id], onDelete: SetNull, map: "Activity_tenant_contactId_fkey")
   owner        User          @relation("ActivityOwner", fields: [ownerId], references: [id])
   createdBy    User          @relation("ActivityCreatedBy", fields: [createdById], references: [id])
   completedBy  User?         @relation("ActivityCompletedBy", fields: [completedById], references: [id])
@@ -643,16 +665,17 @@ model SalesTask {
   updatedAt         DateTime          @updatedAt
 
   owner            User                   @relation("SalesTaskOwner", fields: [ownerId], references: [id])
-  leadCustomer     LeadCustomer?          @relation(fields: [leadCustomerId], references: [id], onDelete: SetNull)
-  opportunity      Opportunity?           @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
-  proposal         Proposal?              @relation(fields: [proposalId], references: [id], onDelete: SetNull)
-  order            Order?                 @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  leadCustomer     LeadCustomer?          @relation(fields: [organizationId, leadCustomerId], references: [organizationId, id], onDelete: SetNull, map: "SalesTask_tenant_leadCustomerId_fkey")
+  opportunity      Opportunity?           @relation(fields: [organizationId, opportunityId], references: [organizationId, id], onDelete: SetNull, map: "SalesTask_tenant_opportunityId_fkey")
+  proposal         Proposal?              @relation(fields: [organizationId, proposalId], references: [organizationId, id], onDelete: SetNull, map: "SalesTask_tenant_proposalId_fkey")
+  order            Order?                 @relation(fields: [organizationId, orderId], references: [organizationId, id], onDelete: SetNull, map: "SalesTask_tenant_orderId_fkey")
   voiceNotes       SalesVoiceNote[]
   textNotes        SalesTextNote[]
   suggestedActions SalesVoiceNoteAction[] @relation("CreatedSalesTaskFromAction")
   reviewItems      SalesDayReviewItem[]
   organization     Organization?          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
+  @@unique([organizationId, id])
   @@index([organizationId])
   @@index([ownerId, dueAt])
   @@index([ownerId, status])
@@ -676,11 +699,11 @@ model SalesTextNote {
   updatedAt      DateTime @updatedAt
 
   owner        User          @relation("SalesTextNoteOwner", fields: [ownerId], references: [id])
-  task         SalesTask?    @relation(fields: [taskId], references: [id], onDelete: SetNull)
-  leadCustomer LeadCustomer? @relation(fields: [leadCustomerId], references: [id], onDelete: SetNull)
-  opportunity  Opportunity?  @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
-  proposal     Proposal?     @relation(fields: [proposalId], references: [id], onDelete: SetNull)
-  order        Order?        @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  task         SalesTask?    @relation(fields: [organizationId, taskId], references: [organizationId, id], onDelete: SetNull, map: "SalesTextNote_tenant_taskId_fkey")
+  leadCustomer LeadCustomer? @relation(fields: [organizationId, leadCustomerId], references: [organizationId, id], onDelete: SetNull, map: "SalesTextNote_tenant_leadCustomerId_fkey")
+  opportunity  Opportunity?  @relation(fields: [organizationId, opportunityId], references: [organizationId, id], onDelete: SetNull, map: "SalesTextNote_tenant_opportunityId_fkey")
+  proposal     Proposal?     @relation(fields: [organizationId, proposalId], references: [organizationId, id], onDelete: SetNull, map: "SalesTextNote_tenant_proposalId_fkey")
+  order        Order?        @relation(fields: [organizationId, orderId], references: [organizationId, id], onDelete: SetNull, map: "SalesTextNote_tenant_orderId_fkey")
   organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
   @@index([organizationId])
@@ -717,14 +740,15 @@ model SalesVoiceNote {
   updatedAt        DateTime             @updatedAt
 
   owner        User                   @relation("SalesVoiceNoteOwner", fields: [ownerId], references: [id])
-  task         SalesTask?             @relation(fields: [taskId], references: [id], onDelete: SetNull)
-  leadCustomer LeadCustomer?          @relation(fields: [leadCustomerId], references: [id], onDelete: SetNull)
-  opportunity  Opportunity?           @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
-  proposal     Proposal?              @relation(fields: [proposalId], references: [id], onDelete: SetNull)
-  order        Order?                 @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  task         SalesTask?             @relation(fields: [organizationId, taskId], references: [organizationId, id], onDelete: SetNull, map: "SalesVoiceNote_tenant_taskId_fkey")
+  leadCustomer LeadCustomer?          @relation(fields: [organizationId, leadCustomerId], references: [organizationId, id], onDelete: SetNull, map: "SalesVoiceNote_tenant_leadCustomerId_fkey")
+  opportunity  Opportunity?           @relation(fields: [organizationId, opportunityId], references: [organizationId, id], onDelete: SetNull, map: "SalesVoiceNote_tenant_opportunityId_fkey")
+  proposal     Proposal?               @relation(fields: [organizationId, proposalId], references: [organizationId, id], onDelete: SetNull, map: "SalesVoiceNote_tenant_proposalId_fkey")
+  order        Order?                  @relation(fields: [organizationId, orderId], references: [organizationId, id], onDelete: SetNull, map: "SalesVoiceNote_tenant_orderId_fkey")
   actions      SalesVoiceNoteAction[]
   organization Organization?          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
+  @@unique([organizationId, id])
   @@index([organizationId])
   @@index([ownerId, createdAt])
   @@index([taskId])
@@ -747,8 +771,8 @@ model SalesVoiceNoteAction {
   acceptedAt      DateTime?
   rejectedAt      DateTime?
 
-  voiceNote    SalesVoiceNote @relation(fields: [voiceNoteId], references: [id], onDelete: Cascade)
-  createdTask  SalesTask?     @relation("CreatedSalesTaskFromAction", fields: [createdTaskId], references: [id], onDelete: SetNull)
+  voiceNote    SalesVoiceNote @relation(fields: [organizationId, voiceNoteId], references: [organizationId, id], onDelete: Cascade, map: "SalesVoiceNoteAction_tenant_voiceNoteId_fkey")
+  createdTask  SalesTask?     @relation("CreatedSalesTaskFromAction", fields: [organizationId, createdTaskId], references: [organizationId, id], onDelete: SetNull, map: "SalesVoiceNoteAction_tenant_createdTaskId_fkey")
   organization Organization?  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
   @@index([organizationId])
@@ -769,6 +793,7 @@ model SalesDayReview {
   items        SalesDayReviewItem[]
   organization Organization?        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
+  @@unique([organizationId, id])
   @@unique([organizationId, ownerId, reviewDate])
   @@index([organizationId])
   @@index([ownerId, reviewDate])
@@ -783,8 +808,8 @@ model SalesDayReviewItem {
   note           String?
   createdAt      DateTime                 @default(now())
 
-  review       SalesDayReview @relation(fields: [reviewId], references: [id], onDelete: Cascade)
-  task         SalesTask      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  review       SalesDayReview @relation(fields: [organizationId, reviewId], references: [organizationId, id], onDelete: Cascade, map: "SalesDayReviewItem_tenant_reviewId_fkey")
+  task         SalesTask      @relation(fields: [organizationId, taskId], references: [organizationId, id], onDelete: Cascade, map: "SalesDayReviewItem_tenant_taskId_fkey")
   organization Organization?  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
   @@unique([organizationId, reviewId, taskId])
@@ -802,7 +827,7 @@ model LeadOwnershipHistory {
   reason         String
   createdAt      DateTime @default(now())
 
-  leadCustomer LeadCustomer  @relation(fields: [leadCustomerId], references: [id], onDelete: Cascade)
+  leadCustomer LeadCustomer  @relation(fields: [organizationId, leadCustomerId], references: [organizationId, id], onDelete: Cascade, map: "LeadOwnershipHistory_tenant_leadCustomerId_fkey")
   fromOwner    User?         @relation("LeadOwnershipFrom", fields: [fromOwnerId], references: [id])
   toOwner      User          @relation("LeadOwnershipTo", fields: [toOwnerId], references: [id])
   changedBy    User          @relation("LeadOwnershipChangedBy", fields: [changedById], references: [id])
@@ -827,6 +852,7 @@ model PipelineStage {
   opportunities Opportunity[]
   organization  Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
+  @@unique([organizationId, id])
   @@index([organizationId])
   @@unique([organizationId, name])
   @@index([sortOrder])
@@ -852,9 +878,9 @@ model Opportunity {
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
-  leadCustomer    LeadCustomer            @relation(fields: [leadCustomerId], references: [id], onDelete: Cascade)
-  branch          Branch?                 @relation(fields: [branchId], references: [id], onDelete: SetNull)
-  stage           PipelineStage           @relation(fields: [stageId], references: [id])
+  leadCustomer    LeadCustomer            @relation(fields: [organizationId, leadCustomerId], references: [organizationId, id], onDelete: Cascade, map: "Opportunity_tenant_leadCustomerId_fkey")
+  branch          Branch?                 @relation(fields: [organizationId, branchId], references: [organizationId, id], onDelete: SetNull, map: "Opportunity_tenant_branchId_fkey")
+  stage           PipelineStage           @relation(fields: [organizationId, stageId], references: [organizationId, id], map: "Opportunity_tenant_stageId_fkey")
   owner           User                    @relation("OpportunityOwner", fields: [ownerId], references: [id])
   createdBy       User                    @relation("OpportunityCreatedBy", fields: [createdById], references: [id])
   updatedBy       User                    @relation("OpportunityUpdatedBy", fields: [updatedById], references: [id])
@@ -866,6 +892,7 @@ model Opportunity {
   salesVoiceNotes SalesVoiceNote[]
   organization    Organization?           @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
+  @@unique([organizationId, id])
   @@index([organizationId])
   @@index([leadCustomerId])
   @@index([branchId])
@@ -881,7 +908,7 @@ model OpportunityOwnerSplit {
   organizationId String
   percent        Int
 
-  opportunity  Opportunity   @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  opportunity  Opportunity   @relation(fields: [organizationId, opportunityId], references: [organizationId, id], onDelete: Cascade, map: "OpportunityOwnerSplit_tenant_opportunityId_fkey")
   user         User          @relation(fields: [userId], references: [id])
   organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
@@ -932,6 +959,7 @@ model ProductService {
   orderLineItems    OrderLineItem[]
   organization      Organization?      @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
+  @@unique([organizationId, id])
   @@index([organizationId])
   @@unique([organizationId, code])
   @@index([active, sortOrder])
@@ -964,7 +992,7 @@ model Proposal {
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt
 
-  opportunity     Opportunity             @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  opportunity     Opportunity             @relation(fields: [organizationId, opportunityId], references: [organizationId, id], onDelete: Cascade, map: "Proposal_tenant_opportunityId_fkey")
   createdBy       User                    @relation("ProposalCreatedBy", fields: [createdById], references: [id])
   updatedBy       User                    @relation("ProposalUpdatedBy", fields: [updatedById], references: [id])
   lineItems       ProposalLineItem[]
@@ -975,6 +1003,7 @@ model Proposal {
   salesVoiceNotes SalesVoiceNote[]
   organization    Organization?           @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
+  @@unique([organizationId, id])
   @@unique([organizationId, opportunityId, sequenceNumber])
   @@index([organizationId])
   @@index([opportunityId])
@@ -1001,11 +1030,12 @@ model ProposalLineItem {
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
 
-  proposal       Proposal       @relation(fields: [proposalId], references: [id], onDelete: Cascade)
-  productService ProductService @relation(fields: [productServiceId], references: [id])
+  proposal       Proposal       @relation(fields: [organizationId, proposalId], references: [organizationId, id], onDelete: Cascade, map: "ProposalLineItem_tenant_proposalId_fkey")
+  productService ProductService @relation(fields: [organizationId, productServiceId], references: [organizationId, id], map: "ProposalLineItem_tenant_productServiceId_fkey")
   orderLineItem  OrderLineItem?
   organization   Organization?  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
+  @@unique([organizationId, id])
   @@index([organizationId])
   @@index([proposalId])
   @@index([productServiceId])
@@ -1027,7 +1057,7 @@ model ProposalPdfAttachment {
   uploadedAt       DateTime  @default(now())
   replacedAt       DateTime?
 
-  proposal     Proposal      @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  proposal     Proposal      @relation(fields: [organizationId, proposalId], references: [organizationId, id], onDelete: Cascade, map: "ProposalPdfAttachment_tenant_proposalId_fkey")
   uploadedBy   User          @relation("ProposalPdfUploadedBy", fields: [uploadedById], references: [id])
   organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
@@ -1040,7 +1070,7 @@ model Order {
   id              String      @id @default(cuid())
   organizationId  String
   orderNumber     String
-  proposalId      String      @unique
+  proposalId      String
   opportunityId   String
   leadCustomerId  String
   branchId        String?
@@ -1063,10 +1093,10 @@ model Order {
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 
-  proposal        Proposal                  @relation(fields: [proposalId], references: [id])
-  opportunity     Opportunity               @relation(fields: [opportunityId], references: [id])
-  leadCustomer    LeadCustomer              @relation(fields: [leadCustomerId], references: [id])
-  branch          Branch?                   @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  proposal        Proposal                  @relation(fields: [organizationId, proposalId], references: [organizationId, id], map: "Order_tenant_proposalId_fkey")
+  opportunity     Opportunity               @relation(fields: [organizationId, opportunityId], references: [organizationId, id], map: "Order_tenant_opportunityId_fkey")
+  leadCustomer    LeadCustomer              @relation(fields: [organizationId, leadCustomerId], references: [organizationId, id], map: "Order_tenant_leadCustomerId_fkey")
+  branch          Branch?                   @relation(fields: [organizationId, branchId], references: [organizationId, id], onDelete: SetNull, map: "Order_tenant_branchId_fkey")
   owner           User                      @relation("OrderOwner", fields: [ownerId], references: [id])
   createdBy       User                      @relation("OrderCreatedBy", fields: [createdById], references: [id])
   updatedBy       User                      @relation("OrderUpdatedBy", fields: [updatedById], references: [id])
@@ -1081,6 +1111,8 @@ model Order {
   salesVoiceNotes SalesVoiceNote[]
   organization    Organization?             @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
+  @@unique([organizationId, id])
+  @@unique([organizationId, proposalId])
   @@index([organizationId])
   @@unique([organizationId, orderNumber])
   @@index([status])
@@ -1095,7 +1127,7 @@ model OrderLineItem {
   id                            String   @id @default(cuid())
   organizationId                String
   orderId                       String
-  proposalLineItemId            String   @unique
+  proposalLineItemId            String
   productServiceId              String?
   productNameSnapshot           String
   productCategorySnapshot       String
@@ -1112,13 +1144,15 @@ model OrderLineItem {
   createdAt                     DateTime @default(now())
   updatedAt                     DateTime @updatedAt
 
-  order               Order                @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  proposalLineItem    ProposalLineItem     @relation(fields: [proposalLineItemId], references: [id])
-  productService      ProductService?      @relation(fields: [productServiceId], references: [id], onDelete: SetNull)
+  order               Order                @relation(fields: [organizationId, orderId], references: [organizationId, id], onDelete: Cascade, map: "OrderLineItem_tenant_orderId_fkey")
+  proposalLineItem    ProposalLineItem     @relation(fields: [organizationId, proposalLineItemId], references: [organizationId, id], map: "OrderLineItem_tenant_proposalLineItemId_fkey")
+  productService      ProductService?      @relation(fields: [organizationId, productServiceId], references: [organizationId, id], onDelete: SetNull, map: "OrderLineItem_tenant_productServiceId_fkey")
   productionWorkItems ProductionWorkItem[]
   costComponents      CostComponent[]
   organization        Organization?        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
+  @@unique([organizationId, id])
+  @@unique([organizationId, proposalLineItemId])
   @@index([organizationId])
   @@index([orderId])
   @@index([productServiceId])
@@ -1131,7 +1165,7 @@ model OrderOwnerSplitSnapshot {
   organizationId String
   percent        Int
 
-  order        Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order        Order         @relation(fields: [organizationId, orderId], references: [organizationId, id], onDelete: Cascade, map: "OrderOwnerSplitSnapshot_tenant_orderId_fkey")
   user         User          @relation(fields: [userId], references: [id])
   organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
@@ -1155,6 +1189,7 @@ model ProductionTemplate {
   workItems    ProductionWorkItem[]
   organization Organization?             @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
+  @@unique([organizationId, id])
   @@index([organizationId])
   @@unique([organizationId, key])
   @@index([active, sortOrder])
@@ -1173,10 +1208,11 @@ model ProductionTemplateStage {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
-  template       ProductionTemplate        @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  template       ProductionTemplate        @relation(fields: [organizationId, templateId], references: [organizationId, id], onDelete: Cascade, map: "ProductionTemplateStage_tenant_templateId_fkey")
   stageInstances ProductionStageInstance[]
   organization   Organization?             @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
+  @@unique([organizationId, id])
   @@unique([organizationId, templateId, key])
   @@index([organizationId])
   @@index([templateId, sortOrder])
@@ -1200,8 +1236,8 @@ model ProductionWorkItem {
   createdAt               DateTime              @default(now())
   updatedAt               DateTime              @updatedAt
 
-  orderLineItem      OrderLineItem             @relation(fields: [orderLineItemId], references: [id], onDelete: Cascade)
-  productionTemplate ProductionTemplate?       @relation(fields: [productionTemplateId], references: [id], onDelete: SetNull)
+  orderLineItem      OrderLineItem             @relation(fields: [organizationId, orderLineItemId], references: [organizationId, id], onDelete: Cascade, map: "ProductionWorkItem_tenant_orderLineItemId_fkey")
+  productionTemplate ProductionTemplate?       @relation(fields: [organizationId, productionTemplateId], references: [organizationId, id], onDelete: SetNull, map: "ProductionWorkItem_tenant_productionTemplateId_fkey")
   assignedTo         User?                     @relation("ProductionWorkItemAssignedTo", fields: [assignedToId], references: [id])
   createdBy          User                      @relation("ProductionWorkItemCreatedBy", fields: [createdById], references: [id])
   updatedBy          User                      @relation("ProductionWorkItemUpdatedBy", fields: [updatedById], references: [id])
@@ -1209,6 +1245,7 @@ model ProductionWorkItem {
   notes              ProductionNote[]
   organization       Organization?             @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
+  @@unique([organizationId, id])
   @@index([organizationId])
   @@index([orderLineItemId])
   @@index([productionTemplateId])
@@ -1237,13 +1274,14 @@ model ProductionStageInstance {
   createdAt       DateTime              @default(now())
   updatedAt       DateTime              @updatedAt
 
-  workItem      ProductionWorkItem       @relation(fields: [workItemId], references: [id], onDelete: Cascade)
-  templateStage ProductionTemplateStage? @relation(fields: [templateStageId], references: [id], onDelete: SetNull)
+  workItem      ProductionWorkItem       @relation(fields: [organizationId, workItemId], references: [organizationId, id], onDelete: Cascade, map: "ProductionStageInstance_tenant_workItemId_fkey")
+  templateStage ProductionTemplateStage? @relation(fields: [organizationId, templateStageId], references: [organizationId, id], onDelete: SetNull, map: "ProductionStageInstance_tenant_templateStageId_fkey")
   assignedTo    User?                    @relation("ProductionStageAssignedTo", fields: [assignedToId], references: [id])
   completedBy   User?                    @relation("ProductionStageCompletedBy", fields: [completedById], references: [id])
   notes         ProductionNote[]
   organization  Organization?            @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
+  @@unique([organizationId, id])
   @@index([organizationId])
   @@index([workItemId])
   @@index([templateStageId])
@@ -1261,8 +1299,8 @@ model ProductionNote {
   createdById     String
   createdAt       DateTime @default(now())
 
-  workItem      ProductionWorkItem       @relation(fields: [workItemId], references: [id], onDelete: Cascade)
-  stageInstance ProductionStageInstance? @relation(fields: [stageInstanceId], references: [id], onDelete: SetNull)
+  workItem      ProductionWorkItem       @relation(fields: [organizationId, workItemId], references: [organizationId, id], onDelete: Cascade, map: "ProductionNote_tenant_workItemId_fkey")
+  stageInstance ProductionStageInstance? @relation(fields: [organizationId, stageInstanceId], references: [organizationId, id], onDelete: SetNull, map: "ProductionNote_tenant_stageInstanceId_fkey")
   createdBy     User                     @relation("ProductionNoteCreatedBy", fields: [createdById], references: [id])
   organization  Organization?            @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
@@ -1292,13 +1330,14 @@ model Invoice {
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 
-  order        Order               @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order        Order               @relation(fields: [organizationId, orderId], references: [organizationId, id], onDelete: Cascade, map: "Invoice_tenant_orderId_fkey")
   createdBy    User                @relation("InvoiceCreatedBy", fields: [createdById], references: [id])
   updatedBy    User                @relation("InvoiceUpdatedBy", fields: [updatedById], references: [id])
   voidedBy     User?               @relation("InvoiceVoidedBy", fields: [voidedById], references: [id])
   allocations  PaymentAllocation[]
   organization Organization?       @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
+  @@unique([organizationId, id])
   @@index([organizationId])
   @@unique([organizationId, invoiceNumber])
   @@index([orderId])
@@ -1320,11 +1359,12 @@ model Payment {
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
 
-  order        Order               @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order        Order               @relation(fields: [organizationId, orderId], references: [organizationId, id], onDelete: Cascade, map: "Payment_tenant_orderId_fkey")
   createdBy    User                @relation("PaymentCreatedBy", fields: [createdById], references: [id])
   allocations  PaymentAllocation[]
   organization Organization?       @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
+  @@unique([organizationId, id])
   @@index([organizationId])
   @@index([orderId])
   @@index([paymentDate])
@@ -1339,8 +1379,8 @@ model PaymentAllocation {
   amountPaisa    Int
   createdAt      DateTime @default(now())
 
-  payment      Payment       @relation(fields: [paymentId], references: [id], onDelete: Cascade)
-  invoice      Invoice       @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  payment      Payment       @relation(fields: [organizationId, paymentId], references: [organizationId, id], onDelete: Cascade, map: "PaymentAllocation_tenant_paymentId_fkey")
+  invoice      Invoice       @relation(fields: [organizationId, invoiceId], references: [organizationId, id], onDelete: Cascade, map: "PaymentAllocation_tenant_invoiceId_fkey")
   organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
   @@unique([paymentId, invoiceId])
@@ -1370,8 +1410,8 @@ model CostComponent {
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
 
-  order         Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  orderLineItem OrderLineItem? @relation(fields: [orderLineItemId], references: [id], onDelete: SetNull)
+  order         Order          @relation(fields: [organizationId, orderId], references: [organizationId, id], onDelete: Cascade, map: "CostComponent_tenant_orderId_fkey")
+  orderLineItem OrderLineItem? @relation(fields: [organizationId, orderLineItemId], references: [organizationId, id], onDelete: SetNull, map: "CostComponent_tenant_orderLineItemId_fkey")
   createdBy     User           @relation("CostComponentCreatedBy", fields: [createdById], references: [id])
   updatedBy     User           @relation("CostComponentUpdatedBy", fields: [updatedById], references: [id])
   approvedBy    User?          @relation("CostComponentApprovedBy", fields: [approvedById], references: [id])
@@ -1389,7 +1429,7 @@ model CostComponent {
 model Incentive {
   id                     String          @id @default(cuid())
   organizationId         String
-  orderId                String          @unique
+  orderId                String
   grossMarginPaisa       Int
   approvedCostTotalPaisa Int
   rateBps                Int             @default(500)
@@ -1412,7 +1452,7 @@ model Incentive {
   createdAt              DateTime        @default(now())
   updatedAt              DateTime        @updatedAt
 
-  order        Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order        Order            @relation(fields: [organizationId, orderId], references: [organizationId, id], onDelete: Cascade, map: "Incentive_tenant_orderId_fkey")
   approvedBy   User?            @relation("IncentiveApprovedBy", fields: [approvedById], references: [id])
   overrideBy   User?            @relation("IncentiveOverrideBy", fields: [overrideById], references: [id])
   rejectedBy   User?            @relation("IncentiveRejectedBy", fields: [rejectedById], references: [id])
@@ -1420,6 +1460,8 @@ model Incentive {
   splits       IncentiveSplit[]
   organization Organization?    @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
+  @@unique([organizationId, id])
+  @@unique([organizationId, orderId])
   @@index([organizationId])
   @@index([status])
   @@index([approvedById])
@@ -1432,7 +1474,7 @@ model IncentiveSplit {
   percent        Int
   amountPaisa    Int
 
-  incentive    Incentive     @relation(fields: [incentiveId], references: [id], onDelete: Cascade)
+  incentive    Incentive     @relation(fields: [organizationId, incentiveId], references: [organizationId, id], onDelete: Cascade, map: "IncentiveSplit_tenant_incentiveId_fkey")
   user         User          @relation(fields: [userId], references: [id])
   organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 

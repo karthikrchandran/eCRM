@@ -12,6 +12,7 @@ import {
 } from "./tenant-public-operation-matrix";
 import { tenantOpaqueOwnedRelationships, tenantOwnedRelationships, tenantUserRelationships } from "./tenant-relationships";
 import { hasCreatedRow, hasDuplicateBusinessKey, resultHasExactEvidence, type ExactEvidence } from "./tenant-operation-proof";
+import { validateDisposableDatabaseUrls } from "./disposable-database";
 
 const controlUrl = process.env.TEST_DATABASE_URL;
 const tenantUrlValue = process.env.TEST_TENANT_DATABASE_URL;
@@ -107,14 +108,10 @@ const probes = {
 
 integration("executable organization A/B adversarial matrix", () => {
   if (!controlUrl || !tenantUrlValue) return;
-  const controlDatabaseName = new URL(controlUrl).pathname.slice(1);
-  const tenantDatabaseName = new URL(tenantUrlValue).pathname.slice(1);
-  if (!/(test|wp4|disposable)/i.test(controlDatabaseName) || tenantDatabaseName !== controlDatabaseName) {
-    throw new Error("Tenant matrix URLs must target the same explicitly disposable test database.");
-  }
+  const safeUrls = validateDisposableDatabaseUrls(controlUrl, tenantUrlValue);
 
-  const control = new PrismaClient({ datasourceUrl: controlUrl });
-  const tenantUrl = new URL(tenantUrlValue);
+  const control = new PrismaClient({ datasourceUrl: safeUrls.ownerUrl });
+  const tenantUrl = new URL(safeUrls.tenantUrl);
   tenantUrl.searchParams.set("connection_limit", "1");
   const tenant = new PrismaClient({
     datasourceUrl: tenantUrl.toString(),
@@ -434,7 +431,6 @@ integration("executable organization A/B adversarial matrix", () => {
             createdById: userA,
             updatedById: userA,
             lineItems: { create: [{
-              organizationId: orgA,
               productServiceId: completeFixtureId("ProductService", "A"),
               productNameSnapshot: marker,
               productCategorySnapshot: "Matrix",
