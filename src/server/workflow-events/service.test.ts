@@ -7,7 +7,8 @@ describe("workflow event service", () => {
     const createMock = vi.fn().mockResolvedValue({ id: "event_1" });
     const salesTaskCreateMock = vi.fn().mockResolvedValue({ id: "task_1" });
     const database = {
-      leadCustomer: { findFirst: vi.fn().mockResolvedValue({ id: "lead_1" }) },
+      $queryRaw: vi.fn().mockResolvedValue([{ allowed: true }]),
+      leadCustomer: { findFirst: vi.fn().mockResolvedValue({ id: "lead_1", ownerId: "sales_1" }) },
       workflowEvent: {
         create: createMock,
         findMany: vi.fn().mockResolvedValue([])
@@ -39,11 +40,28 @@ describe("workflow event service", () => {
         data: expect.objectContaining({
           title: "Follow-up from EmailVoice meeting",
           leadCustomerId: "lead_1",
+          ownerId: "sales_1",
           type: "FOLLOW_UP",
           source: "CRM"
         })
       })
     );
+  });
+
+  it.each(["foreign", "inactive", "missing"])("rejects a %s lead actor before creating event or task", async () => {
+    const database = {
+      $queryRaw: vi.fn().mockResolvedValue([{ allowed: false }]),
+      workflowEvent: { create: vi.fn(), findFirst: vi.fn().mockResolvedValue(null) },
+      leadCustomer: { findFirst: vi.fn().mockResolvedValue({ id: "lead_1", ownerId: "bad_actor" }) },
+      salesTask: { create: vi.fn() }
+    };
+
+    await expect(ingestWorkflowEvent("org_A", {
+      sourceApp: "emailvoice", sourceEventId: "meeting-2", sourceEventType: "meeting_booked",
+      entityType: "ACTIVITY", relatedRecordType: "LEAD", relatedRecordId: "lead_1", summary: "Meeting"
+    }, database as never)).rejects.toThrow("Organization member was not found.");
+    expect(database.workflowEvent.create).not.toHaveBeenCalled();
+    expect(database.salesTask.create).not.toHaveBeenCalled();
   });
 
   it("lists workflow events for an entity by most recent first", async () => {

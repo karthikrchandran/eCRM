@@ -11,6 +11,24 @@ import {
 const actor = { id: "user_sales", organizationId: "org_test", role: "SALES" as const };
 
 describe("crm mutations", () => {
+  it("validates owners through the tenant transaction guard when available", async () => {
+    const query = vi.fn().mockResolvedValue([{ allowed: true }]);
+    const userLookup = vi.fn();
+    const create = vi.fn().mockResolvedValue({ id: "lead_1" });
+
+    await createLeadCustomer(actor, {
+      name: "Guarded lead", state: "LEAD", ownerId: "user_sales"
+    }, {
+      $queryRaw: query,
+      leadCustomer: { create },
+      user: { findFirst: userLookup }
+    } as never);
+
+    expect(query).toHaveBeenCalledOnce();
+    expect(userLookup).not.toHaveBeenCalled();
+    expect(create).toHaveBeenCalledOnce();
+  });
+
   it("creates a lead/customer with created and updated actor metadata", async () => {
     const create = vi.fn().mockResolvedValue({ id: "lead_1" });
 
@@ -24,8 +42,8 @@ describe("crm mutations", () => {
         source: "Referral"
       },
       {
+        $queryRaw: vi.fn().mockResolvedValue([{ allowed: true }]),
         leadCustomer: { create },
-        user: { findFirst: vi.fn().mockResolvedValue({ id: "user_sales" }) }
       }
     );
 
@@ -97,8 +115,8 @@ describe("crm mutations", () => {
         dueAt
       },
       {
+        $queryRaw: vi.fn().mockResolvedValue([{ allowed: true }]),
         leadCustomer: { findUnique: vi.fn().mockResolvedValue({ id: "lead_1" }) },
-        user: { findFirst: vi.fn().mockResolvedValue({ id: "user_admin" }) },
         activity: { create }
       }
     );
@@ -145,11 +163,11 @@ describe("crm mutations", () => {
         reason: "Account handoff after territory review"
       },
       {
+        $queryRaw: vi.fn().mockResolvedValue([{ allowed: true }]),
         leadCustomer: {
           findUnique: vi.fn().mockResolvedValue({ id: "lead_1", ownerId: "user_sales" }),
           update
         },
-        user: { findFirst: vi.fn().mockResolvedValue({ id: "user_admin" }) },
         leadOwnershipHistory: { create: createHistory },
         $transaction: async (callback: (tx: unknown) => Promise<unknown>) =>
           callback({

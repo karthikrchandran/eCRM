@@ -63,6 +63,7 @@ SELECT format(
 SELECT format('GRANT SELECT (id, name, email, role, active) ON TABLE "User" TO %I', :'app_role') \gexec
 SELECT format('GRANT SELECT ON TABLE "BusinessSettings" TO %I', :'app_role') \gexec
 SELECT format('GRANT EXECUTE ON FUNCTION public.tenant_user_in_current_organization(TEXT) TO %I', :'app_role') \gexec
+SELECT format('GRANT EXECUTE ON FUNCTION public.tenant_member_is_active(TEXT, TEXT) TO %I', :'app_role') \gexec
 SELECT format(
   'REVOKE ALL PRIVILEGES ON TABLE "User", "Organization", "OrganizationMembership", "OrganizationSettings", "OrganizationBranding" FROM %I',
   :'login_role'

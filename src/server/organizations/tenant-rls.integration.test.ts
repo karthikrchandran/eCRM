@@ -1,5 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { assertTenantMember } from "./tenant-member-guard";
+import { withOrganization } from "./with-organization";
 
 const testDatabaseUrl = process.env.TEST_DATABASE_URL;
 const testTenantDatabaseUrl = process.env.TEST_TENANT_DATABASE_URL ?? process.env.TENANT_DATABASE_URL;
@@ -13,6 +15,22 @@ const ownedTables = [
   "ProposalPdfAttachment", "Order", "OrderLineItem", "OrderOwnerSplitSnapshot", "ProductionTemplate",
   "ProductionTemplateStage", "ProductionWorkItem", "ProductionStageInstance", "ProductionNote", "Invoice",
   "Payment", "PaymentAllocation", "CostComponent", "Incentive", "IncentiveSplit"
+] as const;
+const legacyGlobalBusinessIndexes = [
+  "SharedBusinessRecord_entityType_ecrmLegacyId_key",
+  "SharedBusinessRecord_entityType_emailVoiceLegacyId_key",
+  "SharedBusinessRecord_entityType_externalKey_key",
+  "WorkflowEvent_sourceApp_sourceEventId_key",
+  "SalesDayReview_ownerId_reviewDate_key",
+  "SalesDayReviewItem_reviewId_taskId_key",
+  "PipelineStage_name_key",
+  "ProductService_code_key",
+  "SalesTarget_ownerId_financialYear_quarter_key",
+  "Proposal_opportunityId_sequenceNumber_key",
+  "Order_orderNumber_key",
+  "ProductionTemplate_key_key",
+  "ProductionTemplateStage_templateId_key_key",
+  "Invoice_invoiceNumber_key"
 ] as const;
 
 integration("PostgreSQL tenant RLS", () => {
@@ -108,6 +126,13 @@ integration("PostgreSQL tenant RLS", () => {
     expect(loginMembers.some((member) =>
       member.rolcanlogin && !member.rolsuper && !member.rolbypassrls
     )).toBe(true);
+
+    const legacyIndexes = await database.$queryRaw<Array<{ indexname: string }>>`
+      SELECT indexname
+      FROM pg_indexes
+      WHERE schemaname = 'public' AND indexname = ANY(${[...legacyGlobalBusinessIndexes]}::text[])
+    `;
+    expect(legacyIndexes).toEqual([]);
   });
 
   it("denies direct authentication and control-plane table access", async () => {
@@ -198,5 +223,34 @@ integration("PostgreSQL tenant RLS", () => {
       expect(setting[0]?.organization_id ?? "").toBe("");
       expect(await transaction.leadCustomer.count()).toBe(0);
     });
+  });
+
+  it("rejects a member revoked after control-plane prevalidation and before the tenant write", async () => {
+    const prevalidated = await database.organizationMembership.findFirst({
+      where: { organizationId: "rls_org_A", userId: "rls_user_A", status: "ACTIVE" },
+      select: { id: true }
+    });
+    expect(prevalidated).toEqual({ id: "rls_membership_A" });
+
+    await database.organizationMembership.update({
+      where: { id: "rls_membership_A" },
+      data: { status: "REVOKED" }
+    });
+
+    try {
+      await expect(withOrganization("rls_org_A", async (transaction) => {
+        await assertTenantMember(transaction, "rls_user_A", ["SALES"]);
+        await transaction.leadCustomer.create({ data: {
+          id: "rls_revoked_write", organizationId: "rls_org_A", name: "Denied after revocation",
+          ownerId: "rls_user_A", createdById: "rls_user_A", updatedById: "rls_user_A"
+        } });
+      }, tenantDatabase)).rejects.toThrow("Organization member was not found.");
+      expect(await database.leadCustomer.findUnique({ where: { id: "rls_revoked_write" } })).toBeNull();
+    } finally {
+      await database.organizationMembership.update({
+        where: { id: "rls_membership_A" },
+        data: { status: "ACTIVE" }
+      });
+    }
   });
 });

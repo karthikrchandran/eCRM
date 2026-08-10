@@ -16,6 +16,29 @@ const opportunityInput = {
 };
 
 describe("opportunity mutations", () => {
+  it("validates the owner and every split through the tenant transaction guard", async () => {
+    const query = vi.fn().mockResolvedValue([{ allowed: true }]);
+    const userLookup = vi.fn();
+    const opportunityCreate = vi.fn().mockResolvedValue({ id: "opp_guarded" });
+
+    await createOpportunity(actor, opportunityInput, [
+      { userId: "user_sales", percent: 70 },
+      { userId: "user_admin", percent: 30 }
+    ], {
+      $queryRaw: query,
+      user: { findFirst: userLookup },
+      leadCustomer: { findFirst: vi.fn().mockResolvedValue({ id: "lead_1" }) },
+      branch: { findFirst: vi.fn().mockResolvedValue({ id: "branch_1" }) },
+      pipelineStage: { findFirst: vi.fn().mockResolvedValue({ id: "stage_qualified" }) },
+      opportunity: { create: opportunityCreate },
+      opportunityOwnerSplit: { createMany: vi.fn(), deleteMany: vi.fn() }
+    } as never);
+
+    expect(query).toHaveBeenCalledTimes(3);
+    expect(userLookup).not.toHaveBeenCalled();
+    expect(opportunityCreate).toHaveBeenCalledOnce();
+  });
+
   it("creates an opportunity with actor metadata and owner splits", async () => {
     const opportunityCreate = vi.fn().mockResolvedValue({ id: "opp_1" });
     const splitCreateMany = vi.fn().mockResolvedValue({ count: 2 });
@@ -28,7 +51,7 @@ describe("opportunity mutations", () => {
         { userId: "user_admin", percent: 30 }
       ],
       {
-        user: { findFirst: vi.fn().mockResolvedValue({ id: "user_sales" }) },
+        $queryRaw: vi.fn().mockResolvedValue([{ allowed: true }]),
         leadCustomer: { findFirst: vi.fn().mockResolvedValue({ id: "lead_1" }) },
         branch: { findFirst: vi.fn().mockResolvedValue({ id: "branch_1" }) },
         pipelineStage: { findFirst: vi.fn().mockResolvedValue({ id: "stage_qualified" }) },
@@ -69,7 +92,7 @@ describe("opportunity mutations", () => {
         opportunityInput,
         [{ userId: "user_sales", percent: 90 }],
         {
-          user: { findFirst: vi.fn().mockResolvedValue({ id: "user_sales" }) },
+          $queryRaw: vi.fn().mockResolvedValue([{ allowed: true }]),
           leadCustomer: { findFirst: vi.fn().mockResolvedValue({ id: "lead_1" }) },
           branch: { findFirst: vi.fn().mockResolvedValue({ id: "branch_1" }) },
           pipelineStage: { findFirst: vi.fn().mockResolvedValue({ id: "stage_qualified" }) },
@@ -84,7 +107,7 @@ describe("opportunity mutations", () => {
   it("rejects a branch outside the selected lead/customer", async () => {
     await expect(
       createOpportunity(actor, opportunityInput, [], {
-        user: { findFirst: vi.fn().mockResolvedValue({ id: "user_sales" }) },
+        $queryRaw: vi.fn().mockResolvedValue([{ allowed: true }]),
         leadCustomer: { findFirst: vi.fn().mockResolvedValue({ id: "lead_1" }) },
         branch: { findFirst: vi.fn().mockResolvedValue(null) },
         pipelineStage: { findFirst: vi.fn().mockResolvedValue({ id: "stage_qualified" }) },
@@ -121,7 +144,7 @@ describe("opportunity mutations", () => {
         targetValueInr: "500000.00"
       },
       {
-        user: { findFirst: vi.fn().mockResolvedValue({ id: "user_sales" }) },
+        $queryRaw: vi.fn().mockResolvedValue([{ allowed: true }]),
         salesTarget: { upsert }
       }
     );

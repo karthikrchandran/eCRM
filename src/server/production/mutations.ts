@@ -1,5 +1,7 @@
 import type { OrderStatus, Prisma, ProductionStageStatus } from "@prisma/client";
 import { db } from "@/server/db";
+import { assertTenantMember } from "@/server/organizations/tenant-member-guard";
+import { assertOrganizationUserEligible } from "@/server/organizations/member-options";
 import { withOrganization } from "@/server/organizations/with-organization";
 import { assertCanManageProductionConfig, assertCanWriteProductionRecords } from "./permissions";
 import type { ProductionStageStatusInput, ProductionTemplateInput, ProductionTemplateStageInput, ProductionUser } from "./types";
@@ -65,9 +67,7 @@ type ProductionTransactionDb = {
 };
 
 type ProductionStageDb = {
-  organizationMembership?: {
-    findFirst: (args: Prisma.OrganizationMembershipFindFirstArgs) => Promise<{ id: string } | null>;
-  };
+  $queryRaw?<T>(query: TemplateStringsArray, ...values: unknown[]): Promise<T>;
   productionStageInstance: {
     findFirst: (args: Prisma.ProductionStageInstanceFindFirstArgs) => Promise<{
       id: string;
@@ -300,26 +300,22 @@ export async function updateProductionStageStatus(
 ): Promise<{ id: string; status: ProductionStageStatus | string }> {
   assertCanWriteProductionRecords(user);
 
-  if (input.assignedToId) {
-    const membershipDatabase = database === (db as unknown as ProductionStageDb)
-      ? db as unknown as ProductionStageDb
-      : database;
-    const assignee = await membershipDatabase.organizationMembership?.findFirst({
-      where: {
-        organizationId: user.organizationId,
-        userId: input.assignedToId,
-        status: "ACTIVE",
-        role: { in: ["ADMIN", "SALES", "PRODUCTION"] },
-        user: { active: true }
-      },
-      select: { id: true }
-    });
-    if (!assignee) throw new Error("Assignee was not found.");
+  if (input.assignedToId && database === (db as unknown as ProductionStageDb)) {
+    await assertOrganizationUserEligible(user.organizationId, input.assignedToId, ["ADMIN", "SALES", "PRODUCTION"]);
   }
 
   if (database === (db as unknown as ProductionStageDb)) {
-    return withOrganization(user.organizationId, (tx) =>
-      updateProductionStageStatusInTenant(user, stageInstanceId, input, tx as unknown as ProductionStageDb));
+    return withOrganization(user.organizationId, async (tx) => {
+      if (input.assignedToId) {
+        await assertTenantMember(tx, input.assignedToId, ["ADMIN", "SALES", "PRODUCTION"]);
+      }
+      return updateProductionStageStatusInTenant(user, stageInstanceId, input, tx as unknown as ProductionStageDb);
+    });
+  }
+
+  if (input.assignedToId) {
+    if (!database.$queryRaw) throw new Error("Organization member was not found.");
+    await assertTenantMember(database as Required<Pick<ProductionStageDb, "$queryRaw">>, input.assignedToId, ["ADMIN", "SALES", "PRODUCTION"]);
   }
 
   return updateProductionStageStatusInTenant(user, stageInstanceId, input, database);

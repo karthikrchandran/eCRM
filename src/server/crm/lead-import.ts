@@ -76,7 +76,8 @@ type OwnerLookupDb = {
   };
 };
 
-type LeadImportTransactionDb = OwnerLookupDb & {
+type LeadImportTransactionDb = {
+  $queryRaw<T>(query: TemplateStringsArray, ...values: unknown[]): Promise<T>;
   leadCustomer: {
     create: (args: Prisma.LeadCustomerCreateArgs) => Promise<IdResult>;
     findFirst: (args: Prisma.LeadCustomerFindFirstArgs) => Promise<IdResult | null>;
@@ -514,7 +515,7 @@ export async function importLeadCsv(
       }
 
       const importRow = async (tx: LeadImportTransactionDb) => {
-        const lead = await createLeadCustomer(user, row.lead, tx, true);
+        const lead = await createLeadCustomer(user, row.lead, tx);
         let branchId: string | undefined;
 
         if (row.branch) {

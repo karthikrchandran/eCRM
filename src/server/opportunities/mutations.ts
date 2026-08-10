@@ -2,15 +2,14 @@ import type { Prisma } from "@prisma/client";
 import { db } from "@/server/db";
 import { withOrganization } from "@/server/organizations/with-organization";
 import { assertOrganizationUserEligible } from "@/server/organizations/member-options";
+import { assertTenantMember } from "@/server/organizations/tenant-member-guard";
 import { assertCanWriteOpportunities, type OpportunityUser } from "./permissions";
 import type { OpportunityInput, OpportunitySplitInput, PipelineStageInput, SalesTargetInput } from "./types";
 
 type IdResult = { id: string };
 
 type OwnerDb = {
-  user: {
-    findFirst: (args: Prisma.UserFindFirstArgs) => Promise<IdResult | null>;
-  };
+  $queryRaw<T>(query: TemplateStringsArray, ...values: unknown[]): Promise<T>;
 };
 
 type LeadDb = {
@@ -91,14 +90,8 @@ type StageManagementDb = {
 };
 
 async function assertActiveOwner(database: OwnerDb, organizationId: string, ownerId: string) {
-  const owner = await database.user.findFirst({
-    where: { id: ownerId, active: true, role: { in: ["ADMIN", "SALES"] }, memberships: { some: { organizationId, status: "ACTIVE" } } },
-    select: { id: true }
-  });
-
-  if (!owner) {
-    throw new Error("Choose an active Admin or Sales owner.");
-  }
+  void organizationId;
+  await assertTenantMember(database, ownerId, ["ADMIN", "SALES"]);
 }
 
 async function assertLeadExists(database: LeadDb, organizationId: string, leadCustomerId: string) {
@@ -134,7 +127,7 @@ async function assertActiveStage(database: StageDb, organizationId: string, stag
   }
 }
 
-async function assertValidSplits(database: OwnerDb, organizationId: string, splits: OpportunitySplitInput[], ownersVerified = false) {
+async function assertValidSplits(database: OwnerDb, organizationId: string, splits: OpportunitySplitInput[]) {
   if (splits.length === 0) {
     return;
   }
@@ -150,7 +143,7 @@ async function assertValidSplits(database: OwnerDb, organizationId: string, spli
       throw new Error("Split percentages must be whole numbers from 1 to 100.");
     }
 
-    if (!ownersVerified) await assertActiveOwner(database, organizationId, split.userId);
+    await assertActiveOwner(database, organizationId, split.userId);
   }
 }
 
@@ -176,19 +169,18 @@ export async function createOpportunity(
   user: OpportunityUser,
   input: OpportunityInput,
   splits: OpportunitySplitInput[] = [],
-  database: CreateOpportunityDb = db as unknown as CreateOpportunityDb,
-  ownersVerified = false
+  database: CreateOpportunityDb = db as unknown as CreateOpportunityDb
 ): Promise<IdResult> {
   if (database === (db as unknown as CreateOpportunityDb)) {
     await assertOrganizationUserEligible(user.organizationId, input.ownerId, ["ADMIN", "SALES"]);
     for (const split of splits) await assertOrganizationUserEligible(user.organizationId, split.userId, ["ADMIN", "SALES"]);
-    return withOrganization(user.organizationId, (tx) => createOpportunity(user, input, splits, tx as unknown as CreateOpportunityDb, true));
+    return withOrganization(user.organizationId, (tx) => createOpportunity(user, input, splits, tx as unknown as CreateOpportunityDb));
   }
   assertCanWriteOpportunities(user);
   await assertLeadExists(database, user.organizationId, input.leadCustomerId);
-  if (!ownersVerified) await assertActiveOwner(database, user.organizationId, input.ownerId);
+  await assertActiveOwner(database, user.organizationId, input.ownerId);
   await assertActiveStage(database, user.organizationId, input.stageId);
-  await assertValidSplits(database, user.organizationId, splits, ownersVerified);
+  await assertValidSplits(database, user.organizationId, splits);
 
   if (input.branchId) {
     await assertBranchBelongsToLead(database, user.organizationId, input.leadCustomerId, input.branchId);
@@ -224,13 +216,12 @@ export async function updateOpportunity(
   opportunityId: string,
   input: OpportunityInput,
   splits: OpportunitySplitInput[] = [],
-  database: UpdateOpportunityDb = db as unknown as UpdateOpportunityDb,
-  ownersVerified = false
+  database: UpdateOpportunityDb = db as unknown as UpdateOpportunityDb
 ): Promise<IdResult> {
   if (database === (db as unknown as UpdateOpportunityDb)) {
     await assertOrganizationUserEligible(user.organizationId, input.ownerId, ["ADMIN", "SALES"]);
     for (const split of splits) await assertOrganizationUserEligible(user.organizationId, split.userId, ["ADMIN", "SALES"]);
-    return withOrganization(user.organizationId, (tx) => updateOpportunity(user, opportunityId, input, splits, tx as unknown as UpdateOpportunityDb, true));
+    return withOrganization(user.organizationId, (tx) => updateOpportunity(user, opportunityId, input, splits, tx as unknown as UpdateOpportunityDb));
   }
   assertCanWriteOpportunities(user);
   const existing = await database.opportunity.findFirst({
@@ -243,9 +234,9 @@ export async function updateOpportunity(
   }
 
   await assertLeadExists(database, user.organizationId, input.leadCustomerId);
-  if (!ownersVerified) await assertActiveOwner(database, user.organizationId, input.ownerId);
+  await assertActiveOwner(database, user.organizationId, input.ownerId);
   await assertActiveStage(database, user.organizationId, input.stageId);
-  await assertValidSplits(database, user.organizationId, splits, ownersVerified);
+  await assertValidSplits(database, user.organizationId, splits);
 
   if (input.branchId) {
     await assertBranchBelongsToLead(database, user.organizationId, input.leadCustomerId, input.branchId);
@@ -298,15 +289,14 @@ export async function moveOpportunityStage(
 export async function upsertSalesTarget(
   user: OpportunityUser,
   input: SalesTargetInput,
-  database: TargetDb = db as unknown as TargetDb,
-  ownerVerified = false
+  database: TargetDb = db as unknown as TargetDb
 ): Promise<IdResult> {
   if (database === (db as unknown as TargetDb)) {
     await assertOrganizationUserEligible(user.organizationId, input.ownerId, ["ADMIN", "SALES"]);
-    return withOrganization(user.organizationId, (tx) => upsertSalesTarget(user, input, tx as unknown as TargetDb, true));
+    return withOrganization(user.organizationId, (tx) => upsertSalesTarget(user, input, tx as unknown as TargetDb));
   }
   assertCanWriteOpportunities(user);
-  if (!ownerVerified) await assertActiveOwner(database, user.organizationId, input.ownerId);
+  await assertActiveOwner(database, user.organizationId, input.ownerId);
 
   return database.salesTarget.upsert({
     where: {

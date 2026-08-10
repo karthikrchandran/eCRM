@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { db } from "@/server/db";
+import { assertTenantMember } from "@/server/organizations/tenant-member-guard";
 import { withOrganization } from "@/server/organizations/with-organization";
 
 export type WorkflowEventInput = {
@@ -32,13 +33,14 @@ export type WorkflowEventRecord = {
 };
 
 type WorkflowEventDb = {
+  $queryRaw?<T>(query: TemplateStringsArray, ...values: unknown[]): Promise<T>;
   workflowEvent: {
     create: (args: Prisma.WorkflowEventCreateArgs) => Promise<WorkflowEventRecord>;
     findMany: (args: Prisma.WorkflowEventFindManyArgs) => Promise<WorkflowEventRecord[]>;
     findFirst?: (args: Prisma.WorkflowEventFindFirstArgs) => Promise<WorkflowEventRecord | null>;
   };
   leadCustomer?: {
-    findFirst: (args: Prisma.LeadCustomerFindFirstArgs) => Promise<{ id: string } | null>;
+    findFirst: (args: Prisma.LeadCustomerFindFirstArgs) => Promise<{ id: string; ownerId: string } | null>;
   };
   salesTask?: {
     create: (args: Prisma.SalesTaskCreateArgs) => Promise<{ id: string }>;
@@ -64,13 +66,19 @@ export async function ingestWorkflowEvent(
     if (existing) return existing;
   }
 
+  let relatedLead: { id: string; ownerId: string } | null | undefined;
   if (isLeadRelated(input.relatedRecordType, input.relatedRecordId)) {
-    const relatedLead = await database.leadCustomer?.findFirst({
+    relatedLead = await database.leadCustomer?.findFirst({
       where: { id: input.relatedRecordId!, organizationId },
-      select: { id: true }
+      select: { id: true, ownerId: true }
     });
     if (!relatedLead) {
       throw new Error("Related record was not found.");
+    }
+
+    if (input.sourceEventType === "meeting_booked") {
+      if (!database.$queryRaw) throw new Error("Organization member was not found.");
+      await assertTenantMember(database as Required<Pick<WorkflowEventDb, "$queryRaw">>, relatedLead.ownerId, ["ADMIN", "SALES"]);
     }
   }
 
@@ -94,7 +102,7 @@ export async function ingestWorkflowEvent(
     await database.salesTask.create({
       data: {
         organizationId,
-        ownerId: "system",
+        ownerId: relatedLead!.ownerId,
         title: "Follow-up from EmailVoice meeting",
         description: input.summary,
         type: "FOLLOW_UP",

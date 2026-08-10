@@ -270,6 +270,7 @@ describe("finance mutations", () => {
         { percent: 40, userId: "sales_b" }
       ],
       {
+        $queryRaw: vi.fn().mockResolvedValue([{ allowed: true }]),
         incentive: { findUnique: vi.fn().mockResolvedValue({ id: "incentive_1", payableAmountPaisa: 10000 }) },
         incentiveSplit: { createMany: splitCreateMany, deleteMany: splitDeleteMany }
       }
@@ -294,5 +295,22 @@ describe("finance mutations", () => {
       where: { id: "incentive_1" },
       data: expect.objectContaining({ paidById: "admin", paymentReference: "PAY-1", status: "PAID" })
     });
+  });
+
+  test("rejects a foreign incentive split member before replacing existing splits", async () => {
+    const deleteMany = vi.fn();
+    const createMany = vi.fn();
+    const query = vi.fn().mockResolvedValue([{ allowed: false }]);
+
+    await expect(updateIncentiveSplits(admin, "incentive_1", [
+      { percent: 100, userId: "user_B" }
+    ], {
+      $queryRaw: query,
+      incentive: { findFirst: vi.fn().mockResolvedValue({ id: "incentive_1", payableAmountPaisa: 100 }) },
+      incentiveSplit: { createMany, deleteMany }
+    } as never)).rejects.toThrow("Organization member was not found.");
+
+    expect(deleteMany).not.toHaveBeenCalled();
+    expect(createMany).not.toHaveBeenCalled();
   });
 });

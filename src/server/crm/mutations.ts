@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { db } from "@/server/db";
 import { withOrganization } from "@/server/organizations/with-organization";
 import { assertOrganizationUserEligible } from "@/server/organizations/member-options";
+import { assertTenantMember } from "@/server/organizations/tenant-member-guard";
 import { assertCanWriteCrmRecords, type CrmUser } from "./permissions";
 import type { ActivityInput, BranchInput, ContactInput, LeadCustomerInput, ReassignmentInput } from "./types";
 
@@ -9,9 +10,7 @@ type IdResult = { id: string };
 type LeadOwnerResult = { id: string; ownerId: string };
 
 type OwnerDb = {
-  user: {
-    findFirst: (args: Prisma.UserFindFirstArgs) => Promise<IdResult | null>;
-  };
+  $queryRaw<T>(query: TemplateStringsArray, ...values: unknown[]): Promise<T>;
 };
 
 type LeadLookupDb = {
@@ -92,14 +91,8 @@ type ReassignDb = OwnerDb & {
 };
 
 async function assertActiveOwner(database: OwnerDb, organizationId: string, ownerId: string) {
-  const owner = await database.user.findFirst({
-    where: { id: ownerId, active: true, role: { in: ["ADMIN", "SALES"] }, memberships: { some: { organizationId, status: "ACTIVE" } } },
-    select: { id: true }
-  });
-
-  if (!owner) {
-    throw new Error("Choose an active Admin or Sales owner.");
-  }
+  void organizationId;
+  await assertTenantMember(database, ownerId, ["ADMIN", "SALES"]);
 }
 
 async function assertLeadExists(database: LeadLookupDb, organizationId: string, leadCustomerId: string) {
@@ -138,15 +131,14 @@ async function assertContactBelongsToLead(database: CreateActivityDb, organizati
 export async function createLeadCustomer(
   user: CrmUser,
   input: LeadCustomerInput,
-  database: CreateLeadDb = db as unknown as CreateLeadDb,
-  ownerVerified = false
+  database: CreateLeadDb = db as unknown as CreateLeadDb
 ): Promise<IdResult> {
   if (database === (db as unknown as CreateLeadDb)) {
     await assertOrganizationUserEligible(user.organizationId, input.ownerId, ["ADMIN", "SALES"]);
-    return withOrganization(user.organizationId, (tx) => createLeadCustomer(user, input, tx as unknown as CreateLeadDb, true));
+    return withOrganization(user.organizationId, (tx) => createLeadCustomer(user, input, tx as unknown as CreateLeadDb));
   }
   assertCanWriteCrmRecords(user);
-  if (!ownerVerified) await assertActiveOwner(database, user.organizationId, input.ownerId);
+  await assertActiveOwner(database, user.organizationId, input.ownerId);
 
   return database.leadCustomer.create({
     data: {
@@ -167,16 +159,15 @@ export async function updateLeadCustomer(
   user: CrmUser,
   leadCustomerId: string,
   input: LeadCustomerInput,
-  database: UpdateLeadDb = db as unknown as UpdateLeadDb,
-  ownerVerified = false
+  database: UpdateLeadDb = db as unknown as UpdateLeadDb
 ): Promise<IdResult> {
   if (database === (db as unknown as UpdateLeadDb)) {
     await assertOrganizationUserEligible(user.organizationId, input.ownerId, ["ADMIN", "SALES"]);
-    return withOrganization(user.organizationId, (tx) => updateLeadCustomer(user, leadCustomerId, input, tx as unknown as UpdateLeadDb, true));
+    return withOrganization(user.organizationId, (tx) => updateLeadCustomer(user, leadCustomerId, input, tx as unknown as UpdateLeadDb));
   }
   assertCanWriteCrmRecords(user);
   await assertLeadExists(database, user.organizationId, leadCustomerId);
-  if (!ownerVerified) await assertActiveOwner(database, user.organizationId, input.ownerId);
+  await assertActiveOwner(database, user.organizationId, input.ownerId);
 
   return database.leadCustomer.update({
     where: { id: leadCustomerId },
@@ -223,16 +214,15 @@ export async function createContact(
 export async function createActivity(
   user: CrmUser,
   input: ActivityInput,
-  database: CreateActivityDb = db as unknown as CreateActivityDb,
-  ownerVerified = false
+  database: CreateActivityDb = db as unknown as CreateActivityDb
 ): Promise<IdResult> {
   if (database === (db as unknown as CreateActivityDb)) {
     await assertOrganizationUserEligible(user.organizationId, input.ownerId, ["ADMIN", "SALES"]);
-    return withOrganization(user.organizationId, (tx) => createActivity(user, input, tx as unknown as CreateActivityDb, true));
+    return withOrganization(user.organizationId, (tx) => createActivity(user, input, tx as unknown as CreateActivityDb));
   }
   assertCanWriteCrmRecords(user);
   await assertLeadExists(database, user.organizationId, input.leadCustomerId);
-  if (!ownerVerified) await assertActiveOwner(database, user.organizationId, input.ownerId);
+  await assertActiveOwner(database, user.organizationId, input.ownerId);
 
   if (input.branchId) {
     await assertBranchBelongsToLead(database, user.organizationId, input.leadCustomerId, input.branchId);
@@ -280,15 +270,14 @@ export async function completeActivity(
 export async function reassignLeadOwner(
   user: CrmUser,
   input: ReassignmentInput,
-  database: ReassignDb = db as unknown as ReassignDb,
-  ownerVerified = false
+  database: ReassignDb = db as unknown as ReassignDb
 ): Promise<unknown> {
   if (database === (db as unknown as ReassignDb)) {
     await assertOrganizationUserEligible(user.organizationId, input.toOwnerId, ["ADMIN", "SALES"]);
-    return withOrganization(user.organizationId, (tx) => reassignLeadOwner(user, input, tx as unknown as ReassignDb, true));
+    return withOrganization(user.organizationId, (tx) => reassignLeadOwner(user, input, tx as unknown as ReassignDb));
   }
   assertCanWriteCrmRecords(user);
-  if (!ownerVerified) await assertActiveOwner(database, user.organizationId, input.toOwnerId);
+  await assertActiveOwner(database, user.organizationId, input.toOwnerId);
 
   const lead = await (database.leadCustomer.findFirst ?? database.leadCustomer.findUnique!)({
     where: { id: input.leadCustomerId, organizationId: user.organizationId },

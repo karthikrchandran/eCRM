@@ -1,5 +1,6 @@
 import type { CostComponentStatus, IncentiveStatus, InvoiceStatus, Prisma } from "@prisma/client";
 import { db } from "@/server/db";
+import { assertTenantMember } from "@/server/organizations/tenant-member-guard";
 import { withOrganization } from "@/server/organizations/with-organization";
 import {
   calculateApprovedCostTotal,
@@ -77,6 +78,7 @@ type IncentiveApprovalDb = {
 };
 
 type IncentiveSplitDb = {
+  $queryRaw<T>(query: TemplateStringsArray, ...values: unknown[]): Promise<T>;
   incentive: {
     findFirst?: (args: Prisma.IncentiveFindFirstArgs) => Promise<{ id: string; payableAmountPaisa: number } | null>;
     findUnique?: (args: Prisma.IncentiveFindUniqueArgs) => Promise<{ id: string; payableAmountPaisa: number } | null>;
@@ -396,6 +398,10 @@ export async function updateIncentiveSplits(
   }
 
   const splitAmounts = calculateIncentiveSplits(incentive.payableAmountPaisa, splits);
+
+  for (const split of splits) {
+    await assertTenantMember(database, split.userId, ["ADMIN", "SALES"]);
+  }
 
   await database.incentiveSplit.deleteMany({ where: { incentiveId, organizationId: user.organizationId } });
   return database.incentiveSplit.createMany({

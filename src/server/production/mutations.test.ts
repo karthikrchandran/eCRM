@@ -301,7 +301,7 @@ describe("production mutations", () => {
   it("rejects an assignee without an active membership in the organization", async () => {
     const update = vi.fn();
     const database = {
-      organizationMembership: { findFirst: vi.fn().mockResolvedValue(null) },
+      $queryRaw: vi.fn().mockResolvedValue([{ allowed: false }]),
       productionStageInstance: {
         findFirst: vi.fn().mockResolvedValue({
           id: "stage_1", workItemId: "work_1", status: "NOT_STARTED", startedAt: null,
@@ -313,18 +313,25 @@ describe("production mutations", () => {
 
     await expect(updateProductionStageStatus(actor, "stage_1", {
       assignedToId: "user_B", status: "IN_PROGRESS"
-    }, database as never)).rejects.toThrow("Assignee was not found.");
-    expect(database.organizationMembership.findFirst).toHaveBeenCalledWith({
-      where: {
-        organizationId: "org_test",
-        userId: "user_B",
-        status: "ACTIVE",
-        role: { in: ["ADMIN", "SALES", "PRODUCTION"] },
-        user: { active: true }
-      },
-      select: { id: true }
-    });
+    }, database as never)).rejects.toThrow("Organization member was not found.");
+    expect(database.$queryRaw).toHaveBeenCalledOnce();
     expect(update).not.toHaveBeenCalled();
+  });
+
+  it("uses the tenant transaction guard instead of reading memberships", async () => {
+    const membershipLookup = vi.fn();
+    const stageLookup = vi.fn();
+    const database = {
+      $queryRaw: vi.fn().mockResolvedValue([{ allowed: false }]),
+      organizationMembership: { findFirst: membershipLookup },
+      productionStageInstance: { findFirst: stageLookup }
+    };
+
+    await expect(updateProductionStageStatus(actor, "stage_1", {
+      assignedToId: "user_B", status: "IN_PROGRESS"
+    }, database as never)).rejects.toThrow("Organization member was not found.");
+    expect(membershipLookup).not.toHaveBeenCalled();
+    expect(stageLookup).not.toHaveBeenCalled();
   });
 
   it("rejects a template-stage parent from another organization", async () => {
