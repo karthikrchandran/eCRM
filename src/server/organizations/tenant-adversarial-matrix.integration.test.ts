@@ -707,6 +707,7 @@ integration("executable organization A/B adversarial matrix", () => {
               : null;
           const foreign = await runScenario(scenario, "B");
           assertNoTenantB(scenario, foreign.rendered);
+          assertBUnchanged(scenario, foreign);
           if (scenario.exportName === "upsertSharedRecord" || scenario.exportName === "upsertPipelineStage") {
             expect(foreign.rejected, `${scenario.model}:${scenario.exportName} should safely resolve only inside A`).toBe(false);
             const protectedBAfter = scenario.exportName === "upsertSharedRecord"
@@ -714,6 +715,7 @@ integration("executable organization A/B adversarial matrix", () => {
               : await control.pipelineStage.findFirst({ where: { id: completeFixtureId("PipelineStage", "B") }, select: { sortOrder: true, updatedAt: true } });
             expect(protectedBAfter, `${scenario.model}:${scenario.exportName} changed tenant B through a business key`).toEqual(protectedB);
           } else {
+            expect(foreign.afterA, `${scenario.model}:${scenario.exportName} changed tenant A while targeting B`).toEqual(foreign.beforeA);
             expect(foreign.rejected, `${scenario.model}:${scenario.exportName} accepted a B ${category} target`).toBe(true);
           }
           return "success";
