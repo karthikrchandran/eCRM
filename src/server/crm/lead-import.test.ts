@@ -7,7 +7,7 @@ import {
   type LeadImportDatabase
 } from "./lead-import";
 
-const actor = { id: "user_admin", role: "ADMIN" as const };
+const actor = { id: "user_admin", organizationId: "org_test", role: "ADMIN" as const };
 
 function csv(rows: string[][]) {
   return [LEAD_IMPORT_HEADERS.join(","), ...rows.map((row) => row.map(csvCell).join(","))].join("\n");
@@ -236,9 +236,10 @@ describe("lead CSV import", () => {
     const leadCreate = vi.fn().mockResolvedValue({ id: "lead_1" });
     const branchCreate = vi.fn().mockResolvedValue({ id: "branch_1" });
     const contactCreate = vi.fn().mockResolvedValue({ id: "contact_1" });
+    const membershipGuard = vi.fn().mockResolvedValue([{ allowed: true }]);
     const transaction = vi.fn(async (callback: (tx: unknown) => Promise<unknown>) =>
       callback({
-        user: { findFirst: vi.fn().mockResolvedValue({ id: "user_sales" }) },
+        $queryRaw: membershipGuard,
         leadCustomer: {
           create: leadCreate,
           findUnique: vi.fn().mockResolvedValue({ id: "lead_1" })
@@ -289,6 +290,7 @@ describe("lead CSV import", () => {
 
     expect(result).toMatchObject({ totalRows: 1, importedRows: 1, skippedRows: 0, errors: [] });
     expect(transaction).toHaveBeenCalledTimes(1);
+    expect(membershipGuard).toHaveBeenCalledOnce();
     expect(leadCreate).toHaveBeenCalledWith({
       data: expect.objectContaining({
         name: "Acme Learning",
@@ -311,7 +313,7 @@ describe("lead CSV import", () => {
     const contactCreate = vi.fn();
     const transaction = vi.fn(async (callback: (tx: unknown) => Promise<unknown>) =>
       callback({
-        user: { findFirst: vi.fn().mockResolvedValue({ id: "user_sales" }) },
+        $queryRaw: vi.fn().mockResolvedValue([{ allowed: true }]),
         leadCustomer: {
           create: leadCreate,
           findUnique: vi.fn().mockResolvedValue({ id: "lead_1" })

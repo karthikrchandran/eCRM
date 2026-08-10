@@ -1,5 +1,6 @@
 import type { Prisma, ProductionStageStatus, User } from "@prisma/client";
-import { db } from "@/server/db";
+import { withOrganization } from "@/server/organizations/with-organization";
+import { listOrganizationUserOptions } from "@/server/organizations/member-options";
 import { assertCanManageProductionConfig, assertCanViewProductionRecords } from "./permissions";
 import type { ProductionFilters, ProductionUser } from "./types";
 
@@ -67,7 +68,7 @@ export type ProductionProductServiceConfigRecord = Prisma.ProductServiceGetPaylo
 type ProductionQueryDb = {
   productionWorkItem: {
     findMany: (args: Prisma.ProductionWorkItemFindManyArgs) => Promise<ProductionWorkItemRecord[]>;
-    findUnique?: (args: Prisma.ProductionWorkItemFindUniqueArgs) => Promise<ProductionWorkItemRecord | null>;
+    findFirst?: (args: Prisma.ProductionWorkItemFindFirstArgs) => Promise<ProductionWorkItemRecord | null>;
   };
   user?: {
     findMany: (args: Prisma.UserFindManyArgs) => Promise<ProductionOwner[]>;
@@ -80,8 +81,8 @@ type ProductionQueryDb = {
   };
 };
 
-function buildProductionWorkItemWhere(filters: ProductionFilters): Prisma.ProductionWorkItemWhereInput {
-  const where: Prisma.ProductionWorkItemWhereInput = {};
+function buildProductionWorkItemWhere(organizationId: string, filters: ProductionFilters): Prisma.ProductionWorkItemWhereInput {
+  const where: Prisma.ProductionWorkItemWhereInput = { organizationId };
 
   if (filters.status) {
     where.status = filters.status;
@@ -107,11 +108,12 @@ function buildProductionWorkItemWhere(filters: ProductionFilters): Prisma.Produc
 export async function listProductionBoard(
   user: ProductionUser,
   filters: ProductionFilters,
-  database: ProductionQueryDb = db as unknown as ProductionQueryDb
-) {
+  database?: ProductionQueryDb
+): Promise<{ statuses: typeof productionBoardStatuses; recordsByStatus: Record<ProductionStageStatus, ProductionWorkItemRecord[]> }> {
+  if (!database) return withOrganization(user.organizationId, (tx) => listProductionBoard(user, filters, tx as unknown as ProductionQueryDb));
   assertCanViewProductionRecords(user);
   const workItems = await database.productionWorkItem.findMany({
-    where: buildProductionWorkItemWhere(filters),
+    where: buildProductionWorkItemWhere(user.organizationId, filters),
     orderBy: [{ dueAt: "asc" }, { updatedAt: "desc" }, { title: "asc" }],
     include: productionWorkItemInclude
   });
@@ -134,12 +136,13 @@ export async function listProductionBoard(
 export async function listProductionWorkItems(
   user: ProductionUser,
   filters: ProductionFilters = {},
-  database: ProductionQueryDb = db as unknown as ProductionQueryDb
-) {
+  database?: ProductionQueryDb
+): Promise<ProductionWorkItemRecord[]> {
+  if (!database) return withOrganization(user.organizationId, (tx) => listProductionWorkItems(user, filters, tx as unknown as ProductionQueryDb));
   assertCanViewProductionRecords(user);
 
   return database.productionWorkItem.findMany({
-    where: buildProductionWorkItemWhere(filters),
+    where: buildProductionWorkItemWhere(user.organizationId, filters),
     orderBy: [{ dueAt: "asc" }, { updatedAt: "desc" }],
     include: productionWorkItemInclude
   });
@@ -148,27 +151,31 @@ export async function listProductionWorkItems(
 export async function getProductionWorkItemDetail(
   user: ProductionUser,
   workItemId: string,
-  database: ProductionQueryDb = db as unknown as ProductionQueryDb
-) {
+  database?: ProductionQueryDb
+): Promise<ProductionWorkItemRecord | null> {
+  if (!database) return withOrganization(user.organizationId, (tx) => getProductionWorkItemDetail(user, workItemId, tx as unknown as ProductionQueryDb));
   assertCanViewProductionRecords(user);
 
-  if (!database.productionWorkItem.findUnique) {
+  if (!database.productionWorkItem.findFirst) {
     throw new Error("Production work item detail query is unavailable.");
   }
 
-  return database.productionWorkItem.findUnique({
-    where: { id: workItemId },
+  return database.productionWorkItem.findFirst({
+    where: { id: workItemId, organizationId: user.organizationId },
     include: productionWorkItemInclude
   });
 }
 
-export async function listProductionFormOptions(database: ProductionQueryDb = db as unknown as ProductionQueryDb) {
+export async function listProductionFormOptions(user: ProductionUser, database?: ProductionQueryDb): Promise<{ owners: ProductionOwner[] }> {
+  if (!database) {
+    return { owners: await listOrganizationUserOptions(user.organizationId, ["ADMIN", "SALES", "PRODUCTION"]) };
+  }
   if (!database.user) {
     throw new Error("Production form options query is unavailable.");
   }
 
   const owners = await database.user.findMany({
-    where: { active: true, role: { in: ["ADMIN", "SALES"] } },
+    where: { active: true, role: { in: ["ADMIN", "SALES"] }, memberships: { some: { organizationId: user.organizationId, status: "ACTIVE" } } },
     orderBy: { name: "asc" },
     select: productionUserSelect
   });
@@ -178,8 +185,9 @@ export async function listProductionFormOptions(database: ProductionQueryDb = db
 
 export async function listProductionTemplateConfig(
   user: ProductionUser,
-  database: ProductionQueryDb = db as unknown as ProductionQueryDb
-) {
+  database?: ProductionQueryDb
+): Promise<{ productServices: ProductionProductServiceConfigRecord[]; templates: ProductionTemplateConfigRecord[] }> {
+  if (!database) return withOrganization(user.organizationId, (tx) => listProductionTemplateConfig(user, tx as unknown as ProductionQueryDb));
   assertCanManageProductionConfig(user);
 
   if (!database.productionTemplate || !database.productService) {
@@ -188,10 +196,12 @@ export async function listProductionTemplateConfig(
 
   const [templates, productServices] = await Promise.all([
     database.productionTemplate.findMany({
+      where: { organizationId: user.organizationId },
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
       include: productionTemplateConfigInclude
     }),
     database.productService.findMany({
+      where: { organizationId: user.organizationId },
       orderBy: [{ active: "desc" }, { sortOrder: "asc" }, { name: "asc" }],
       select: productionProductServiceSelect
     })

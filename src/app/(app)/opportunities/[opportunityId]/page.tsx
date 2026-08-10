@@ -4,6 +4,7 @@ import { requireUser } from "@/server/auth/current-user";
 import { moveOpportunityStageAction } from "@/server/opportunities/actions";
 import { getOpportunityDetail, listOpportunityFormOptions } from "@/server/opportunities/queries";
 import { listProposalsForOpportunity } from "@/server/proposals/queries";
+import { ProposalVersionList } from "@/components/proposals/proposal-version-list";
 
 function formatAmount(value: unknown) {
   if (value === null || value === undefined) {
@@ -41,7 +42,7 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
   const { opportunityId } = await params;
   const [opportunity, options, proposals] = await Promise.all([
     getOpportunityDetail(user, opportunityId),
-    listOpportunityFormOptions(),
+    listOpportunityFormOptions(user),
     listProposalsForOpportunity(user, opportunityId)
   ]);
 
@@ -144,40 +145,7 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
         </form>
       </section>
 
-      <section className="surface p-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 className="text-lg font-semibold">Proposals</h2>
-            <p className="mt-1 text-sm text-[var(--muted)]">Commercial proposals and uploaded Canva PDF metadata.</p>
-          </div>
-          <Link className="crm-button crm-button-primary text-sm" href={`/opportunities/${opportunity.id}/proposals/new`}>
-            New proposal
-          </Link>
-        </div>
-
-        {proposals.length === 0 ? <p className="mt-4 text-sm text-[var(--muted)]">No proposals created yet.</p> : null}
-        <div className="mt-4 space-y-3">
-          {proposals.map((proposal) => (
-            <article className="rounded-md border border-[var(--border)] p-3" key={proposal.id}>
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <Link
-                    className="font-semibold text-[var(--accent-strong)] hover:underline"
-                    href={`/opportunities/${opportunity.id}/proposals/${proposal.id}`}
-                  >
-                    {proposal.title}
-                  </Link>
-                  <p className="mt-1 text-sm text-[var(--muted)]">
-                    Sequence {proposal.sequenceNumber}
-                    {proposal.versionLabel ? ` - ${proposal.versionLabel}` : ""} - {proposal.status}
-                  </p>
-                </div>
-                <p className="text-sm font-semibold">{formatAmount((proposal.totalPaisa / 100).toFixed(2))}</p>
-              </div>
-            </article>
-          ))}
-        </div>
-      </section>
+      <ProposalVersionList opportunityId={opportunity.id} proposals={proposals} />
     </div>
   );
 }

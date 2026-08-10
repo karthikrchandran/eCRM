@@ -52,6 +52,7 @@ describe("AppShell", () => {
     expect(screen.getByRole("banner")).toHaveTextContent("Admin Console");
     expect(screen.queryByRole("link", { name: "My Day" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Leads" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Contacts" })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Pipeline" })).toHaveAttribute("href", "/opportunities");
   });
 
@@ -91,19 +92,19 @@ describe("AppShell", () => {
     expect(screen.getByRole("link", { name: "Performance" })).toHaveAttribute("href", "/performance");
     expect(screen.queryByRole("link", { name: "Orders" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Production" })).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Customer 360" })).toHaveAttribute("href", "/customer-360");
-    expect(screen.getByRole("link", { name: "Reports" })).toHaveAttribute("href", "/reports");
+    expect(screen.getByRole("link", { name: "Leads" })).toHaveAttribute("href", "/leads");
+    expect(screen.getByRole("link", { name: "Contacts" })).toHaveAttribute("href", "/contacts");
   });
 
-  it("keeps the sales workspace navigation connected across customer 360, pipeline, and performance", () => {
+  it("keeps the sales workspace navigation connected across leads, contacts, and pipeline", () => {
     render(
       <AppShell user={{ name: "Priya Menon", email: "sales@example.com", role: "SALES" }}>
         <p>Dashboard content</p>
       </AppShell>
     );
 
-    expect(screen.getByRole("link", { name: "Customer 360" })).toHaveAttribute("href", "/customer-360");
+    expect(screen.getByRole("link", { name: "Leads" })).toHaveAttribute("href", "/leads");
+    expect(screen.getByRole("link", { name: "Contacts" })).toHaveAttribute("href", "/contacts");
     expect(screen.getByRole("link", { name: "Pipeline" })).toHaveAttribute("href", "/opportunities");
-    expect(screen.getByRole("link", { name: "Performance" })).toHaveAttribute("href", "/performance");
   });
 });

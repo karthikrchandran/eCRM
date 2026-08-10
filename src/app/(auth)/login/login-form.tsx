@@ -11,8 +11,8 @@ export function LoginForm() {
   return (
     <form action={formAction} className="surface mx-auto flex w-full max-w-sm flex-col gap-4 p-6">
       <div>
-        <h1 className="text-2xl font-semibold">Sign in</h1>
-        <p className="mt-1 text-sm text-[var(--muted)]">Access the eCRM workspace.</p>
+        <h2 className="text-2xl font-semibold">Welcome back</h2>
+        <p className="mt-1 text-sm text-[var(--muted)]">Sign in to continue.</p>
       </div>
 
       <label className="flex flex-col gap-1 text-sm font-medium">

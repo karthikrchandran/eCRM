@@ -1,8 +1,8 @@
-import { describe, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import { getReportsOverview } from "./queries";
 
-const admin = { id: "admin", email: "admin@example.com", name: "Admin User", role: "ADMIN" as const };
-const sales = { id: "sales", email: "sales@example.com", name: "Sales User", role: "SALES" as const };
+const admin = { id: "admin", email: "admin@example.com", name: "Admin User", organizationId: "org_test", role: "ADMIN" as const };
+const sales = { id: "sales", email: "sales@example.com", name: "Sales User", organizationId: "org_test", role: "SALES" as const };
 
 function createDatabase() {
   return {
@@ -275,6 +275,10 @@ function createDatabase() {
 }
 
 describe("reports overview", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   test("allows Admin and Sales to load company-wide reports", async () => {
     await expect(getReportsOverview(admin, createDatabase())).resolves.toBeTruthy();
     await expect(getReportsOverview(sales, createDatabase())).resolves.toBeTruthy();
@@ -287,13 +291,16 @@ describe("reports overview", () => {
   });
 
   test("builds live dashboard and report summaries from landed models", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-01T12:00:00Z"));
+
     const overview = await getReportsOverview(admin, createDatabase());
 
     expect(overview.currency).toBe("USD");
     expect(overview.dashboardMetrics).toEqual([
       { detail: "Opportunities in open stages", label: "Open opportunities", value: "1" },
       { detail: "Open estimated value", label: "Pipeline value", value: "USD 2,500.50" },
-      { detail: "Excludes GST", label: "Booked value excl. GST", value: "USD 3,000.00" },
+      { detail: "Booked orders", label: "Booked value", value: "USD 3,000.00" },
       { detail: "Outstanding against order totals", label: "Pending receivables", value: "USD 1,360.00" },
       { detail: "Actual payment records", label: "Collected payments", value: "USD 2,180.00" },
       { detail: "Work not done or skipped", label: "Production pending", value: "1" },

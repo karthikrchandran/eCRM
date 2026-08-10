@@ -1,5 +1,5 @@
 import type { Prisma } from "@prisma/client";
-import { db } from "@/server/db";
+import { withOrganization } from "@/server/organizations/with-organization";
 import { assertCanManageProductServices } from "./permissions";
 import type { ProductServiceInput, ProductUser } from "./types";
 
@@ -13,14 +13,14 @@ type ProductCreateDb = {
 
 type ProductUpdateDb = {
   productService: {
-    findUnique: (args: Prisma.ProductServiceFindUniqueArgs) => Promise<IdResult | null>;
+    findFirst: (args: Prisma.ProductServiceFindFirstArgs) => Promise<IdResult | null>;
     update: (args: Prisma.ProductServiceUpdateArgs) => Promise<IdResult>;
   };
 };
 
-async function assertProductExists(database: ProductUpdateDb, productServiceId: string) {
-  const product = await database.productService.findUnique({
-    where: { id: productServiceId },
+async function assertProductExists(database: ProductUpdateDb, organizationId: string, productServiceId: string) {
+  const product = await database.productService.findFirst({
+    where: { id: productServiceId, organizationId },
     select: { id: true }
   });
 
@@ -32,12 +32,14 @@ async function assertProductExists(database: ProductUpdateDb, productServiceId: 
 export async function createProductService(
   user: ProductUser,
   input: ProductServiceInput,
-  database: ProductCreateDb = db as unknown as ProductCreateDb
-) {
+  database?: ProductCreateDb
+): Promise<IdResult> {
+  if (!database) return withOrganization(user.organizationId, (tx) => createProductService(user, input, tx as unknown as ProductCreateDb));
   assertCanManageProductServices(user);
 
   return database.productService.create({
     data: {
+      organizationId: user.organizationId,
       ...input,
       createdById: user.id,
       updatedById: user.id
@@ -49,10 +51,11 @@ export async function updateProductService(
   user: ProductUser,
   productServiceId: string,
   input: ProductServiceInput,
-  database: ProductUpdateDb = db as unknown as ProductUpdateDb
-) {
+  database?: ProductUpdateDb
+): Promise<IdResult> {
+  if (!database) return withOrganization(user.organizationId, (tx) => updateProductService(user, productServiceId, input, tx as unknown as ProductUpdateDb));
   assertCanManageProductServices(user);
-  await assertProductExists(database, productServiceId);
+  await assertProductExists(database, user.organizationId, productServiceId);
 
   return database.productService.update({
     where: { id: productServiceId },
@@ -67,10 +70,11 @@ export async function setProductServiceActive(
   user: ProductUser,
   productServiceId: string,
   active: boolean,
-  database: ProductUpdateDb = db as unknown as ProductUpdateDb
-) {
+  database?: ProductUpdateDb
+): Promise<IdResult> {
+  if (!database) return withOrganization(user.organizationId, (tx) => setProductServiceActive(user, productServiceId, active, tx as unknown as ProductUpdateDb));
   assertCanManageProductServices(user);
-  await assertProductExists(database, productServiceId);
+  await assertProductExists(database, user.organizationId, productServiceId);
 
   return database.productService.update({
     where: { id: productServiceId },

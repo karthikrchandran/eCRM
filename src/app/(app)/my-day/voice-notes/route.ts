@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { requireUser } from "@/server/auth/current-user";
-import { createSalesVoiceNote } from "@/server/sales-day/mutations";
+import { createSalesVoiceNote, createSuggestedActionsForVoiceNote, saveVoiceNoteTranscript } from "@/server/sales-day/mutations";
 import { saveVoiceNoteAudio } from "@/server/sales-day/storage";
+import { buildTranscriptResult } from "@/server/sales-day/transcription";
 import { salesVoiceNoteUploadMetadataSchema } from "@/server/sales-day/validators";
 
 export async function POST(request: Request) {
@@ -20,7 +21,8 @@ export async function POST(request: Request) {
     opportunityId: formData.get("opportunityId"),
     proposalId: formData.get("proposalId"),
     orderId: formData.get("orderId"),
-    durationSeconds: formData.get("durationSeconds")
+    durationSeconds: formData.get("durationSeconds"),
+    transcript: formData.get("transcript")
   });
 
   if (!metadata.success) {
@@ -32,6 +34,7 @@ export async function POST(request: Request) {
   let saved;
   try {
     saved = await saveVoiceNoteAudio({
+      organizationId: user.organizationId,
       ownerId: user.id,
       voiceNoteId,
       originalFileName: audio.name || "sales-voice-note.webm",
@@ -44,9 +47,11 @@ export async function POST(request: Request) {
   const retainedUntil = new Date();
   retainedUntil.setDate(retainedUntil.getDate() + 30);
 
+  const { transcript, ...voiceNoteMetadata } = metadata.data;
+
   await createSalesVoiceNote(user, {
     id: voiceNoteId,
-    ...metadata.data,
+    ...voiceNoteMetadata,
     audioStorageKey: saved.storageKey,
     originalFileName: saved.originalFileName,
     mimeType: saved.mimeType,
@@ -54,9 +59,15 @@ export async function POST(request: Request) {
     retainedUntil
   });
 
+  if (transcript) {
+    const transcriptResult = buildTranscriptResult(transcript);
+    await saveVoiceNoteTranscript(user, voiceNoteId, transcriptResult);
+    await createSuggestedActionsForVoiceNote(user, voiceNoteId, transcriptResult.suggestedActions);
+  }
+
   return NextResponse.json({
     voiceNoteId,
     audioUrl: `/my-day/voice-notes/${voiceNoteId}/audio`,
-    status: "UPLOADED"
+    status: transcript ? "TRANSCRIBED" : "UPLOADED"
   });
 }

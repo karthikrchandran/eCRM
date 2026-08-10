@@ -1,4 +1,4 @@
-import { requireSharedDataApiToken } from "@/server/shared-records/api-auth";
+import { getSharedDataOrganizationId, requireSharedDataApiToken } from "@/server/shared-records/api-auth";
 import { getSharedRecord } from "@/server/shared-records/queries";
 
 type SharedRecordRouteContext = {
@@ -12,10 +12,12 @@ export async function GET(request: Request, context: SharedRecordRouteContext) {
   if (authResponse) {
     return authResponse;
   }
+  const organizationId = getSharedDataOrganizationId();
+  if (!organizationId) return Response.json({ error: "Shared data organization is not configured." }, { status: 500 });
 
   try {
     const { recordId } = await context.params;
-    const record = await getSharedRecord(recordId);
+    const record = await getSharedRecord(organizationId, recordId);
 
     if (!record) {
       return Response.json({ error: "Shared record was not found." }, { status: 404 });

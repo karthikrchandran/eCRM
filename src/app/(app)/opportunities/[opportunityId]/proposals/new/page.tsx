@@ -4,16 +4,18 @@ import { ProposalForm } from "@/components/proposals/proposal-form";
 import { requireUser } from "@/server/auth/current-user";
 import { getOpportunityDetail } from "@/server/opportunities/queries";
 import { createProposalAction } from "@/server/proposals/actions";
+import { listProposalsForOpportunity } from "@/server/proposals/queries";
 import { listActiveProductServices } from "@/server/products/queries";
 import { getBusinessSettings } from "@/server/settings/settings";
 
 export default async function NewProposalPage({ params }: { params: Promise<{ opportunityId: string }> }) {
   const user = await requireUser();
   const { opportunityId } = await params;
-  const [opportunity, products, settings] = await Promise.all([
+  const [opportunity, products, settings, proposals] = await Promise.all([
     getOpportunityDetail(user, opportunityId),
     listActiveProductServices(user),
-    getBusinessSettings(user)
+    getBusinessSettings(user),
+    listProposalsForOpportunity(user, opportunityId)
   ]);
 
   if (!opportunity) {
@@ -41,6 +43,7 @@ export default async function NewProposalPage({ params }: { params: Promise<{ op
       <ProposalForm
         action={createProposalAction}
         currency={settings.defaultCurrency}
+        defaultVersionLabel={`V${proposals.length + 1}`}
         opportunityId={opportunity.id}
         products={products}
         submitLabel="Create proposal"

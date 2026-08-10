@@ -13,7 +13,10 @@ const validUser: SessionUser = {
   id: "user_1",
   email: "admin@example.com",
   name: "Admin User",
-  role: "ADMIN"
+  organizationId: "org_1",
+  membershipId: "membership_1",
+  role: "OWNER",
+  sessionVersion: 1
 };
 
 function encodeSecret(value: string) {
@@ -34,7 +37,10 @@ describe("session utilities", () => {
       id: "user_1",
       email: "admin@example.com",
       name: "Admin User",
-      role: "ADMIN"
+      organizationId: "org_1",
+      membershipId: "membership_1",
+      role: "OWNER",
+      sessionVersion: 1
     });
   });
 
@@ -59,12 +65,70 @@ describe("session utilities", () => {
     await expect(verifySessionToken(token, secret)).resolves.toBeNull();
   });
 
-  it("rejects signed tokens with invalid user claim schema", async () => {
+  it("rejects legacy signed tokens without organization claims", async () => {
+    const token = await new SignJWT({
+      id: validUser.id,
+      email: validUser.email,
+      name: validUser.name,
+      role: "ADMIN"
+    })
+      .setProtectedHeader({ alg: "HS256" })
+      .setIssuer(issuer)
+      .setAudience(audience)
+      .setIssuedAt()
+      .setExpirationTime("8h")
+      .sign(encodeSecret(secret));
+
+    await expect(verifySessionToken(token, secret)).resolves.toBeNull();
+  });
+
+  it.each(["OWNER", "ADMIN", "SALES", "FINANCE", "PRODUCTION", "READ_ONLY"] as const)(
+    "accepts the %s organization role",
+    async (role) => {
+      const token = await signSession({ ...validUser, role }, secret);
+
+      await expect(verifySessionToken(token, secret)).resolves.toMatchObject({ role });
+    }
+  );
+
+  it("rejects signed tokens with an unknown organization role", async () => {
     const token = await new SignJWT({
       ...validUser,
-      email: "not-an-email",
-      role: "OWNER"
+      role: "SUPER_ADMIN"
     })
+      .setProtectedHeader({ alg: "HS256" })
+      .setIssuer(issuer)
+      .setAudience(audience)
+      .setIssuedAt()
+      .setExpirationTime("8h")
+      .sign(encodeSecret(secret));
+
+    await expect(verifySessionToken(token, secret)).resolves.toBeNull();
+  });
+
+  it("rejects unexpected application claims instead of silently stripping them", async () => {
+    const token = await new SignJWT({ ...validUser, isSuperuser: true })
+      .setProtectedHeader({ alg: "HS256" })
+      .setIssuer(issuer)
+      .setAudience(audience)
+      .setIssuedAt()
+      .setExpirationTime("8h")
+      .sign(encodeSecret(secret));
+
+    await expect(verifySessionToken(token, secret)).resolves.toBeNull();
+  });
+
+  it.each([
+    ["blank user id", { id: " " }],
+    ["blank name", { name: " " }],
+    ["invalid email", { email: "not-an-email" }],
+    ["blank organization id", { organizationId: " " }],
+    ["blank membership id", { membershipId: " " }],
+    ["zero session version", { sessionVersion: 0 }],
+    ["negative session version", { sessionVersion: -1 }],
+    ["fractional session version", { sessionVersion: 1.5 }]
+  ])("rejects %s", async (_label, claims) => {
+    const token = await new SignJWT({ ...validUser, ...claims })
       .setProtectedHeader({ alg: "HS256" })
       .setIssuer(issuer)
       .setAudience(audience)
@@ -165,7 +229,7 @@ describe("session utilities", () => {
     const malformedUser = {
       ...validUser,
       email: "not-an-email",
-      role: "OWNER"
+      role: "SUPER_ADMIN"
     };
 
     await expect(

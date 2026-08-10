@@ -7,7 +7,7 @@ import { getProductionWorkItemDetail, listProductionFormOptions } from "@/server
 export default async function ProductionDetailPage({ params }: { params: Promise<{ workItemId: string }> }) {
   const user = await requireUser();
   const { workItemId } = await params;
-  const [workItem, options] = await Promise.all([getProductionWorkItemDetail(user, workItemId), listProductionFormOptions()]);
+  const [workItem, options] = await Promise.all([getProductionWorkItemDetail(user, workItemId), listProductionFormOptions(user)]);
 
   if (!workItem) {
     notFound();

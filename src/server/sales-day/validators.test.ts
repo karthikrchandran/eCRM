@@ -80,6 +80,18 @@ describe("sales-day validators", () => {
     });
   });
 
+  it("accepts an optional browser transcript with upload metadata", () => {
+    const result = salesVoiceNoteUploadMetadataSchema.parse({
+      taskId: " task_1 ",
+      transcript: "  Client asked us to send pricing tomorrow.  "
+    });
+
+    expect(result).toEqual({
+      taskId: "task_1",
+      transcript: "Client asked us to send pricing tomorrow."
+    });
+  });
+
   it("normalizes missing FormData voice note metadata fields", () => {
     expect(
       salesVoiceNoteUploadMetadataSchema.parse({

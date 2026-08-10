@@ -2,21 +2,25 @@ import { describe, expect, it, vi } from "vitest";
 import {
   acceptSuggestedAction,
   completeSalesTask,
+  createSalesTask,
   createSalesTextNote,
+  createSalesVoiceNote,
   deleteSalesTextNote,
   reopenSalesTask,
   saveEndOfDayReview,
+  updateSalesTask,
   updateSalesTextNote
 } from "./mutations";
 import type { SalesDayUser } from "./permissions";
 
-const salesUser: SalesDayUser = { id: "sales_1", role: "SALES" };
+const salesUser: SalesDayUser = { id: "sales_1", organizationId: "org_test", role: "SALES" };
 
 describe("sales-day mutations", () => {
   it("completes a salesperson's task with completed timestamp", async () => {
     const database = {
+      $queryRaw: vi.fn().mockResolvedValue([{ allowed: true }]),
       salesTask: {
-        findUnique: vi.fn().mockResolvedValue({ id: "task_1", ownerId: "sales_1" }),
+        findFirst: vi.fn().mockResolvedValue({ id: "task_1", ownerId: "sales_1" }),
         update: vi.fn().mockResolvedValue({ id: "task_1" })
       }
     };
@@ -36,8 +40,9 @@ describe("sales-day mutations", () => {
 
   it("reopens a completed task and clears completion state", async () => {
     const database = {
+      $queryRaw: vi.fn().mockResolvedValue([{ allowed: true }]),
       salesTask: {
-        findUnique: vi.fn().mockResolvedValue({ id: "task_1", ownerId: "sales_1" }),
+        findFirst: vi.fn().mockResolvedValue({ id: "task_1", ownerId: "sales_1" }),
         update: vi.fn().mockResolvedValue({ id: "task_1" })
       }
     };
@@ -57,8 +62,9 @@ describe("sales-day mutations", () => {
 
   it("accepts a draft suggested action by creating one task and marking the action accepted", async () => {
     const database = {
+      $queryRaw: vi.fn().mockResolvedValue([{ allowed: true }]),
       salesVoiceNoteAction: {
-        findUnique: vi.fn().mockResolvedValue({
+        findFirst: vi.fn().mockResolvedValue({
           id: "action_1",
           status: "DRAFT",
           title: "Send pricing sheet",
@@ -86,6 +92,7 @@ describe("sales-day mutations", () => {
 
     expect(database.salesTask.create).toHaveBeenCalledWith({
       data: {
+        organizationId: "org_test",
         ownerId: "sales_1",
         leadCustomerId: "lead_1",
         opportunityId: "opp_1",
@@ -111,8 +118,9 @@ describe("sales-day mutations", () => {
 
   it("does not create a second task when accepting an already accepted action", async () => {
     const database = {
+      $queryRaw: vi.fn().mockResolvedValue([{ allowed: true }]),
       salesVoiceNoteAction: {
-        findUnique: vi.fn().mockResolvedValue({
+        findFirst: vi.fn().mockResolvedValue({
           id: "action_1",
           status: "ACCEPTED",
           createdTaskId: "existing_task",
@@ -131,6 +139,7 @@ describe("sales-day mutations", () => {
 
   it("saves end-of-day carry-forward without deleting the original task", async () => {
     const database = {
+      $queryRaw: vi.fn().mockResolvedValue([{ allowed: true }]),
       salesDayReview: {
         upsert: vi.fn().mockResolvedValue({ id: "review_1" })
       },
@@ -138,7 +147,7 @@ describe("sales-day mutations", () => {
         upsert: vi.fn().mockResolvedValue({ id: "item_1" })
       },
       salesTask: {
-        findUnique: vi.fn().mockResolvedValue({
+        findFirst: vi.fn().mockResolvedValue({
           id: "task_1",
           ownerId: "sales_1",
           leadCustomerId: "lead_1",
@@ -183,8 +192,9 @@ describe("sales-day mutations", () => {
 
   it("rejects mutation attempts for another salesperson's task", async () => {
     const database = {
+      $queryRaw: vi.fn().mockResolvedValue([{ allowed: true }]),
       salesTask: {
-        findUnique: vi.fn().mockResolvedValue({ id: "task_1", ownerId: "other_sales" }),
+        findFirst: vi.fn().mockResolvedValue({ id: "task_1", ownerId: "other_sales" }),
         update: vi.fn()
       }
     };
@@ -197,6 +207,9 @@ describe("sales-day mutations", () => {
 
   it("creates a typed My Day note linked to CRM records", async () => {
     const database = {
+      $queryRaw: vi.fn().mockResolvedValue([{ allowed: true }]),
+      leadCustomer: { findFirst: vi.fn().mockResolvedValue({ id: "lead_1" }) },
+      opportunity: { findFirst: vi.fn().mockResolvedValue({ id: "opp_1" }) },
       salesTextNote: {
         create: vi.fn().mockResolvedValue({ id: "text_note_1" })
       }
@@ -214,6 +227,7 @@ describe("sales-day mutations", () => {
 
     expect(database.salesTextNote.create).toHaveBeenCalledWith({
       data: {
+        organizationId: "org_test",
         body: "Client prefers USD pricing with tax entered manually.",
         ownerId: "sales_1",
         leadCustomerId: "lead_1",
@@ -228,8 +242,10 @@ describe("sales-day mutations", () => {
 
   it("updates and deletes only notes owned by the signed-in salesperson", async () => {
     const database = {
+      $queryRaw: vi.fn().mockResolvedValue([{ allowed: true }]),
+      order: { findFirst: vi.fn().mockResolvedValue({ id: "order_1" }) },
       salesTextNote: {
-        findUnique: vi.fn().mockResolvedValue({ id: "text_note_1", ownerId: "sales_1" }),
+        findFirst: vi.fn().mockResolvedValue({ id: "text_note_1", ownerId: "sales_1" }),
         update: vi.fn().mockResolvedValue({ id: "text_note_1" }),
         delete: vi.fn().mockResolvedValue({ id: "text_note_1" })
       }
@@ -254,5 +270,59 @@ describe("sales-day mutations", () => {
       where: { id: "text_note_1" },
       select: { id: true }
     });
+  });
+
+  it.each([
+    ["task create", (database: unknown) => createSalesTask(salesUser, {
+      title: "Call", type: "CALL", priority: "MEDIUM", leadCustomerId: "lead_B"
+    } as never, database as never), "salesTask"],
+    ["task update", (database: unknown) => updateSalesTask(salesUser, "task_A", {
+      opportunityId: "opportunity_B"
+    } as never, database as never), "salesTask"],
+    ["text note", (database: unknown) => createSalesTextNote(salesUser, {
+      body: "Private", proposalId: "proposal_B"
+    }, database as never), "salesTextNote"],
+    ["voice note", (database: unknown) => createSalesVoiceNote(salesUser, {
+      audioStorageKey: "audio/A", fileSizeBytes: 1, mimeType: "audio/webm",
+      originalFileName: "note.webm", orderId: "order_B", taskId: "task_B"
+    }, database as never), "salesVoiceNote"]
+  ])("rejects cross-organization optional foreign IDs for %s", async (_name, mutate, writeModel) => {
+    const database = {
+      $queryRaw: vi.fn().mockResolvedValue([{ allowed: true }]),
+      leadCustomer: { findFirst: vi.fn().mockResolvedValue(null) },
+      opportunity: { findFirst: vi.fn().mockResolvedValue(null) },
+      proposal: { findFirst: vi.fn().mockResolvedValue(null) },
+      order: { findFirst: vi.fn().mockResolvedValue(null) },
+      salesTask: {
+        findFirst: vi.fn().mockImplementation(({ where }) =>
+          where.id === "task_A" ? Promise.resolve({ id: "task_A", ownerId: "sales_1" }) : Promise.resolve(null)),
+        create: vi.fn(), update: vi.fn()
+      },
+      salesTextNote: { create: vi.fn() },
+      salesVoiceNote: { create: vi.fn() }
+    };
+
+    await expect(mutate(database)).rejects.toThrow("Related record was not found.");
+    expect((database as Record<string, { create?: ReturnType<typeof vi.fn>; update?: ReturnType<typeof vi.fn> }>)[writeModel].create ??
+      (database as Record<string, { update?: ReturnType<typeof vi.fn> }>)[writeModel].update).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["task", (database: unknown) => createSalesTask(salesUser, { title: "Call", type: "CALL", priority: "MEDIUM" } as never, database as never)],
+    ["text note", (database: unknown) => createSalesTextNote(salesUser, { body: "Note" }, database as never)],
+    ["voice note", (database: unknown) => createSalesVoiceNote(salesUser, {
+      audioStorageKey: "audio/A", fileSizeBytes: 1, mimeType: "audio/webm", originalFileName: "note.webm"
+    }, database as never)]
+  ])("rejects a revoked current owner before creating %s", async (_name, mutate) => {
+    const database = {
+      $queryRaw: vi.fn().mockResolvedValue([{ allowed: false }]),
+      salesTask: { create: vi.fn() },
+      salesTextNote: { create: vi.fn() },
+      salesVoiceNote: { create: vi.fn() }
+    };
+    await expect(mutate(database)).rejects.toThrow("Organization member was not found.");
+    expect(database.salesTask.create).not.toHaveBeenCalled();
+    expect(database.salesTextNote.create).not.toHaveBeenCalled();
+    expect(database.salesVoiceNote.create).not.toHaveBeenCalled();
   });
 });

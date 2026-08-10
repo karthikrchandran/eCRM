@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { createProductService, setProductServiceActive, updateProductService } from "./mutations";
 
-const admin = { id: "user_admin", role: "ADMIN" as const };
-const sales = { id: "user_sales", role: "SALES" as const };
+const admin = { id: "user_admin", organizationId: "org_test", role: "ADMIN" as const };
+const sales = { id: "user_sales", organizationId: "org_test", role: "SALES" as const };
 
 const productInput = {
   name: "Custom eLearning Module",
@@ -25,6 +25,7 @@ describe("product service mutations", () => {
 
     expect(create).toHaveBeenCalledWith({
       data: {
+        organizationId: "org_test",
         ...productInput,
         createdById: "user_admin",
         updatedById: "user_admin"
@@ -45,7 +46,7 @@ describe("product service mutations", () => {
 
     await updateProductService(admin, "product_1", { ...productInput, name: "Updated eLearning Module" }, {
       productService: {
-        findUnique: vi.fn().mockResolvedValue({ id: "product_1" }),
+        findFirst: vi.fn().mockResolvedValue({ id: "product_1" }),
         update
       }
     });
@@ -64,7 +65,7 @@ describe("product service mutations", () => {
 
     await setProductServiceActive(admin, "product_1", false, {
       productService: {
-        findUnique: vi.fn().mockResolvedValue({ id: "product_1" }),
+        findFirst: vi.fn().mockResolvedValue({ id: "product_1" }),
         update
       }
     });

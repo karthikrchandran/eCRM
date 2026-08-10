@@ -1,8 +1,9 @@
-import type { CostComponentStatus, InvoiceStatus, PaymentMode } from "@prisma/client";
+import type { CostComponentStatus, InvoiceStatus, OrganizationRole, PaymentMode } from "@prisma/client";
 
 export type FinanceUser = {
   id: string;
-  role: "ADMIN" | "SALES";
+  organizationId: string;
+  role: OrganizationRole;
 };
 
 export type ActionState = {

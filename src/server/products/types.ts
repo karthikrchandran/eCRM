@@ -1,3 +1,5 @@
+import type { OrganizationRole } from "@prisma/client";
+
 export type ActionState = {
   ok: boolean;
   message?: string;
@@ -6,7 +8,8 @@ export type ActionState = {
 
 export type ProductUser = {
   id: string;
-  role: "ADMIN" | "SALES";
+  organizationId: string;
+  role: OrganizationRole;
 };
 
 export type ProductServiceInput = {

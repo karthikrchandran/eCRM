@@ -318,7 +318,7 @@ export default async function ReportsPage({
               <tr>
                 <th className="px-4 py-3">Customer</th>
                 <th className="px-4 py-3">Orders</th>
-                <th className="px-4 py-3">Booked excl. GST</th>
+                <th className="px-4 py-3">Booked value</th>
               </tr>
             </thead>
             <tbody>
@@ -363,7 +363,7 @@ export default async function ReportsPage({
                 <th className="px-4 py-3">Order</th>
                 <th className="px-4 py-3">Client</th>
                 <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Booked excl. GST</th>
+                <th className="px-4 py-3">Booked value</th>
               </tr>
             </thead>
             <tbody>
@@ -387,7 +387,7 @@ export default async function ReportsPage({
                 <th className="px-4 py-3">Order</th>
                 <th className="px-4 py-3">Client</th>
                 <th className="px-4 py-3">Owner</th>
-                <th className="px-4 py-3">Booked excl. GST</th>
+                <th className="px-4 py-3">Booked value</th>
               </tr>
             </thead>
             <tbody>

@@ -1,6 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { isSafeExternalUrl } from "@/lib/safe-external-url";
-import { db } from "@/server/db";
+import { withOrganization } from "@/server/organizations/with-organization";
 import type { SupportedCurrency } from "@/server/settings/settings";
 import { calculateProposalTotals } from "./calculations";
 import { assertCanWriteProposals } from "./permissions";
@@ -20,7 +20,7 @@ type ProposalCreateDb = {
     findUnique: (args: Prisma.BusinessSettingsFindUniqueArgs) => Promise<{ defaultCurrency: SupportedCurrency } | null>;
   };
   opportunity: {
-    findUnique: (args: Prisma.OpportunityFindUniqueArgs) => Promise<{ id: string; stage: { kind: string; name: string } } | null>;
+    findFirst: (args: Prisma.OpportunityFindFirstArgs) => Promise<{ id: string; stage: { kind: string; name: string } } | null>;
   };
   proposal: {
     count: (args: Prisma.ProposalCountArgs) => Promise<number>;
@@ -33,7 +33,7 @@ type ProposalCreateDb = {
 
 type ProposalPdfDb = {
   proposal: {
-    findUnique: (args: Prisma.ProposalFindUniqueArgs) => Promise<{ id: string; opportunityId: string } | null>;
+    findFirst: (args: Prisma.ProposalFindFirstArgs) => Promise<{ id: string; opportunityId: string } | null>;
   };
   proposalPdfAttachment: {
     create: (args: Prisma.ProposalPdfAttachmentCreateArgs) => Promise<{ id: string }>;
@@ -45,7 +45,7 @@ type ProposalStatusDb = {
     findFirst: (args: Prisma.PipelineStageFindFirstArgs) => Promise<{ id: string } | null>;
   };
   proposal: {
-    findUnique: (args: Prisma.ProposalFindUniqueArgs) => Promise<{
+    findFirst: (args: Prisma.ProposalFindFirstArgs) => Promise<{
       id: string;
       opportunityId: string;
       status: ProposalStatusValue;
@@ -59,9 +59,9 @@ type ProposalStatusDb = {
   };
 };
 
-async function assertOpenOpportunity(database: ProposalCreateDb, opportunityId: string) {
-  const opportunity = await database.opportunity.findUnique({
-    where: { id: opportunityId },
+async function assertOpenOpportunity(database: ProposalCreateDb, organizationId: string, opportunityId: string) {
+  const opportunity = await database.opportunity.findFirst({
+    where: { id: opportunityId, organizationId },
     select: { id: true, stage: { select: { kind: true, name: true } } }
   });
 
@@ -83,10 +83,10 @@ async function loadDefaultCurrency(database: ProposalCreateDb): Promise<Supporte
   return settings?.defaultCurrency ?? "INR";
 }
 
-async function loadProductSnapshots(database: ProposalCreateDb, lines: ProposalLineInput[], currency: SupportedCurrency) {
+async function loadProductSnapshots(database: ProposalCreateDb, organizationId: string, lines: ProposalLineInput[], currency: SupportedCurrency) {
   const productIds = [...new Set(lines.map((line) => line.productServiceId))];
   const products = await database.productService.findMany({
-    where: { id: { in: productIds } },
+    where: { id: { in: productIds }, organizationId },
     select: { id: true, name: true, category: true, defaultGstRateBps: true, active: true }
   });
   const productsById = new Map(products.map((product) => [product.id, product]));
@@ -114,22 +114,24 @@ export async function createProposal(
   user: ProposalUser,
   input: ProposalInput,
   lines: ProposalLineInput[],
-  database: ProposalCreateDb = db as unknown as ProposalCreateDb
-) {
+  database?: ProposalCreateDb
+): Promise<{ id: string }> {
+  if (!database) return withOrganization(user.organizationId, (tx) => createProposal(user, input, lines, tx as unknown as ProposalCreateDb));
   assertCanWriteProposals(user);
 
   if (lines.length < 1) {
     throw new Error("Add at least one proposal line.");
   }
 
-  await assertOpenOpportunity(database, input.opportunityId);
+  await assertOpenOpportunity(database, user.organizationId, input.opportunityId);
   const currency = await loadDefaultCurrency(database);
-  const productsById = await loadProductSnapshots(database, lines, currency);
-  const sequenceNumber = (await database.proposal.count({ where: { opportunityId: input.opportunityId } })) + 1;
+  const productsById = await loadProductSnapshots(database, user.organizationId, lines, currency);
+  const sequenceNumber = (await database.proposal.count({ where: { opportunityId: input.opportunityId, organizationId: user.organizationId } })) + 1;
   const totals = calculateProposalTotals(lines);
 
   return database.proposal.create({
     data: {
+      organizationId: user.organizationId,
       ...input,
       sequenceNumber,
       status: "DRAFT",
@@ -172,11 +174,12 @@ export async function addProposalPdfMetadata(
   user: ProposalUser,
   proposalId: string,
   input: ProposalPdfMetadataInput,
-  database: ProposalPdfDb = db as unknown as ProposalPdfDb
-) {
+  database?: ProposalPdfDb
+): Promise<{ id: string }> {
+  if (!database) return withOrganization(user.organizationId, (tx) => addProposalPdfMetadata(user, proposalId, input, tx as unknown as ProposalPdfDb));
   assertCanWriteProposals(user);
-  const proposal = await database.proposal.findUnique({
-    where: { id: proposalId },
+  const proposal = await database.proposal.findFirst({
+    where: { id: proposalId, organizationId: user.organizationId },
     select: { id: true, opportunityId: true }
   });
 
@@ -186,6 +189,7 @@ export async function addProposalPdfMetadata(
 
   return database.proposalPdfAttachment.create({
     data: {
+      organizationId: user.organizationId,
       proposalId,
       originalFileName: input.originalFileName,
       storedFileName: input.storedFileName,
@@ -204,11 +208,12 @@ export async function changeProposalStatus(
   user: ProposalUser,
   proposalId: string,
   nextStatus: ProposalStatusValue,
-  database: ProposalStatusDb = db as unknown as ProposalStatusDb
-) {
+  database?: ProposalStatusDb
+): Promise<{ id: string; status: ProposalStatusValue }> {
+  if (!database) return withOrganization(user.organizationId, (tx) => changeProposalStatus(user, proposalId, nextStatus, tx as unknown as ProposalStatusDb));
   assertCanWriteProposals(user);
-  const proposal = await database.proposal.findUnique({
-    where: { id: proposalId },
+  const proposal = await database.proposal.findFirst({
+    where: { id: proposalId, organizationId: user.organizationId },
     select: {
       id: true,
       opportunityId: true,
@@ -234,7 +239,7 @@ export async function changeProposalStatus(
 
   if (nextStatus === "SENT") {
     const proposalSentStage = await database.pipelineStage.findFirst({
-      where: { name: "Proposal Sent", active: true, kind: "OPEN" },
+      where: { organizationId: user.organizationId, name: "Proposal Sent", active: true, kind: "OPEN" },
       select: { id: true }
     });
 

@@ -16,6 +16,7 @@ type ProposalFormProps = {
   currency: "INR" | "USD";
   opportunityId: string;
   products: ProductServiceRecord[];
+  defaultVersionLabel?: string;
   submitLabel: string;
 };
 
@@ -29,7 +30,14 @@ function FieldError({ errors }: { errors?: string[] }) {
   ) : null;
 }
 
-export function ProposalForm({ action, currency, opportunityId, products, submitLabel }: ProposalFormProps) {
+export function ProposalForm({
+  action,
+  currency,
+  opportunityId,
+  products,
+  defaultVersionLabel = "V1",
+  submitLabel
+}: ProposalFormProps) {
   const [state, formAction, pending] = useActionState(action, initialState);
 
   return (
@@ -49,7 +57,7 @@ export function ProposalForm({ action, currency, opportunityId, products, submit
 
           <label className="flex flex-col gap-1 text-sm font-medium">
             Version label
-            <input className="crm-control" defaultValue="V1" name="versionLabel" type="text" />
+            <input className="crm-control" defaultValue={defaultVersionLabel} name="versionLabel" type="text" />
           </label>
 
           <label className="flex flex-col gap-1 text-sm font-medium">

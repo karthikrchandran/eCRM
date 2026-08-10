@@ -1,5 +1,5 @@
 import type { Prisma } from "@prisma/client";
-import { db } from "@/server/db";
+import { withOrganization } from "@/server/organizations/with-organization";
 import { assertCanViewFinance } from "./permissions";
 import type { FinanceUser } from "./types";
 
@@ -50,19 +50,21 @@ export type OrderFinanceSummary = Prisma.OrderGetPayload<{ include: typeof order
 
 type FinanceQueryDb = {
   order: {
-    findUnique: (args: Prisma.OrderFindUniqueArgs) => Promise<OrderFinanceSummary | null>;
+    findFirst?: (args: Prisma.OrderFindFirstArgs) => Promise<OrderFinanceSummary | null>;
+    findUnique?: (args: Prisma.OrderFindUniqueArgs) => Promise<OrderFinanceSummary | null>;
   };
 };
 
 export async function getOrderFinanceSummary(
   user: FinanceUser,
   orderId: string,
-  database: FinanceQueryDb = db as unknown as FinanceQueryDb
-) {
+  database?: FinanceQueryDb
+): Promise<OrderFinanceSummary | null> {
+  if (!database) return withOrganization(user.organizationId, (tx) => getOrderFinanceSummary(user, orderId, tx as unknown as FinanceQueryDb));
   assertCanViewFinance(user);
 
-  return database.order.findUnique({
-    where: { id: orderId },
+  return (database.order.findFirst ?? database.order.findUnique!)({
+    where: { id: orderId, organizationId: user.organizationId },
     include: orderFinanceSummaryInclude
   });
 }

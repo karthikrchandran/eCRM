@@ -27,7 +27,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ lea
   const { leadId } = await params;
   const [lead, owners, timeline] = await Promise.all([
     getLeadCustomerDetail(user, leadId),
-    listCrmOwners(),
+    listCrmOwners(user),
     getCustomer360Timeline(user, leadId)
   ]);
 
@@ -112,7 +112,11 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ lea
         <div className="grid gap-3 md:grid-cols-2">
           {lead.contacts.map((contact) => (
             <article className="surface min-w-0 p-4" key={contact.id}>
-              <h3 className="break-words font-semibold">{contact.name}</h3>
+              <h3 className="break-words font-semibold">
+                <Link className="text-[var(--accent-strong)] hover:underline" href={`/contacts/${contact.id}`}>
+                  {contact.name}
+                </Link>
+              </h3>
               <p className="break-words text-sm text-[var(--muted)]">
                 {contact.designation ?? "Designation not set"}
                 {contact.branch ? ` - ${contact.branch.name}` : " - Company level"}

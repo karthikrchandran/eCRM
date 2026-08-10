@@ -36,6 +36,7 @@ describe("listSharedRecords", () => {
     const findMany = vi.fn<(_: Prisma.SharedBusinessRecordFindManyArgs) => Promise<SharedBusinessRecordRow[]>>().mockResolvedValue([sharedRecordRow()]);
 
     const result = await listSharedRecords(
+      "org_test",
       {
         entityType: "CUSTOMER",
         q: " Acme ",
@@ -53,6 +54,7 @@ describe("listSharedRecords", () => {
 
     expect(findMany).toHaveBeenCalledWith({
       where: {
+        organizationId: "org_test",
         archivedAt: null,
         entityType: "CUSTOMER",
         status: "ACTIVE",

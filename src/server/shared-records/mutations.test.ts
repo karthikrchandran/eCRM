@@ -48,6 +48,7 @@ describe("upsertSharedRecord", () => {
     };
 
     const result = await upsertSharedRecord(
+      "org_test",
       {
         entityType: "CUSTOMER",
         displayName: "Acme Learning",
@@ -93,6 +94,7 @@ describe("upsertSharedRecord", () => {
 
     await expect(
       upsertSharedRecord(
+        "org_test",
         {
           entityType: "CUSTOMER",
           displayName: "New name",
@@ -112,12 +114,14 @@ describe("upsertSharedRecord", () => {
     });
     expect(database.sharedBusinessRecord.findFirst).toHaveBeenNthCalledWith(1, {
       where: {
+        organizationId: "org_test",
         entityType: "CUSTOMER",
         ecrmLegacyId: "lead_1"
       }
     });
     expect(database.sharedBusinessRecord.findFirst).toHaveBeenNthCalledWith(2, {
       where: {
+        organizationId: "org_test",
         entityType: "CUSTOMER",
         ecrmLegacyId: "lead_1"
       }
@@ -156,6 +160,7 @@ describe("upsertSharedRecord", () => {
     };
 
     const result = await upsertSharedRecord(
+      "org_test",
       {
         entityType: "CUSTOMER",
         displayName: "Linked customer",
@@ -171,6 +176,7 @@ describe("upsertSharedRecord", () => {
     expect(database.sharedBusinessRecord.create).not.toHaveBeenCalled();
     expect(database.sharedBusinessRecord.findFirst).toHaveBeenNthCalledWith(2, {
       where: {
+        organizationId: "org_test",
         entityType: "CUSTOMER",
         emailVoiceLegacyId: "emailvoice_contact_1"
       }
@@ -201,6 +207,7 @@ describe("upsertSharedRecord", () => {
     };
 
     const result = await upsertSharedRecord(
+      "org_test",
       {
         entityType: "LEAD",
         displayName: "Updated external lead",
@@ -215,6 +222,7 @@ describe("upsertSharedRecord", () => {
     expect(database.sharedBusinessRecord.create).not.toHaveBeenCalled();
     expect(database.sharedBusinessRecord.findFirst).toHaveBeenCalledWith({
       where: {
+        organizationId: "org_test",
         entityType: "LEAD",
         externalKey: "emailvoice:lead:123"
       }
@@ -258,6 +266,7 @@ describe("upsertSharedRecord", () => {
     };
 
     const result = await upsertSharedRecord(
+      "org_test",
       {
         entityType: "ORDER",
         displayName: "Updated external order",
@@ -271,6 +280,7 @@ describe("upsertSharedRecord", () => {
     expect(result.created).toBe(false);
     expect(database.sharedBusinessRecord.findFirst).toHaveBeenNthCalledWith(2, {
       where: {
+        organizationId: "org_test",
         entityType: "ORDER",
         externalKey: "external:order:777"
       }
@@ -282,5 +292,44 @@ describe("upsertSharedRecord", () => {
         searchText: "updated external order booked external:order:777"
       })
     });
+  });
+
+  it.each([
+    ["relatedLeadId", "leadCustomer"],
+    ["relatedCustomerId", "leadCustomer"],
+    ["relatedContactId", "contact"],
+    ["relatedOpportunityId", "opportunity"]
+  ] as const)("rejects a tenant-B semantic %s", async (field, delegate) => {
+    const database = {
+      [delegate]: { findFirst: vi.fn().mockResolvedValue(null) },
+      sharedBusinessRecord: { create: vi.fn(), findFirst: vi.fn(), update: vi.fn() }
+    };
+
+    await expect(upsertSharedRecord("org_A", {
+      entityType: "CUSTOMER",
+      displayName: "Cross tenant",
+      status: "ACTIVE",
+      sourceApp: "ecrm",
+      externalKey: "cross-tenant",
+      [field]: "tenant_B_id"
+    }, database as never)).rejects.toThrow("Related record was not found.");
+    expect(database.sharedBusinessRecord.create).not.toHaveBeenCalled();
+  });
+
+  it("rejects an inactive or tenant-B semantic ownerId", async () => {
+    const database = {
+      $queryRaw: vi.fn().mockResolvedValue([{ allowed: false }]),
+      sharedBusinessRecord: { create: vi.fn(), findFirst: vi.fn(), update: vi.fn() }
+    };
+
+    await expect(upsertSharedRecord("org_A", {
+      entityType: "CUSTOMER",
+      displayName: "Cross tenant",
+      status: "ACTIVE",
+      sourceApp: "ecrm",
+      externalKey: "cross-tenant-owner",
+      ownerId: "tenant_B_user"
+    }, database as never)).rejects.toThrow("Organization member was not found.");
+    expect(database.sharedBusinessRecord.create).not.toHaveBeenCalled();
   });
 });

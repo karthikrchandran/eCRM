@@ -1,5 +1,6 @@
 import { formatCurrencyPaisa, type ReportCurrency } from "@/components/reports/report-formatters";
-import { db } from "@/server/db";
+import { withOrganization } from "@/server/organizations/with-organization";
+import { listOrganizationUserOptions } from "@/server/organizations/member-options";
 import { calculateOrderPaymentSummary } from "@/server/finance/calculations";
 import { assertCanViewReports } from "./permissions";
 import type {
@@ -125,8 +126,9 @@ function dateRangeWhere(filters: ReportsFilters) {
   };
 }
 
-function buildOrderWhere(filters: ReportsFilters) {
+function buildOrderWhere(organizationId: string, filters: ReportsFilters) {
   return {
+    organizationId,
     ...(dateRangeWhere(filters) ? { bookedAt: dateRangeWhere(filters) } : {}),
     ...(filters.currency ? { currency: filters.currency } : {}),
     ...(filters.customerId ? { leadCustomerId: filters.customerId } : {}),
@@ -136,8 +138,9 @@ function buildOrderWhere(filters: ReportsFilters) {
   };
 }
 
-function buildOpportunityWhere(filters: ReportsFilters) {
+function buildOpportunityWhere(organizationId: string, filters: ReportsFilters) {
   return {
+    organizationId,
     ...(filters.customerId ? { leadCustomerId: filters.customerId } : {}),
     ...(filters.ownerId ? { ownerId: filters.ownerId } : {}),
     ...(filters.stageId ? { stageId: filters.stageId } : {})
@@ -301,8 +304,8 @@ function buildDashboardMetrics(currency: ReportCurrency, data: {
     { detail: "Opportunities in open stages", label: "Open opportunities", value: String(openOpportunityCount) },
     { detail: "Open estimated value", label: "Pipeline value", value: formatCurrencyPaisa(pipelineValuePaisa, currency) },
     {
-      detail: "Excludes GST",
-      label: "Booked value excl. GST",
+      detail: "Booked orders",
+      label: "Booked value",
       value: formatCurrencyPaisa(data.currentOrders.reduce((total, order) => total + order.subtotalPaisa, 0), currency)
     },
     {
@@ -456,10 +459,10 @@ function optionsFromCustomers(orders: OrderRecord[], opportunities: OpportunityR
   return Array.from(customers.values()).sort((left, right) => left.name.localeCompare(right.name));
 }
 
-async function loadFilterOptions(database: ReportsQueryDb, orders: OrderRecord[], opportunities: OpportunityRecord[], products: ProductServiceRecord[]): Promise<ReportsFilterOptions> {
-  const owners = database.user
-    ? await database.user.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, email: true } })
-    : [];
+async function loadFilterOptions(database: ReportsQueryDb, organizationId: string, orders: OrderRecord[], opportunities: OpportunityRecord[], products: ProductServiceRecord[], preloadedOwners?: ReportOption[]): Promise<ReportsFilterOptions> {
+  const owners = preloadedOwners ?? (database.user
+    ? await database.user.findMany({ where: { memberships: { some: { organizationId, status: "ACTIVE" } } }, orderBy: { name: "asc" }, select: { id: true, name: true, email: true } })
+    : []);
   const stageMap = new Map<string, ReportOption>();
   for (const opportunity of opportunities) stageMap.set(opportunity.stage.id, { id: opportunity.stage.id, name: opportunity.stage.name });
 
@@ -475,18 +478,23 @@ async function loadFilterOptions(database: ReportsQueryDb, orders: OrderRecord[]
 
 export async function getReportsOverview(
   user: ReportsUser,
-  database: ReportsQueryDb = db as unknown as ReportsQueryDb,
+  database?: ReportsQueryDb,
   filters: ReportsFilters = {},
-  now = new Date()
+  now = new Date(),
+  preloadedOwners?: ReportOption[]
 ): Promise<ReportsOverview> {
+  if (!database) {
+    const owners = await listOrganizationUserOptions(user.organizationId, ["ADMIN", "SALES", "FINANCE", "PRODUCTION", "READ_ONLY", "OWNER"]);
+    return withOrganization(user.organizationId, (tx) => getReportsOverview(user, tx as unknown as ReportsQueryDb, filters, now, owners));
+  }
   assertCanViewReports(user);
 
   const settings = database.businessSettings
     ? await database.businessSettings.findUnique({ where: { id: "default" }, select: { defaultCurrency: true } })
     : null;
   const currency = filters.currency ?? settings?.defaultCurrency ?? "INR";
-  const orderWhere = buildOrderWhere({ ...filters, currency });
-  const opportunityWhere = buildOpportunityWhere(filters);
+  const orderWhere = buildOrderWhere(user.organizationId, { ...filters, currency });
+  const opportunityWhere = buildOpportunityWhere(user.organizationId, filters);
 
   const [opportunities, orders, payments, productionWorkItems, activities, invoices, costs, incentives, products] = await Promise.all([
     database.opportunity.findMany({
@@ -511,8 +519,9 @@ export async function getReportsOverview(
         payments: { select: { id: true, amountPaisa: true } }
       }
     }),
-    database.payment.findMany({ orderBy: [{ paymentDate: "desc" }], select: { amountPaisa: true, id: true, paymentDate: true } }),
+    database.payment.findMany({ where: { organizationId: user.organizationId }, orderBy: [{ paymentDate: "desc" }], select: { amountPaisa: true, id: true, paymentDate: true } }),
     database.productionWorkItem.findMany({
+      where: { organizationId: user.organizationId },
       orderBy: [{ dueAt: "asc" }, { updatedAt: "desc" }],
       include: {
         assignedTo: { select: { id: true, name: true } },
@@ -534,11 +543,12 @@ export async function getReportsOverview(
       }
     }),
     database.activity.findMany({
-      where: { status: "OPEN" },
+      where: { organizationId: user.organizationId, status: "OPEN" },
       orderBy: [{ dueAt: "asc" }],
       include: { leadCustomer: { select: { id: true, name: true } }, owner: { select: { id: true, name: true } } }
     }),
     database.invoice?.findMany({
+      where: { organizationId: user.organizationId },
       orderBy: [{ invoiceDate: "desc" }],
       include: {
         order: {
@@ -553,18 +563,20 @@ export async function getReportsOverview(
       }
     }) ?? Promise.resolve([]),
     database.costComponent?.findMany({
+      where: { organizationId: user.organizationId },
       orderBy: [{ id: "asc" }],
       include: {
         order: { select: { id: true, currency: true, leadCustomer: { select: { id: true, name: true } }, orderNumber: true } }
       }
     }) ?? Promise.resolve([]),
     database.incentive?.findMany({
+      where: { organizationId: user.organizationId },
       orderBy: [{ id: "asc" }],
       include: {
         order: { select: { id: true, currency: true, leadCustomer: { select: { id: true, name: true } }, orderNumber: true } }
       }
     }) ?? Promise.resolve([]),
-    database.productService?.findMany({ orderBy: [{ name: "asc" }], select: { id: true, name: true } }) ?? Promise.resolve([])
+    database.productService?.findMany({ where: { organizationId: user.organizationId }, orderBy: [{ name: "asc" }], select: { id: true, name: true } }) ?? Promise.resolve([])
   ]);
 
   const currentOrders = orders.filter(isCurrentOrder);
@@ -574,7 +586,7 @@ export async function getReportsOverview(
   const pendingProduction = buildPendingProduction(productionWorkItems);
   const upcomingFollowUps = buildUpcomingFollowUps(activities, now);
   const topBillings = currentOrders.map(toBillingSummary).sort((left, right) => right.bookedValuePaisa - left.bookedValuePaisa);
-  const filterOptions = await loadFilterOptions(database, currentOrders, opportunities, products);
+  const filterOptions = await loadFilterOptions(database, user.organizationId, currentOrders, opportunities, products, preloadedOwners);
 
   return {
     collections,

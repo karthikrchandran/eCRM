@@ -6,7 +6,7 @@ import { listOpportunityFormOptions } from "@/server/opportunities/queries";
 
 export default async function OpportunityStagesPage() {
   const user = await requireUser();
-  const { stages } = await listOpportunityFormOptions();
+  const { stages } = await listOpportunityFormOptions(user);
 
   return (
     <div className="space-y-6">

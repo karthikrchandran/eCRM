@@ -1,7 +1,7 @@
 import { describe, expect, test, vi } from "vitest";
 import { getOrderFinanceSummary } from "./queries";
 
-const admin = { id: "admin", role: "ADMIN" as const };
+const admin = { id: "admin", organizationId: "org_test", role: "ADMIN" as const };
 
 describe("finance queries", () => {
   test("loads order finance summary with finance history and incentive splits", async () => {
@@ -11,7 +11,7 @@ describe("finance queries", () => {
 
     expect(summary).toEqual({ id: "order_1", invoices: [], payments: [], costComponents: [], incentive: null });
     expect(findUnique).toHaveBeenCalledWith({
-      where: { id: "order_1" },
+      where: { id: "order_1", organizationId: "org_test" },
       include: expect.objectContaining({
         costComponents: expect.any(Object),
         incentive: expect.any(Object),

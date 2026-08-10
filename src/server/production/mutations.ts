@@ -1,11 +1,13 @@
 import type { OrderStatus, Prisma, ProductionStageStatus } from "@prisma/client";
-import { db } from "@/server/db";
+import { assertTenantMember } from "@/server/organizations/tenant-member-guard";
+import { assertOrganizationUserEligible } from "@/server/organizations/member-options";
+import { withOrganization } from "@/server/organizations/with-organization";
 import { assertCanManageProductionConfig, assertCanWriteProductionRecords } from "./permissions";
 import type { ProductionStageStatusInput, ProductionTemplateInput, ProductionTemplateStageInput, ProductionUser } from "./types";
 
 type ProductionMutationDb = {
   orderLineItem: {
-    findUnique: (args: Prisma.OrderLineItemFindUniqueArgs) => Promise<{
+    findFirst: (args: Prisma.OrderLineItemFindFirstArgs) => Promise<{
       id: string;
       orderId: string;
       productNameSnapshot: string;
@@ -15,7 +17,7 @@ type ProductionMutationDb = {
     } | null>;
   };
   productionTemplate: {
-    findUnique: (args: Prisma.ProductionTemplateFindUniqueArgs) => Promise<{
+    findFirst: (args: Prisma.ProductionTemplateFindFirstArgs) => Promise<{
       id: string;
       key: string;
       stages: Array<{
@@ -35,7 +37,7 @@ type ProductionMutationDb = {
   order?: {
     update: (args: Prisma.OrderUpdateArgs) => Promise<{ id: string; status?: OrderStatus | string }>;
   };
-  $transaction: <T>(callback: (transaction: ProductionTransactionDb) => Promise<T>) => Promise<T>;
+  $transaction?: <T>(callback: (transaction: ProductionTransactionDb) => Promise<T>) => Promise<T>;
 };
 
 type ProductionTransactionDb = {
@@ -64,8 +66,9 @@ type ProductionTransactionDb = {
 };
 
 type ProductionStageDb = {
+  $queryRaw?<T>(query: TemplateStringsArray, ...values: unknown[]): Promise<T>;
   productionStageInstance: {
-    findUnique: (args: Prisma.ProductionStageInstanceFindUniqueArgs) => Promise<{
+    findFirst: (args: Prisma.ProductionStageInstanceFindFirstArgs) => Promise<{
       id: string;
       workItemId: string;
       status: ProductionStageStatus | string;
@@ -98,22 +101,31 @@ type ProductionStageDb = {
   order?: {
     update: (args: Prisma.OrderUpdateArgs) => Promise<{ id: string; status?: OrderStatus | string }>;
   };
-  $transaction: <T>(callback: (transaction: ProductionTransactionDb) => Promise<T>) => Promise<T>;
+  $transaction?: <T>(callback: (transaction: ProductionTransactionDb) => Promise<T>) => Promise<T>;
   now?: () => Date;
 };
 
 type ProductionConfigDb = {
   productionTemplate: {
+    findFirst: (args: Prisma.ProductionTemplateFindFirstArgs) => Promise<{ id: string } | null>;
     create: (args: Prisma.ProductionTemplateCreateArgs) => Promise<{ id: string }>;
     update: (args: Prisma.ProductionTemplateUpdateArgs) => Promise<{ id: string }>;
     upsert: (args: Prisma.ProductionTemplateUpsertArgs) => Promise<{ id: string }>;
   };
   productionTemplateStage: {
+    findFirst: (args: Prisma.ProductionTemplateStageFindFirstArgs) => Promise<{ id: string } | null>;
     create: (args: Prisma.ProductionTemplateStageCreateArgs) => Promise<{ id: string }>;
     update: (args: Prisma.ProductionTemplateStageUpdateArgs) => Promise<{ id: string }>;
     upsert: (args: Prisma.ProductionTemplateStageUpsertArgs) => Promise<{ id: string }>;
   };
 };
+
+function inProductionTransaction<T>(
+  database: { $transaction?: <R>(callback: (transaction: ProductionTransactionDb) => Promise<R>) => Promise<R> },
+  work: (transaction: ProductionTransactionDb) => Promise<T>
+) {
+  return database.$transaction ? database.$transaction(work) : work(database as ProductionTransactionDb);
+}
 
 function deriveWorkItemStatus(stages: Array<{ status: ProductionStageStatus | string }>): ProductionStageStatus {
   if (stages.length > 0 && stages.every((stage) => stage.status === "DONE" || stage.status === "SKIPPED")) {
@@ -206,12 +218,13 @@ function stageUpdateDataForPrismaArgs(input: ProductionStageStatusInput, started
 export async function instantiateProductionForOrderLineItem(
   user: ProductionUser,
   orderLineItemId: string,
-  database: ProductionMutationDb = db as unknown as ProductionMutationDb
-) {
+  database?: ProductionMutationDb
+): Promise<{ id: string }> {
+  if (!database) return withOrganization(user.organizationId, (tx) => instantiateProductionForOrderLineItem(user, orderLineItemId, tx as unknown as ProductionMutationDb));
   assertCanWriteProductionRecords(user);
 
   const existing = await database.productionWorkItem.findFirst({
-    where: { orderLineItemId },
+    where: { orderLineItemId, organizationId: user.organizationId },
     select: { id: true }
   });
 
@@ -219,8 +232,8 @@ export async function instantiateProductionForOrderLineItem(
     return existing;
   }
 
-  const orderLineItem = await database.orderLineItem.findUnique({
-    where: { id: orderLineItemId },
+  const orderLineItem = await database.orderLineItem.findFirst({
+    where: { id: orderLineItemId, organizationId: user.organizationId },
     select: {
       id: true,
       orderId: true,
@@ -236,8 +249,8 @@ export async function instantiateProductionForOrderLineItem(
   }
 
   const productionTemplate = orderLineItem.productionTemplateKeySnapshot
-    ? await database.productionTemplate.findUnique({
-        where: { key: orderLineItem.productionTemplateKeySnapshot },
+    ? await database.productionTemplate.findFirst({
+        where: { organizationId: user.organizationId, key: orderLineItem.productionTemplateKeySnapshot },
         select: {
           id: true,
           key: true,
@@ -249,9 +262,10 @@ export async function instantiateProductionForOrderLineItem(
       })
     : null;
 
-  return database.$transaction(async (transaction) =>
+  return inProductionTransaction(database, async (transaction) =>
     transaction.productionWorkItem!.create!({
       data: {
+        organizationId: user.organizationId,
         createdById: user.id,
         orderLineItemId,
         productCategorySnapshot: orderLineItem.productCategorySnapshot,
@@ -280,12 +294,40 @@ export async function updateProductionStageStatus(
   user: ProductionUser,
   stageInstanceId: string,
   input: ProductionStageStatusInput,
-  database: ProductionStageDb = db as unknown as ProductionStageDb
-) {
+  database?: ProductionStageDb
+): Promise<{ id: string; status: ProductionStageStatus | string }> {
   assertCanWriteProductionRecords(user);
 
-  const stage = await database.productionStageInstance.findUnique({
-    where: { id: stageInstanceId },
+  if (input.assignedToId && !database) {
+    await assertOrganizationUserEligible(user.organizationId, input.assignedToId, ["ADMIN", "SALES", "PRODUCTION"]);
+  }
+
+  if (!database) {
+    return withOrganization(user.organizationId, async (tx) => {
+      if (input.assignedToId) {
+        await assertTenantMember(tx, input.assignedToId, ["ADMIN", "SALES", "PRODUCTION"]);
+      }
+      return updateProductionStageStatusInTenant(user, stageInstanceId, input, tx as unknown as ProductionStageDb);
+    });
+  }
+
+  if (input.assignedToId) {
+    if (!database.$queryRaw) throw new Error("Organization member was not found.");
+    await assertTenantMember(database as Required<Pick<ProductionStageDb, "$queryRaw">>, input.assignedToId, ["ADMIN", "SALES", "PRODUCTION"]);
+  }
+
+  return updateProductionStageStatusInTenant(user, stageInstanceId, input, database);
+}
+
+async function updateProductionStageStatusInTenant(
+  user: ProductionUser,
+  stageInstanceId: string,
+  input: ProductionStageStatusInput,
+  database: ProductionStageDb
+): Promise<{ id: string; status: ProductionStageStatus | string }> {
+
+  const stage = await database.productionStageInstance.findFirst({
+    where: { id: stageInstanceId, organizationId: user.organizationId },
     select: {
       id: true,
       startedAt: true,
@@ -312,7 +354,7 @@ export async function updateProductionStageStatus(
   const now = database.now?.() ?? new Date();
   const orderId = stage.workItem.orderLineItem.orderId;
 
-  return database.$transaction(async (transaction) => {
+  return inProductionTransaction(database, async (transaction) => {
     const updatedStage = await transaction.productionStageInstance!.update({
       where: { id: stageInstanceId },
       data: stageUpdateDataForPrismaArgs(input, stage.startedAt, user.id, now)
@@ -321,6 +363,7 @@ export async function updateProductionStageStatus(
     if (input.noteBody) {
       await transaction.productionNote!.create({
         data: {
+          organizationId: user.organizationId,
           body: input.noteBody,
           createdById: user.id,
           stageInstanceId,
@@ -330,7 +373,7 @@ export async function updateProductionStageStatus(
     }
 
     const stages = await transaction.productionStageInstance!.findMany({
-      where: { workItemId: stage.workItemId },
+      where: { workItemId: stage.workItemId, organizationId: user.organizationId },
       select: { completedAt: true, id: true, startedAt: true, status: true }
     });
     const workItemStatus = deriveWorkItemStatus(stages);
@@ -345,7 +388,7 @@ export async function updateProductionStageStatus(
     });
 
     const workItems = await transaction.productionWorkItem!.findMany({
-      where: { orderLineItem: { orderId } },
+      where: { organizationId: user.organizationId, orderLineItem: { orderId } },
       select: { id: true, status: true }
     });
     await transaction.order!.update({
@@ -360,11 +403,13 @@ export async function updateProductionStageStatus(
 export async function saveProductionTemplate(
   user: ProductionUser,
   input: ProductionTemplateInput,
-  database: ProductionConfigDb = db as unknown as ProductionConfigDb
-) {
+  database?: ProductionConfigDb
+): Promise<{ id: string }> {
+  if (!database) return withOrganization(user.organizationId, (tx) => saveProductionTemplate(user, input, tx as unknown as ProductionConfigDb));
   assertCanManageProductionConfig(user);
 
   const data = {
+    organizationId: user.organizationId,
     active: input.active,
     description: input.description ?? null,
     key: input.key,
@@ -373,6 +418,8 @@ export async function saveProductionTemplate(
   };
 
   if (input.id) {
+    const existing = await database.productionTemplate.findFirst({ where: { id: input.id, organizationId: user.organizationId }, select: { id: true } });
+    if (!existing) throw new Error("Production template was not found.");
     return database.productionTemplate.update({
       where: { id: input.id },
       data
@@ -380,7 +427,7 @@ export async function saveProductionTemplate(
   }
 
   return database.productionTemplate.upsert({
-    where: { key: input.key },
+    where: { organizationId_key: { organizationId: user.organizationId, key: input.key } },
     create: data,
     update: data
   });
@@ -389,11 +436,19 @@ export async function saveProductionTemplate(
 export async function saveProductionTemplateStage(
   user: ProductionUser,
   input: ProductionTemplateStageInput,
-  database: ProductionConfigDb = db as unknown as ProductionConfigDb
-) {
+  database?: ProductionConfigDb
+): Promise<{ id: string }> {
+  if (!database) return withOrganization(user.organizationId, (tx) => saveProductionTemplateStage(user, input, tx as unknown as ProductionConfigDb));
   assertCanManageProductionConfig(user);
 
+  const template = await database.productionTemplate.findFirst({
+    where: { id: input.templateId, organizationId: user.organizationId },
+    select: { id: true }
+  });
+  if (!template) throw new Error("Production template was not found.");
+
   const data = {
+    organizationId: user.organizationId,
     defaultDurationDays: input.defaultDurationDays ?? null,
     description: input.description ?? null,
     key: input.key,
@@ -404,6 +459,8 @@ export async function saveProductionTemplateStage(
   };
 
   if (input.stageId) {
+    const existing = await database.productionTemplateStage.findFirst({ where: { id: input.stageId, organizationId: user.organizationId }, select: { id: true } });
+    if (!existing) throw new Error("Production template stage was not found.");
     return database.productionTemplateStage.update({
       where: { id: input.stageId },
       data
@@ -411,7 +468,7 @@ export async function saveProductionTemplateStage(
   }
 
   return database.productionTemplateStage.upsert({
-    where: { templateId_key: { key: input.key, templateId: input.templateId } },
+    where: { organizationId_templateId_key: { organizationId: user.organizationId, key: input.key, templateId: input.templateId } },
     create: data,
     update: data
   });

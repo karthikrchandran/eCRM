@@ -11,8 +11,8 @@ import {
   updateInvoice
 } from "./mutations";
 
-const admin = { id: "admin", role: "ADMIN" as const };
-const sales = { id: "sales", role: "SALES" as const };
+const admin = { id: "admin", organizationId: "org_test", role: "ADMIN" as const };
+const sales = { id: "sales", organizationId: "org_test", role: "SALES" as const };
 
 const order = {
   id: "order_1",
@@ -65,6 +65,7 @@ describe("finance mutations", () => {
     const invoiceUpdate = vi.fn().mockResolvedValue({ id: "invoice_1" });
     const incentiveUpsert = vi.fn().mockResolvedValue({ id: "incentive_1" });
     const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([{ allowed: true }]),
       incentive: { upsert: incentiveUpsert },
       invoice: { update: invoiceUpdate },
       order: {
@@ -94,12 +95,13 @@ describe("finance mutations", () => {
         allocations: { create: [{ amountPaisa: 118000, invoiceId: "invoice_1" }] },
         amountPaisa: 118000,
         createdById: "admin",
-        orderId: "order_1"
+        orderId: "order_1",
+        organizationId: "org_test"
       })
     });
     expect(invoiceUpdate).toHaveBeenCalledWith({ where: { id: "invoice_1" }, data: { status: "PAID", updatedById: "admin" } });
     expect(incentiveUpsert).toHaveBeenCalledWith({
-      where: { orderId: "order_1" },
+      where: { organizationId_orderId: { organizationId: "org_test", orderId: "order_1" } },
       create: expect.objectContaining({
         calculatedAmountPaisa: 5000,
         payableAmountPaisa: 5000,
@@ -148,6 +150,7 @@ describe("finance mutations", () => {
     const costCreate = vi.fn().mockResolvedValue({ id: "cost_1" });
     const incentiveUpsert = vi.fn().mockResolvedValue({ id: "incentive_1" });
     const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([{ allowed: true }]),
       costComponent: { create: costCreate },
       incentive: { upsert: incentiveUpsert },
       order: {
@@ -170,7 +173,7 @@ describe("finance mutations", () => {
       data: expect.objectContaining({ amountPaisa: 20000, createdById: "admin", status: "DRAFT", updatedById: "admin" })
     });
     expect(incentiveUpsert).toHaveBeenCalledWith({
-      where: { orderId: "order_1" },
+      where: { organizationId_orderId: { organizationId: "org_test", orderId: "order_1" } },
       create: expect.objectContaining({ calculatedAmountPaisa: 4000, grossMarginPaisa: 80000 }),
       update: expect.objectContaining({ calculatedAmountPaisa: 4000, grossMarginPaisa: 80000 })
     });
@@ -182,7 +185,7 @@ describe("finance mutations", () => {
       admin,
       "invoice_1",
       { gstPaisa: 9000, invoiceDate: new Date("2026-08-03"), invoiceNumber: "INV-1A", orderId: "order_1", subtotalPaisa: 50000 },
-      { invoice: { create: vi.fn(), update: invoiceUpdate }, order: { findUnique: vi.fn().mockResolvedValue(order) } }
+      { invoice: { create: vi.fn(), findFirst: vi.fn().mockResolvedValue({ id: "invoice_1" }), update: invoiceUpdate }, order: { findUnique: vi.fn().mockResolvedValue(order) } }
     );
     expect(invoiceUpdate).toHaveBeenCalledWith({
       where: { id: "invoice_1" },
@@ -192,6 +195,7 @@ describe("finance mutations", () => {
     const costUpdate = vi.fn().mockResolvedValue({ id: "cost_1" });
     const incentiveUpsert = vi.fn().mockResolvedValue({ id: "incentive_1" });
     const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([{ allowed: true }]),
       costComponent: {
         findUnique: vi.fn().mockResolvedValue({ id: "cost_1", orderId: "order_1" }),
         update: costUpdate
@@ -212,6 +216,66 @@ describe("finance mutations", () => {
       })
     });
     expect(incentiveUpsert).toHaveBeenCalled();
+  });
+
+  test.each(["cross-organization", "revoked", "inactive"])(
+    "rolls back automatic incentive recalculation for a %s recipient",
+    async () => {
+      const incentiveUpsert = vi.fn();
+      const tx = {
+        $queryRaw: vi.fn().mockResolvedValue([{ allowed: false }]),
+        incentive: { upsert: incentiveUpsert },
+        invoice: { update: vi.fn() },
+        order: { findUnique: vi.fn().mockResolvedValue(order) },
+        payment: { create: vi.fn().mockResolvedValue({ id: "payment_denied" }) }
+      };
+      const database = { $transaction: vi.fn(async (callback) => callback(tx)) };
+
+      await expect(recordPayment(admin, {
+        allocations: [], amountPaisa: 1, mode: "BANK_TRANSFER", orderId: "order_1",
+        paymentDate: new Date("2026-08-02")
+      }, database as never)).rejects.toThrow("Organization member was not found.");
+      expect(incentiveUpsert).not.toHaveBeenCalled();
+    }
+  );
+
+  test.each([
+    ["reject", (database: unknown) => rejectIncentive(admin, "incentive_B", "Denied", database as never)],
+    ["paid", (database: unknown) => markIncentivePaid(admin, "incentive_B", "PAY-X", database as never)]
+  ])("returns uniform not-found for %s when scoped lookup is null", async (_name, mutate) => {
+    const update = vi.fn();
+    await expect(mutate({ incentive: { findFirst: vi.fn().mockResolvedValue(null), update } }))
+      .rejects.toThrow("Incentive was not found.");
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  test("rejects an invoice target from another organization before update", async () => {
+    const update = vi.fn();
+    await expect(updateInvoice(
+      admin,
+      "invoice_B",
+      { gstPaisa: 0, invoiceDate: new Date("2026-08-03"), invoiceNumber: "INV-A", orderId: "order_1", subtotalPaisa: 1 },
+      {
+        invoice: { create: vi.fn(), findFirst: vi.fn().mockResolvedValue(null), update },
+        order: { findFirst: vi.fn().mockResolvedValue(order) }
+      } as never
+    )).rejects.toThrow("Invoice was not found.");
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  test("rejects a cost line item outside the order and organization", async () => {
+    const create = vi.fn();
+    const tx = {
+      costComponent: { create },
+      incentive: { upsert: vi.fn() },
+      order: { findFirst: vi.fn().mockResolvedValue(order) },
+      orderLineItem: { findFirst: vi.fn().mockResolvedValue(null) }
+    };
+
+    await expect(createCostComponent(admin, {
+      amountPaisa: 1, category: "Vendor", description: "Cross tenant", orderId: "order_1", orderLineItemId: "line_B"
+    }, { $transaction: vi.fn(async (callback) => callback(tx)) } as never)).rejects.toThrow("Order line item was not found.");
+    expect(create).not.toHaveBeenCalled();
   });
 
   test("rejects Sales writes and incentive approval before ready", async () => {
@@ -240,29 +304,47 @@ describe("finance mutations", () => {
         { percent: 40, userId: "sales_b" }
       ],
       {
+        $queryRaw: vi.fn().mockResolvedValue([{ allowed: true }]),
         incentive: { findUnique: vi.fn().mockResolvedValue({ id: "incentive_1", payableAmountPaisa: 10000 }) },
         incentiveSplit: { createMany: splitCreateMany, deleteMany: splitDeleteMany }
       }
     );
 
-    expect(splitDeleteMany).toHaveBeenCalledWith({ where: { incentiveId: "incentive_1" } });
+    expect(splitDeleteMany).toHaveBeenCalledWith({ where: { incentiveId: "incentive_1", organizationId: "org_test" } });
     expect(splitCreateMany).toHaveBeenCalledWith({
       data: [
-        { amountPaisa: 6000, incentiveId: "incentive_1", percent: 60, userId: "sales_a" },
-        { amountPaisa: 4000, incentiveId: "incentive_1", percent: 40, userId: "sales_b" }
+        { amountPaisa: 6000, incentiveId: "incentive_1", organizationId: "org_test", percent: 60, userId: "sales_a" },
+        { amountPaisa: 4000, incentiveId: "incentive_1", organizationId: "org_test", percent: 40, userId: "sales_b" }
       ]
     });
 
-    await rejectIncentive(admin, "incentive_1", "Margin dispute", { incentive: { update: incentiveUpdate } });
+    await rejectIncentive(admin, "incentive_1", "Margin dispute", { incentive: { findFirst: vi.fn().mockResolvedValue({ id: "incentive_1" }), update: incentiveUpdate } });
     expect(incentiveUpdate).toHaveBeenCalledWith({
       where: { id: "incentive_1" },
       data: expect.objectContaining({ rejectedById: "admin", rejectionReason: "Margin dispute", status: "REJECTED" })
     });
 
-    await markIncentivePaid(admin, "incentive_1", "PAY-1", { incentive: { update: incentiveUpdate } });
+    await markIncentivePaid(admin, "incentive_1", "PAY-1", { incentive: { findFirst: vi.fn().mockResolvedValue({ id: "incentive_1" }), update: incentiveUpdate } });
     expect(incentiveUpdate).toHaveBeenCalledWith({
       where: { id: "incentive_1" },
       data: expect.objectContaining({ paidById: "admin", paymentReference: "PAY-1", status: "PAID" })
     });
+  });
+
+  test("rejects a foreign incentive split member before replacing existing splits", async () => {
+    const deleteMany = vi.fn();
+    const createMany = vi.fn();
+    const query = vi.fn().mockResolvedValue([{ allowed: false }]);
+
+    await expect(updateIncentiveSplits(admin, "incentive_1", [
+      { percent: 100, userId: "user_B" }
+    ], {
+      $queryRaw: query,
+      incentive: { findFirst: vi.fn().mockResolvedValue({ id: "incentive_1", payableAmountPaisa: 100 }) },
+      incentiveSplit: { createMany, deleteMany }
+    } as never)).rejects.toThrow("Organization member was not found.");
+
+    expect(deleteMany).not.toHaveBeenCalled();
+    expect(createMany).not.toHaveBeenCalled();
   });
 });

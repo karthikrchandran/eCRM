@@ -1,5 +1,5 @@
 import { ZodError } from "zod";
-import { requireSharedDataApiToken } from "@/server/shared-records/api-auth";
+import { getSharedDataOrganizationId, requireSharedDataApiToken } from "@/server/shared-records/api-auth";
 import { upsertSharedRecord } from "@/server/shared-records/mutations";
 import { listSharedRecords } from "@/server/shared-records/queries";
 import { sharedRecordListFilterSchema } from "@/server/shared-records/validators";
@@ -13,11 +13,13 @@ export async function GET(request: Request) {
   if (authResponse) {
     return authResponse;
   }
+  const organizationId = getSharedDataOrganizationId();
+  if (!organizationId) return Response.json({ error: "Shared data organization is not configured." }, { status: 500 });
 
   try {
     const searchParams = new URL(request.url).searchParams;
     const filters = sharedRecordListFilterSchema.parse(Object.fromEntries(searchParams.entries()));
-    const records = await listSharedRecords(filters);
+    const records = await listSharedRecords(organizationId, filters);
 
     return Response.json({ records });
   } catch (error) {
@@ -34,6 +36,8 @@ export async function POST(request: Request) {
   if (authResponse) {
     return authResponse;
   }
+  const organizationId = getSharedDataOrganizationId();
+  if (!organizationId) return Response.json({ error: "Shared data organization is not configured." }, { status: 500 });
 
   let body: unknown;
   try {
@@ -43,7 +47,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const result = await upsertSharedRecord(body);
+    const result = await upsertSharedRecord(organizationId, body);
 
     return Response.json(result, { status: result.created ? 201 : 200 });
   } catch (error) {

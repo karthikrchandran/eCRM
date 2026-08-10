@@ -1,19 +1,19 @@
 import type { Prisma } from "@prisma/client";
-import { db } from "@/server/db";
+import { withOrganization } from "@/server/organizations/with-organization";
+import { assertOrganizationUserEligible } from "@/server/organizations/member-options";
+import { assertTenantMember } from "@/server/organizations/tenant-member-guard";
 import { assertCanWriteOpportunities, type OpportunityUser } from "./permissions";
 import type { OpportunityInput, OpportunitySplitInput, PipelineStageInput, SalesTargetInput } from "./types";
 
 type IdResult = { id: string };
 
 type OwnerDb = {
-  user: {
-    findFirst: (args: Prisma.UserFindFirstArgs) => Promise<IdResult | null>;
-  };
+  $queryRaw<T>(query: TemplateStringsArray, ...values: unknown[]): Promise<T>;
 };
 
 type LeadDb = {
   leadCustomer: {
-    findUnique: (args: Prisma.LeadCustomerFindUniqueArgs) => Promise<IdResult | null>;
+    findFirst: (args: Prisma.LeadCustomerFindFirstArgs) => Promise<IdResult | null>;
   };
 };
 
@@ -54,7 +54,7 @@ type CreateOpportunityDb = OwnerDb &
       create: (args: Prisma.OpportunityCreateArgs) => Promise<IdResult>;
     };
     opportunityOwnerSplit: OpportunityTransactionDb["opportunityOwnerSplit"];
-    $transaction: (callback: (tx: unknown) => Promise<IdResult>) => Promise<IdResult>;
+    $transaction?: (callback: (tx: unknown) => Promise<IdResult>) => Promise<IdResult>;
   };
 
 type UpdateOpportunityDb = OwnerDb &
@@ -62,15 +62,16 @@ type UpdateOpportunityDb = OwnerDb &
   BranchDb &
   StageDb & {
     opportunity: {
-      findUnique: (args: Prisma.OpportunityFindUniqueArgs) => Promise<IdResult | null>;
+      findFirst: (args: Prisma.OpportunityFindFirstArgs) => Promise<IdResult | null>;
       update: (args: Prisma.OpportunityUpdateArgs) => Promise<IdResult>;
     };
     opportunityOwnerSplit: OpportunityTransactionDb["opportunityOwnerSplit"];
-    $transaction: (callback: (tx: unknown) => Promise<IdResult>) => Promise<IdResult>;
+    $transaction?: (callback: (tx: unknown) => Promise<IdResult>) => Promise<IdResult>;
   };
 
 type MoveOpportunityDb = StageDb & {
   opportunity: {
+    findFirst: (args: Prisma.OpportunityFindFirstArgs) => Promise<IdResult | null>;
     update: (args: Prisma.OpportunityUpdateArgs) => Promise<IdResult>;
   };
 };
@@ -87,20 +88,14 @@ type StageManagementDb = {
   };
 };
 
-async function assertActiveOwner(database: OwnerDb, ownerId: string) {
-  const owner = await database.user.findFirst({
-    where: { id: ownerId, active: true, role: { in: ["ADMIN", "SALES"] } },
-    select: { id: true }
-  });
-
-  if (!owner) {
-    throw new Error("Choose an active Admin or Sales owner.");
-  }
+async function assertActiveOwner(database: OwnerDb, organizationId: string, ownerId: string) {
+  void organizationId;
+  await assertTenantMember(database, ownerId, ["ADMIN", "SALES"]);
 }
 
-async function assertLeadExists(database: LeadDb, leadCustomerId: string) {
-  const lead = await database.leadCustomer.findUnique({
-    where: { id: leadCustomerId },
+async function assertLeadExists(database: LeadDb, organizationId: string, leadCustomerId: string) {
+  const lead = await database.leadCustomer.findFirst({
+    where: { id: leadCustomerId, organizationId },
     select: { id: true }
   });
 
@@ -109,9 +104,9 @@ async function assertLeadExists(database: LeadDb, leadCustomerId: string) {
   }
 }
 
-async function assertBranchBelongsToLead(database: BranchDb, leadCustomerId: string, branchId: string) {
+async function assertBranchBelongsToLead(database: BranchDb, organizationId: string, leadCustomerId: string, branchId: string) {
   const branch = await database.branch?.findFirst({
-    where: { id: branchId, leadCustomerId },
+    where: { id: branchId, leadCustomerId, organizationId },
     select: { id: true }
   });
 
@@ -120,9 +115,9 @@ async function assertBranchBelongsToLead(database: BranchDb, leadCustomerId: str
   }
 }
 
-async function assertActiveStage(database: StageDb, stageId: string) {
+async function assertActiveStage(database: StageDb, organizationId: string, stageId: string) {
   const stage = await database.pipelineStage.findFirst({
-    where: { id: stageId, active: true },
+    where: { id: stageId, organizationId, active: true },
     select: { id: true }
   });
 
@@ -131,7 +126,7 @@ async function assertActiveStage(database: StageDb, stageId: string) {
   }
 }
 
-async function assertValidSplits(database: OwnerDb, splits: OpportunitySplitInput[]) {
+async function assertValidSplits(database: OwnerDb, organizationId: string, splits: OpportunitySplitInput[]) {
   if (splits.length === 0) {
     return;
   }
@@ -147,12 +142,13 @@ async function assertValidSplits(database: OwnerDb, splits: OpportunitySplitInpu
       throw new Error("Split percentages must be whole numbers from 1 to 100.");
     }
 
-    await assertActiveOwner(database, split.userId);
+    await assertActiveOwner(database, organizationId, split.userId);
   }
 }
 
 function opportunityData(user: OpportunityUser, input: OpportunityInput) {
   return {
+    organizationId: user.organizationId,
     leadCustomerId: input.leadCustomerId,
     branchId: input.branchId,
     stageId: input.stageId,
@@ -172,19 +168,24 @@ export async function createOpportunity(
   user: OpportunityUser,
   input: OpportunityInput,
   splits: OpportunitySplitInput[] = [],
-  database: CreateOpportunityDb = db as unknown as CreateOpportunityDb
-) {
+  database?: CreateOpportunityDb
+): Promise<IdResult> {
+  if (!database) {
+    await assertOrganizationUserEligible(user.organizationId, input.ownerId, ["ADMIN", "SALES"]);
+    for (const split of splits) await assertOrganizationUserEligible(user.organizationId, split.userId, ["ADMIN", "SALES"]);
+    return withOrganization(user.organizationId, (tx) => createOpportunity(user, input, splits, tx as unknown as CreateOpportunityDb));
+  }
   assertCanWriteOpportunities(user);
-  await assertLeadExists(database, input.leadCustomerId);
-  await assertActiveOwner(database, input.ownerId);
-  await assertActiveStage(database, input.stageId);
-  await assertValidSplits(database, splits);
+  await assertLeadExists(database, user.organizationId, input.leadCustomerId);
+  await assertActiveOwner(database, user.organizationId, input.ownerId);
+  await assertActiveStage(database, user.organizationId, input.stageId);
+  await assertValidSplits(database, user.organizationId, splits);
 
   if (input.branchId) {
-    await assertBranchBelongsToLead(database, input.leadCustomerId, input.branchId);
+    await assertBranchBelongsToLead(database, user.organizationId, input.leadCustomerId, input.branchId);
   }
 
-  return database.$transaction(async (tx) => {
+  const work = async (tx: unknown) => {
     const transaction = tx as OpportunityTransactionDb;
     const opportunity = await transaction.opportunity.create({
       data: {
@@ -196,6 +197,7 @@ export async function createOpportunity(
     if (splits.length > 0) {
       await transaction.opportunityOwnerSplit.createMany({
         data: splits.map((split) => ({
+          organizationId: user.organizationId,
           opportunityId: opportunity.id,
           userId: split.userId,
           percent: split.percent
@@ -204,7 +206,8 @@ export async function createOpportunity(
     }
 
     return opportunity;
-  });
+  };
+  return database.$transaction ? database.$transaction(work) : work(database);
 }
 
 export async function updateOpportunity(
@@ -212,11 +215,16 @@ export async function updateOpportunity(
   opportunityId: string,
   input: OpportunityInput,
   splits: OpportunitySplitInput[] = [],
-  database: UpdateOpportunityDb = db as unknown as UpdateOpportunityDb
-) {
+  database?: UpdateOpportunityDb
+): Promise<IdResult> {
+  if (!database) {
+    await assertOrganizationUserEligible(user.organizationId, input.ownerId, ["ADMIN", "SALES"]);
+    for (const split of splits) await assertOrganizationUserEligible(user.organizationId, split.userId, ["ADMIN", "SALES"]);
+    return withOrganization(user.organizationId, (tx) => updateOpportunity(user, opportunityId, input, splits, tx as unknown as UpdateOpportunityDb));
+  }
   assertCanWriteOpportunities(user);
-  const existing = await database.opportunity.findUnique({
-    where: { id: opportunityId },
+  const existing = await database.opportunity.findFirst({
+    where: { id: opportunityId, organizationId: user.organizationId },
     select: { id: true }
   });
 
@@ -224,27 +232,28 @@ export async function updateOpportunity(
     throw new Error("Opportunity was not found.");
   }
 
-  await assertLeadExists(database, input.leadCustomerId);
-  await assertActiveOwner(database, input.ownerId);
-  await assertActiveStage(database, input.stageId);
-  await assertValidSplits(database, splits);
+  await assertLeadExists(database, user.organizationId, input.leadCustomerId);
+  await assertActiveOwner(database, user.organizationId, input.ownerId);
+  await assertActiveStage(database, user.organizationId, input.stageId);
+  await assertValidSplits(database, user.organizationId, splits);
 
   if (input.branchId) {
-    await assertBranchBelongsToLead(database, input.leadCustomerId, input.branchId);
+    await assertBranchBelongsToLead(database, user.organizationId, input.leadCustomerId, input.branchId);
   }
 
-  return database.$transaction(async (tx) => {
+  const work = async (tx: unknown) => {
     const transaction = tx as UpdateOpportunityTransactionDb;
     const opportunity = await transaction.opportunity.update({
       where: { id: opportunityId },
       data: opportunityData(user, input)
     });
 
-    await transaction.opportunityOwnerSplit.deleteMany({ where: { opportunityId } });
+    await transaction.opportunityOwnerSplit.deleteMany({ where: { opportunityId, organizationId: user.organizationId } });
 
     if (splits.length > 0) {
       await transaction.opportunityOwnerSplit.createMany({
         data: splits.map((split) => ({
+          organizationId: user.organizationId,
           opportunityId,
           userId: split.userId,
           percent: split.percent
@@ -253,17 +262,22 @@ export async function updateOpportunity(
     }
 
     return opportunity;
-  });
+  };
+  return database.$transaction ? database.$transaction(work) : work(database);
 }
 
 export async function moveOpportunityStage(
   user: OpportunityUser,
   opportunityId: string,
   stageId: string,
-  database: MoveOpportunityDb = db as unknown as MoveOpportunityDb
-) {
+  database?: MoveOpportunityDb
+): Promise<IdResult> {
+  if (!database) return withOrganization(user.organizationId, (tx) => moveOpportunityStage(user, opportunityId, stageId, tx as unknown as MoveOpportunityDb));
   assertCanWriteOpportunities(user);
-  await assertActiveStage(database, stageId);
+  await assertActiveStage(database, user.organizationId, stageId);
+
+  const existing = await database.opportunity.findFirst({ where: { id: opportunityId, organizationId: user.organizationId }, select: { id: true } });
+  if (!existing) throw new Error("Opportunity was not found.");
 
   return database.opportunity.update({
     where: { id: opportunityId },
@@ -274,14 +288,19 @@ export async function moveOpportunityStage(
 export async function upsertSalesTarget(
   user: OpportunityUser,
   input: SalesTargetInput,
-  database: TargetDb = db as unknown as TargetDb
-) {
+  database?: TargetDb
+): Promise<IdResult> {
+  if (!database) {
+    await assertOrganizationUserEligible(user.organizationId, input.ownerId, ["ADMIN", "SALES"]);
+    return withOrganization(user.organizationId, (tx) => upsertSalesTarget(user, input, tx as unknown as TargetDb));
+  }
   assertCanWriteOpportunities(user);
-  await assertActiveOwner(database, input.ownerId);
+  await assertActiveOwner(database, user.organizationId, input.ownerId);
 
   return database.salesTarget.upsert({
     where: {
-      ownerId_financialYear_quarter: {
+      organizationId_ownerId_financialYear_quarter: {
+        organizationId: user.organizationId,
         ownerId: input.ownerId,
         financialYear: input.financialYear,
         quarter: input.quarter
@@ -289,6 +308,7 @@ export async function upsertSalesTarget(
     },
     update: { targetValueInr: input.targetValueInr },
     create: {
+      organizationId: user.organizationId,
       ownerId: input.ownerId,
       financialYear: input.financialYear,
       quarter: input.quarter,
@@ -301,8 +321,9 @@ export async function upsertSalesTarget(
 export async function upsertPipelineStage(
   user: OpportunityUser,
   input: PipelineStageInput,
-  database: StageManagementDb = db as unknown as StageManagementDb
-) {
+  database?: StageManagementDb
+): Promise<IdResult> {
+  if (!database) return withOrganization(user.organizationId, (tx) => upsertPipelineStage(user, input, tx as unknown as StageManagementDb));
   assertCanWriteOpportunities(user);
 
   if (user.role !== "ADMIN") {
@@ -310,12 +331,12 @@ export async function upsertPipelineStage(
   }
 
   return database.pipelineStage.upsert({
-    where: { name: input.name },
+    where: { organizationId_name: { organizationId: user.organizationId, name: input.name } },
     update: {
       sortOrder: input.sortOrder,
       kind: input.kind,
       active: input.active
     },
-    create: input
+    create: { ...input, organizationId: user.organizationId }
   });
 }

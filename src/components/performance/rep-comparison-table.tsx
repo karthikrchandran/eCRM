@@ -1,8 +1,10 @@
+import Link from "next/link";
 import { formatCurrencyPaisa } from "@/components/reports/report-formatters";
-import type { RepPerformanceFilters, RepPerformanceSummary } from "@/server/reports/rep-performance-queries";
+import type { RepPerformanceFilters, RepPerformanceSummary, SalesRepOption } from "@/server/reports/rep-performance-queries";
 
 type RepComparisonTableProps = {
   filters: RepPerformanceFilters;
+  repOptions?: SalesRepOption[];
   rows: RepPerformanceSummary[];
 };
 
@@ -20,15 +22,24 @@ function pctOfTarget(booked: number, target: number) {
   return `${Math.round((booked / target) * 100)}%`;
 }
 
-export function RepComparisonTable({ filters, rows }: RepComparisonTableProps) {
+export function RepComparisonTable({ filters, repOptions = [], rows }: RepComparisonTableProps) {
+  const selectedRep = filters.ownerId ? rows[0] : undefined;
+
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="text-2xl font-semibold">Team performance</h1>
-        <p className="mt-1 text-sm text-[var(--muted)]">Compare bookings, collections, and incentives across all sales reps.</p>
+        <h1 className="text-2xl font-semibold">Sales performance</h1>
+        <p className="mt-1 text-sm text-[var(--muted)]">Review each sales person against their target, bookings, collections, and incentives for a selected period.</p>
       </header>
 
-      <form action="/admin/performance" className="surface grid gap-4 p-4 md:grid-cols-3" method="get">
+      <form action="/performance" className="surface grid gap-4 p-4 md:grid-cols-4" method="get">
+        <label className="flex flex-col gap-1 text-sm font-medium">
+          Sales rep
+          <select className="crm-control" defaultValue={filters.ownerId ?? ""} name="ownerId">
+            <option value="">All sales reps</option>
+            {repOptions.map((rep) => <option key={rep.id} value={rep.id}>{rep.name}</option>)}
+          </select>
+        </label>
         <label className="flex flex-col gap-1 text-sm font-medium">
           Financial year
           <select className="crm-control" defaultValue={filters.financialYear?.toString() ?? ""} name="financialYear">
@@ -58,6 +69,24 @@ export function RepComparisonTable({ filters, rows }: RepComparisonTableProps) {
           </button>
         </div>
       </form>
+
+      {selectedRep ? (
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5" aria-label="Sales rep performance summary">
+          <article className="surface p-4"><p className="text-xs uppercase text-[var(--muted)]">Rep target</p><p className="mt-2 text-2xl font-semibold">{formatPaisa(selectedRep.targetPaisa)}</p><p className="mt-1 text-xs text-[var(--muted)]">Configured target</p></article>
+          <article className="surface p-4"><p className="text-xs uppercase text-[var(--muted)]">Rep booked</p><p className="mt-2 text-2xl font-semibold">{formatPaisa(selectedRep.bookedPaisa)}</p><p className="mt-1 text-xs text-[var(--muted)]">Booked revenue</p></article>
+          <article className="surface p-4"><p className="text-xs uppercase text-[var(--muted)]">Target attainment</p><p className="mt-2 text-2xl font-semibold">{pctOfTarget(selectedRep.bookedPaisa, selectedRep.targetPaisa)}</p><p className="mt-1 text-xs text-[var(--muted)]">Booked versus target</p></article>
+          <article className="surface p-4"><p className="text-xs uppercase text-[var(--muted)]">Rep collected</p><p className="mt-2 text-2xl font-semibold">{formatPaisa(selectedRep.collectedPaisa)}</p><p className="mt-1 text-xs text-[var(--muted)]">Payments collected</p></article>
+          <article className="surface p-4"><p className="text-xs uppercase text-[var(--muted)]">Rep incentive payable</p><p className="mt-2 text-2xl font-semibold">{formatPaisa(selectedRep.incentivePayablePaisa)}</p><p className="mt-1 text-xs text-[var(--muted)]">Calculated incentive liability</p></article>
+        </section>
+      ) : null}
+
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold">{selectedRep ? `${selectedRep.rep.name} performance` : "Sales reps"}</h2>
+          <p className="mt-1 text-sm text-[var(--muted)]">{selectedRep ? "Target, bookings, collections, and incentive detail for the selected year and quarter." : "Select a sales rep above to open an individual performance view."}</p>
+        </div>
+        <Link className="crm-button crm-button-secondary text-sm" href="/opportunities/targets">Manage targets</Link>
+      </div>
 
       <div className="surface overflow-x-auto">
         <table className="w-full text-sm">

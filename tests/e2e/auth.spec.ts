@@ -9,7 +9,7 @@ test("seeded admin can sign in and see the dashboard", async ({ page }) => {
   await expect(page).toHaveURL(/\/dashboard$/);
   await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
   await expect(page.getByText("Open opportunities")).toBeVisible();
-  await expect(page.getByText("Booked value excl. GST")).toBeVisible();
+  await expect(page.getByText("Booked value")).toBeVisible();
   await expect(page.getByText("Pending receivables")).toBeVisible();
   await expect(page.getByText("Production pending")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Top billings" })).toBeVisible();

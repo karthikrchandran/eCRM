@@ -1,5 +1,6 @@
 import type { Prisma, User } from "@prisma/client";
-import { db } from "@/server/db";
+import { withOrganization } from "@/server/organizations/with-organization";
+import { listOrganizationUserOptions } from "@/server/organizations/member-options";
 import { calculateOrderPaymentSummary } from "@/server/finance/calculations";
 import { canManageAdminSettings } from "@/server/auth/permissions";
 import type { ReportsUser } from "./types";
@@ -12,6 +13,7 @@ function assertAdminOnly(user: ReportsUser) {
 
 export type RepPerformanceFilters = {
   financialYear?: number;
+  ownerId?: string;
   quarter?: 1 | 2 | 3 | 4;
 };
 
@@ -26,6 +28,7 @@ export type RepPerformanceSummary = {
 };
 
 type RepUser = Pick<User, "id" | "name" | "email">;
+export type SalesRepOption = RepUser;
 type OrderSummaryRecord = {
   id: string;
   ownerId: string;
@@ -44,6 +47,23 @@ export type RepPerformanceDb = {
   incentive: { findMany: (args: unknown) => Promise<IncentiveSummaryRecord[]> };
 };
 
+export async function listSalesRepOptions(
+  user: ReportsUser,
+  database?: RepPerformanceDb
+): Promise<SalesRepOption[]> {
+  if (!database) {
+    assertAdminOnly(user);
+    return listOrganizationUserOptions(user.organizationId, ["SALES"]);
+  }
+  assertAdminOnly(user);
+
+  return database.user.findMany({
+    where: { active: true, role: "SALES", memberships: { some: { organizationId: user.organizationId, status: "ACTIVE" } } },
+    orderBy: { name: "asc" },
+    select: { id: true, name: true, email: true }
+  });
+}
+
 function buildBookedAtFilter(filters: RepPerformanceFilters) {
   if (!filters.financialYear) {
     return undefined;
@@ -61,20 +81,27 @@ function buildBookedAtFilter(filters: RepPerformanceFilters) {
 export async function listRepPerformanceSummaries(
   user: ReportsUser,
   filters: RepPerformanceFilters = {},
-  database: RepPerformanceDb = db as unknown as RepPerformanceDb
+  database?: RepPerformanceDb,
+  preloadedReps?: SalesRepOption[]
 ): Promise<RepPerformanceSummary[]> {
+  if (!database) {
+    const reps = (await listOrganizationUserOptions(user.organizationId, ["SALES"]))
+      .filter((rep) => !filters.ownerId || rep.id === filters.ownerId);
+    return withOrganization(user.organizationId, (tx) => listRepPerformanceSummaries(user, filters, tx as unknown as RepPerformanceDb, reps));
+  }
   assertAdminOnly(user);
 
   const bookedAt = buildBookedAtFilter(filters);
 
   const [reps, orders, targets, incentives] = await Promise.all([
-    database.user.findMany({
-      where: { active: true, role: "SALES" },
+    preloadedReps ? Promise.resolve(preloadedReps) : database.user.findMany({
+      where: { active: true, role: "SALES", memberships: { some: { organizationId: user.organizationId, status: "ACTIVE" } }, ...(filters.ownerId ? { id: filters.ownerId } : {}) },
       orderBy: { name: "asc" },
       select: { id: true, name: true, email: true }
     }),
     database.order.findMany({
       where: {
+        organizationId: user.organizationId,
         status: { not: "CANCELLED" },
         ...(bookedAt ? { bookedAt } : {})
       },
@@ -89,6 +116,7 @@ export async function listRepPerformanceSummaries(
     }),
     database.salesTarget.findMany({
       where: {
+        organizationId: user.organizationId,
         ...(filters.financialYear ? { financialYear: filters.financialYear } : {}),
         ...(filters.quarter ? { quarter: filters.quarter } : {})
       },
@@ -96,6 +124,7 @@ export async function listRepPerformanceSummaries(
     }),
     database.incentive.findMany({
       where: {
+        organizationId: user.organizationId,
         ...(bookedAt ? { order: { bookedAt } } : {})
       },
       select: {

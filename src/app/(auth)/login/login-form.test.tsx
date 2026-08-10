@@ -36,4 +36,12 @@ describe("LoginForm", () => {
       "Invalid email or password."
     );
   });
+
+  it("presents neutral CommitArc sign-in guidance without legacy product copy", () => {
+    render(<LoginForm />);
+
+    expect(screen.getByRole("heading", { level: 2, name: "Welcome back" })).toBeVisible();
+    expect(screen.getByText("Sign in to continue.")).toBeVisible();
+    expect(screen.queryByText(/ARA|eCRM|SignalLoop/i)).not.toBeInTheDocument();
+  });
 });

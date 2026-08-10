@@ -6,7 +6,7 @@ import { listOpportunityFormOptions, listSalesTargets } from "@/server/opportuni
 
 export default async function OpportunityTargetsPage() {
   const user = await requireUser();
-  const [options, targets] = await Promise.all([listOpportunityFormOptions(), listSalesTargets(user)]);
+  const [options, targets] = await Promise.all([listOpportunityFormOptions(user), listSalesTargets(user)]);
   const serializableTargets = targets.map((target) => ({
     ...target,
     targetValueInr: target.targetValueInr.toString()

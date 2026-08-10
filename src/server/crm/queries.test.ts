@@ -1,10 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
-import { getCustomer360Timeline, listLeadCustomers } from "./queries";
+import { getContactDetail, getCustomer360Timeline, listContacts, listLeadCustomers } from "./queries";
 
 const requester = {
   id: "user_sales",
   name: "Sales User",
   email: "sales@example.com",
+  organizationId: "org_test",
   role: "SALES" as const,
   active: true
 };
@@ -17,6 +18,7 @@ describe("crm queries", () => {
       requester,
       {},
       {
+        contact: { findMany: vi.fn().mockResolvedValue([]) },
         leadCustomer: {
           findMany,
           count: vi.fn().mockResolvedValue(0)
@@ -29,7 +31,7 @@ describe("crm queries", () => {
 
     expect(findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: {}
+        where: { organizationId: "org_test" }
       })
     );
   });
@@ -41,6 +43,7 @@ describe("crm queries", () => {
       requester,
       { ownerId: "user_admin", state: "LEAD", q: "acme" },
       {
+        contact: { findMany: vi.fn().mockResolvedValue([]) },
         leadCustomer: {
           findMany,
           count: vi.fn().mockResolvedValue(0)
@@ -54,6 +57,7 @@ describe("crm queries", () => {
     expect(findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
+          organizationId: "org_test",
           ownerId: "user_admin",
           state: "LEAD",
           OR: [
@@ -66,6 +70,94 @@ describe("crm queries", () => {
         }
       })
     );
+  });
+
+  it("lists contacts from the shared CRM data with lead and pipeline context", async () => {
+    const findMany = vi.fn().mockResolvedValue([
+      {
+        id: "contact_1",
+        name: "Anita Rao",
+        designation: "Head of Learning Operations",
+        email: "anita.rao@example.com",
+        phone: "+91 98765 43210",
+        isPrimary: true,
+        updatedAt: new Date("2026-06-20T10:00:00.000Z"),
+        branch: { id: "branch_1", name: "Bengaluru Delivery Office", city: "Bengaluru", region: "Karnataka" },
+        leadCustomer: {
+          id: "lead_1",
+          name: "Acme Learning Pvt Ltd",
+          state: "LEAD",
+          owner: { id: "user_sales", name: "Sales User", email: "sales@example.com", role: "SALES" },
+          _count: { contacts: 2, opportunities: 1 }
+        }
+      }
+    ]);
+
+    const result = await listContacts(
+      requester,
+      { q: "anita", ownerId: "user_sales", state: "LEAD" },
+      {
+        contact: { findMany },
+        leadCustomer: { findMany: vi.fn().mockResolvedValue([]), count: vi.fn().mockResolvedValue(0) },
+        user: { findMany: vi.fn().mockResolvedValue([]) }
+      }
+    );
+
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          organizationId: "org_test",
+          OR: [
+            { name: { contains: "anita", mode: "insensitive" } },
+            { designation: { contains: "anita", mode: "insensitive" } },
+            { email: { contains: "anita", mode: "insensitive" } },
+            { phone: { contains: "anita", mode: "insensitive" } },
+            { leadCustomer: { name: { contains: "anita", mode: "insensitive" } } },
+            { branch: { name: { contains: "anita", mode: "insensitive" } } }
+          ]
+        }
+      })
+    );
+    expect(result.records).toHaveLength(1);
+    expect(result.records[0].leadCustomer._count.opportunities).toBe(1);
+  });
+
+  it("loads a contact detail record with basic lead linkage", async () => {
+    const findUnique = vi.fn().mockResolvedValue({
+      id: "contact_1",
+      leadCustomerId: "lead_1",
+      branchId: "branch_1",
+      name: "Anita Rao",
+      designation: "Head of Learning Operations",
+      email: "anita.rao@example.com",
+      phone: "+91 98765 43210",
+      isPrimary: true,
+      notes: "Prefers morning calls.",
+      updatedAt: new Date("2026-06-21T10:00:00.000Z"),
+      branch: { id: "branch_1", name: "Bengaluru Delivery Office", city: "Bengaluru", region: "Karnataka" },
+      leadCustomer: {
+        id: "lead_1",
+        name: "Acme Learning Pvt Ltd",
+        state: "LEAD",
+        industry: "Education",
+        source: "Referral",
+        notes: "Exploring a phased rollout.",
+        owner: { id: "user_sales", name: "Sales User", email: "sales@example.com", role: "SALES" },
+        branches: [{ id: "branch_1", name: "Bengaluru Delivery Office", city: "Bengaluru", region: "Karnataka" }],
+        opportunities: [],
+        _count: { branches: 1, contacts: 2, activities: 3, opportunities: 0 }
+      },
+      activities: []
+    });
+
+    const result = await getContactDetail(requester, "contact_1", { contact: { findUnique } });
+
+    expect(findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "contact_1", organizationId: "org_test" }
+      })
+    );
+    expect(result?.leadCustomer.name).toBe("Acme Learning Pvt Ltd");
   });
 
   it("includes workflow events from EmailVoice in the customer timeline", async () => {
@@ -112,6 +204,7 @@ describe("crm queries", () => {
     expect(workflowEventFindMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
+          organizationId: "org_test",
           OR: [{ entityId: "lead_1" }, { relatedRecordId: "lead_1" }]
         }
       })

@@ -1,12 +1,12 @@
-import type { Prisma, UserRole } from "@prisma/client";
+import type { OrganizationRole, Prisma } from "@prisma/client";
 import { canManageAdminSettings, canViewCompanyRecords } from "@/server/auth/permissions";
-import { db } from "@/server/db";
+import { getControlPlaneDb } from "@/server/db";
 
 export type SupportedCurrency = "INR" | "USD";
 
 export type SettingsUser = {
   id: string;
-  role: UserRole | "ADMIN" | "SALES";
+  role: OrganizationRole;
 };
 
 export type BusinessSettingsView = {
@@ -21,20 +21,20 @@ type SettingsDb = {
 };
 
 function assertCanViewSettings(user: SettingsUser) {
-  if (!canViewCompanyRecords(user.role as UserRole)) {
+  if (!canViewCompanyRecords(user.role)) {
     throw new Error("You do not have permission to view business settings.");
   }
 }
 
 function assertCanManageSettings(user: SettingsUser) {
-  if (!canManageAdminSettings(user.role as UserRole)) {
+  if (!canManageAdminSettings(user.role)) {
     throw new Error("Only Admin can manage business settings.");
   }
 }
 
 export async function getBusinessSettings(
   user: SettingsUser,
-  database: SettingsDb = db as unknown as SettingsDb
+  database: SettingsDb = getControlPlaneDb() as unknown as SettingsDb
 ): Promise<BusinessSettingsView> {
   assertCanViewSettings(user);
 
@@ -49,7 +49,7 @@ export async function getBusinessSettings(
 export async function updateBusinessSettings(
   user: SettingsUser,
   input: BusinessSettingsView,
-  database: SettingsDb = db as unknown as SettingsDb
+  database: SettingsDb = getControlPlaneDb() as unknown as SettingsDb
 ) {
   assertCanManageSettings(user);
 

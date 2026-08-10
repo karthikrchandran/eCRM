@@ -78,7 +78,8 @@ export const salesVoiceNoteUploadMetadataSchema = z.object({
   opportunityId: optionalTrimmedString,
   proposalId: optionalTrimmedString,
   orderId: optionalTrimmedString,
-  durationSeconds: optionalPositiveInteger
+  durationSeconds: optionalPositiveInteger,
+  transcript: optionalTrimmedString
 });
 
 export const salesTextNoteInputSchema = z.object({

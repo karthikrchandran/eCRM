@@ -2,6 +2,8 @@
 
 eCRM is a single-company CRM for a small sales organization. The foundation slice provides the Next.js App Router application baseline, local Postgres database, Prisma schema and migration, internal email/password authentication, Admin and Sales roles, seeded local users, a protected dashboard shell, and verification gates for the CRM modules that follow.
 
+The current workflow covers the sales path from leads and Customer 360 through pipeline, proposals, orders, production, finance, and rep-specific performance. Admins also have company finance, team performance, incentive, product, production-configuration, and reporting views. See [docs/getting-started.md](docs/getting-started.md) for the end-to-end local workflow and the SignalLoop boundary.
+
 ## Local Development
 
 1. Install dependencies.
@@ -53,6 +55,8 @@ eCRM is a single-company CRM for a small sales organization. The foundation slic
 
 6. Open `http://localhost:3000`.
 
+Voice note audio is saved to `.local-storage/sales-voice-notes` locally. If `BLOB_READ_WRITE_TOKEN` is configured, the same code saves voice note audio to private Vercel Blob storage instead. Browser speech recognition is used for free live-recording transcripts when the browser supports it; uploaded audio files are saved without automatic transcription.
+
 ## Seeded Local Users
 
 - Admin: `admin@example.com` / `Admin@12345`
@@ -71,9 +75,14 @@ npm run gate
 npm run test:e2e
 ```
 
+## Deployment Notes
+
+For Vercel deployment, configure a hosted PostgreSQL `DATABASE_URL`, a strong `AUTH_SECRET`, `APP_BASE_URL`, and `BLOB_READ_WRITE_TOKEN` for durable voice-note audio storage. Local filesystem storage is only for local development.
+
 `next-env.d.ts` is intentionally ignored. Next 16 regenerates it differently between development and build flows, and the committed TypeScript config includes the generated `.next/types/**/*.ts` and `.next/dev/types/**/*.ts` route types.
 
 ## Project Documents
 
+- Getting started: [docs/getting-started.md](docs/getting-started.md)
 - Product design spec: [docs/superpowers/specs/2026-06-15-ecrm-design.md](docs/superpowers/specs/2026-06-15-ecrm-design.md)
 - Foundation plan: [docs/superpowers/plans/2026-06-15-ecrm-foundation-plan.md](docs/superpowers/plans/2026-06-15-ecrm-foundation-plan.md)

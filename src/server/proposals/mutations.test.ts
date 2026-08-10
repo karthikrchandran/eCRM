@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { addProposalPdfMetadata, changeProposalStatus, createProposal } from "./mutations";
 
-const actor = { id: "user_sales", role: "SALES" as const };
+const actor = { id: "user_sales", organizationId: "org_test", role: "SALES" as const };
 
 const proposalInput = {
   opportunityId: "opp_1",
@@ -32,7 +32,7 @@ describe("proposal mutations", () => {
 
     await createProposal(actor, proposalInput, proposalLines, {
       opportunity: {
-        findUnique: vi.fn().mockResolvedValue({
+        findFirst: vi.fn().mockResolvedValue({
           id: "opp_1",
           stage: { kind: "OPEN", name: "Qualified" }
         })
@@ -91,7 +91,7 @@ describe("proposal mutations", () => {
           findUnique: vi.fn().mockResolvedValue({ defaultCurrency: "USD" })
         },
         opportunity: {
-          findUnique: vi.fn().mockResolvedValue({
+          findFirst: vi.fn().mockResolvedValue({
             id: "opp_1",
             stage: { kind: "OPEN", name: "Qualified" }
           })
@@ -138,7 +138,7 @@ describe("proposal mutations", () => {
     await expect(
       createProposal(actor, proposalInput, proposalLines, {
         opportunity: {
-          findUnique: vi.fn().mockResolvedValue({
+          findFirst: vi.fn().mockResolvedValue({
             id: "opp_1",
             stage: { kind: "LOST", name: "Lost" }
           })
@@ -165,13 +165,14 @@ describe("proposal mutations", () => {
         canvaDesignUrl: "https://www.canva.com/design/abc"
       },
       {
-        proposal: { findUnique: vi.fn().mockResolvedValue({ id: "proposal_1", opportunityId: "opp_1" }) },
+        proposal: { findFirst: vi.fn().mockResolvedValue({ id: "proposal_1", opportunityId: "opp_1" }) },
         proposalPdfAttachment: { create }
       }
     );
 
     expect(create).toHaveBeenCalledWith({
       data: {
+        organizationId: "org_test",
         proposalId: "proposal_1",
         originalFileName: "proposal.pdf",
         storedFileName: "proposal-1.pdf",
@@ -193,7 +194,7 @@ describe("proposal mutations", () => {
     await changeProposalStatus(actor, "proposal_1", "SENT", {
       pipelineStage: { findFirst: vi.fn().mockResolvedValue({ id: "stage_proposal_sent" }) },
       proposal: {
-        findUnique: vi.fn().mockResolvedValue({
+        findFirst: vi.fn().mockResolvedValue({
           id: "proposal_1",
           opportunityId: "opp_1",
           status: "DRAFT",
@@ -222,7 +223,7 @@ describe("proposal mutations", () => {
       changeProposalStatus(actor, "proposal_1", "SENT", {
         pipelineStage: { findFirst: vi.fn() },
         proposal: {
-          findUnique: vi.fn().mockResolvedValue({
+          findFirst: vi.fn().mockResolvedValue({
             id: "proposal_1",
             opportunityId: "opp_1",
             status: "DRAFT",

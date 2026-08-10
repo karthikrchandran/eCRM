@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import { instantiateProductionForOrderLineItem, updateProductionStageStatus } from "./mutations";
+import { instantiateProductionForOrderLineItem, saveProductionTemplateStage, updateProductionStageStatus } from "./mutations";
 
-const actor = { id: "user_sales", role: "SALES" as const };
+const actor = { id: "user_sales", organizationId: "org_test", role: "SALES" as const };
+const adminActor = { id: "user_admin", organizationId: "org_test", role: "ADMIN" as const };
 
 const orderLineItem = {
   id: "order_line_1",
@@ -43,10 +44,10 @@ describe("production mutations", () => {
 
     const workItem = await instantiateProductionForOrderLineItem(actor, "order_line_1", {
       orderLineItem: {
-        findUnique: vi.fn().mockResolvedValue(orderLineItem)
+        findFirst: vi.fn().mockResolvedValue(orderLineItem)
       },
       productionTemplate: {
-        findUnique: vi.fn().mockResolvedValue(productionTemplate)
+        findFirst: vi.fn().mockResolvedValue(productionTemplate)
       },
       productionWorkItem: {
         findFirst: vi.fn().mockResolvedValue(null),
@@ -67,6 +68,7 @@ describe("production mutations", () => {
     expect(workItem).toEqual({ id: "work_item_1" });
     expect(create).toHaveBeenCalledWith({
       data: {
+        organizationId: "org_test",
         orderLineItemId: "order_line_1",
         productionTemplateId: "template_1",
         title: "ORD-0001 - Custom eLearning module",
@@ -104,8 +106,8 @@ describe("production mutations", () => {
     const create = vi.fn();
 
     const workItem = await instantiateProductionForOrderLineItem(actor, "order_line_1", {
-      orderLineItem: { findUnique: vi.fn() },
-      productionTemplate: { findUnique: vi.fn() },
+      orderLineItem: { findFirst: vi.fn() },
+      productionTemplate: { findFirst: vi.fn() },
       productionWorkItem: {
         findFirst: vi.fn().mockResolvedValue(existing),
         create,
@@ -132,7 +134,7 @@ describe("production mutations", () => {
       { status: "DONE", noteBody: "Script signed off" },
       {
         productionStageInstance: {
-          findUnique: vi.fn().mockResolvedValue({
+          findFirst: vi.fn().mockResolvedValue({
             id: "stage_1",
             workItemId: "work_item_1",
             status: "IN_PROGRESS",
@@ -189,6 +191,7 @@ describe("production mutations", () => {
     });
     expect(noteCreate).toHaveBeenCalledWith({
       data: {
+        organizationId: "org_test",
         workItemId: "work_item_1",
         stageInstanceId: "stage_1",
         body: "Script signed off",
@@ -223,7 +226,7 @@ describe("production mutations", () => {
       { status: "BLOCKED" },
       {
         productionStageInstance: {
-          findUnique: vi.fn().mockResolvedValue({
+          findFirst: vi.fn().mockResolvedValue({
             id: "stage_1",
             workItemId: "work_item_1",
             status: "NOT_STARTED",
@@ -291,5 +294,55 @@ describe("production mutations", () => {
       where: { id: "order_1" },
       data: { status: "IN_PRODUCTION", updatedById: "user_sales" }
     });
+  });
+
+  it("rejects an assignee without an active membership in the organization", async () => {
+    const update = vi.fn();
+    const database = {
+      $queryRaw: vi.fn().mockResolvedValue([{ allowed: false }]),
+      productionStageInstance: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: "stage_1", workItemId: "work_1", status: "NOT_STARTED", startedAt: null,
+          workItem: { id: "work_1", orderLineItem: { orderId: "order_1", order: { id: "order_1", status: "BOOKED" } } }
+        }),
+        update
+      }
+    };
+
+    await expect(updateProductionStageStatus(actor, "stage_1", {
+      assignedToId: "user_B", status: "IN_PROGRESS"
+    }, database as never)).rejects.toThrow("Organization member was not found.");
+    expect(database.$queryRaw).toHaveBeenCalledOnce();
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("uses the tenant transaction guard instead of reading memberships", async () => {
+    const membershipLookup = vi.fn();
+    const stageLookup = vi.fn();
+    const database = {
+      $queryRaw: vi.fn().mockResolvedValue([{ allowed: false }]),
+      organizationMembership: { findFirst: membershipLookup },
+      productionStageInstance: { findFirst: stageLookup }
+    };
+
+    await expect(updateProductionStageStatus(actor, "stage_1", {
+      assignedToId: "user_B", status: "IN_PROGRESS"
+    }, database as never)).rejects.toThrow("Organization member was not found.");
+    expect(membershipLookup).not.toHaveBeenCalled();
+    expect(stageLookup).not.toHaveBeenCalled();
+  });
+
+  it("rejects a template-stage parent from another organization", async () => {
+    const create = vi.fn();
+    const database = {
+      productionTemplate: { findFirst: vi.fn().mockResolvedValue(null) },
+      productionTemplateStage: { create, findFirst: vi.fn(), update: vi.fn(), upsert: vi.fn() }
+    };
+
+    await expect(saveProductionTemplateStage(adminActor, {
+      defaultDurationDays: 1, key: "review", name: "Review", required: true,
+      sortOrder: 10, templateId: "template_B"
+    }, database as never)).rejects.toThrow("Production template was not found.");
+    expect(create).not.toHaveBeenCalled();
   });
 });

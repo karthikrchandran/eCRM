@@ -1,5 +1,5 @@
 import type { Prisma } from "@prisma/client";
-import { db } from "@/server/db";
+import { withOrganization } from "@/server/organizations/with-organization";
 import { assertCanUseSalesWorkspace, type SalesDayUser } from "./permissions";
 import type { MyDayInsightsViewModel, MyDayLinkedRecord, MyDayTaskRecord, MyDayTextNoteRecord, MyDayViewModel } from "./types";
 
@@ -188,8 +188,9 @@ function mapLookup(record: LookupRecord): MyDayLinkedRecord {
 export async function loadMyDay(
   user: SalesDayUser,
   date: Date,
-  database: QueryDb = db as unknown as QueryDb
+  database?: QueryDb
 ): Promise<MyDayViewModel> {
+  if (!database) return withOrganization(user.organizationId, (tx) => loadMyDay(user, date, tx as unknown as QueryDb));
   assertCanUseSalesWorkspace(user);
   const dayStart = startOfDay(date);
   const dayEnd = addDays(dayStart, 1);
@@ -197,6 +198,7 @@ export async function loadMyDay(
   const [records, standaloneVoiceNotes, textNotes] = await Promise.all([
     database.salesTask.findMany({
       where: {
+        organizationId: user.organizationId,
         ownerId: user.id,
         OR: [
           { dueAt: { gte: dayStart, lt: dayEnd } },
@@ -209,6 +211,7 @@ export async function loadMyDay(
     }),
     database.salesVoiceNote?.findMany({
       where: {
+        organizationId: user.organizationId,
         ownerId: user.id,
         taskId: null,
         createdAt: { gte: dayStart, lt: dayEnd }
@@ -223,6 +226,7 @@ export async function loadMyDay(
     }) ?? Promise.resolve([]),
     database.salesTextNote?.findMany({
       where: {
+        organizationId: user.organizationId,
         ownerId: user.id,
         createdAt: { gte: dayStart, lt: dayEnd }
       },
@@ -263,28 +267,29 @@ export async function loadMyDay(
 
 export async function loadMyDayLookups(
   user: SalesDayUser,
-  database: QueryDb = db as unknown as QueryDb
+  database?: QueryDb
 ): Promise<MyDayLookups> {
+  if (!database) return withOrganization(user.organizationId, (tx) => loadMyDayLookups(user, tx as unknown as QueryDb));
   assertCanUseSalesWorkspace(user);
 
   const [leadCustomers, opportunities, proposals, orders] = await Promise.all([
     database.leadCustomer?.findMany({
-      where: { state: { in: ["LEAD", "CUSTOMER"] } },
+      where: { organizationId: user.organizationId, state: { in: ["LEAD", "CUSTOMER"] } },
       orderBy: { name: "asc" },
       select: { id: true, name: true }
     }) ?? Promise.resolve([]),
     database.opportunity?.findMany({
-      where: { ownerId: user.id },
+      where: { organizationId: user.organizationId, ownerId: user.id },
       orderBy: { title: "asc" },
       select: { id: true, title: true }
     }) ?? Promise.resolve([]),
     database.proposal?.findMany({
-      where: { status: { in: ["SENT", "ACCEPTED"] } },
+      where: { organizationId: user.organizationId, status: { in: ["SENT", "ACCEPTED"] } },
       orderBy: { title: "asc" },
       select: { id: true, title: true }
     }) ?? Promise.resolve([]),
     database.order?.findMany({
-      where: { status: { in: ["BOOKED", "IN_PRODUCTION"] }, ownerId: user.id },
+      where: { organizationId: user.organizationId, status: { in: ["BOOKED", "IN_PRODUCTION"] }, ownerId: user.id },
       orderBy: { orderNumber: "asc" },
       select: { id: true, orderNumber: true }
     }) ?? Promise.resolve([])
@@ -301,8 +306,9 @@ export async function loadMyDayLookups(
 export async function loadMyDayInsights(
   user: SalesDayUser,
   date: Date,
-  database: QueryDb = db as unknown as QueryDb
+  database?: QueryDb
 ): Promise<MyDayInsightsViewModel> {
+  if (!database) return withOrganization(user.organizationId, (tx) => loadMyDayInsights(user, date, tx as unknown as QueryDb));
   assertCanUseSalesWorkspace(user);
   const today = startOfDay(date);
   const tomorrow = addDays(today, 1);
@@ -311,6 +317,7 @@ export async function loadMyDayInsights(
   const [carryForwardRecords, voiceNotes, opportunities, draftActions] = await Promise.all([
     database.salesTask.findMany({
       where: {
+        organizationId: user.organizationId,
         ownerId: user.id,
         status: "OPEN",
         OR: [{ dueAt: { lt: tomorrow } }, { dueAt: null }]
@@ -320,6 +327,7 @@ export async function loadMyDayInsights(
     }),
     database.salesVoiceNote?.findMany({
       where: {
+        organizationId: user.organizationId,
         ownerId: user.id,
         createdAt: { gte: weekAgo },
         OR: [{ summary: { not: null } }, { transcript: { not: null } }]
@@ -336,6 +344,7 @@ export async function loadMyDayInsights(
     }) ?? Promise.resolve([]),
     database.opportunity?.findMany({
       where: {
+        organizationId: user.organizationId,
         ownerId: user.id,
         nextFollowUpAt: { lte: tomorrow }
       },
@@ -349,7 +358,7 @@ export async function loadMyDayInsights(
       }
     }) ?? Promise.resolve([]),
     database.salesVoiceNoteAction?.findMany({
-      where: { status: "DRAFT", voiceNote: { ownerId: user.id } },
+      where: { organizationId: user.organizationId, status: "DRAFT", voiceNote: { ownerId: user.id } },
       orderBy: { createdAt: "asc" },
       take: 5,
       select: {

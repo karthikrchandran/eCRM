@@ -1,5 +1,5 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { OpportunityBoard } from "./opportunity-board";
 import { OpportunityList } from "./opportunity-list";
 
@@ -30,6 +30,15 @@ const opportunity = {
 };
 
 describe("OpportunityList", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-01T12:00:00.000Z"));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("shows filters, view links, and dense opportunity rows", () => {
     render(
       <OpportunityList

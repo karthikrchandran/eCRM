@@ -49,12 +49,13 @@ test("salesperson plans, completes, reopens, reviews, and uploads a voice note",
         name: `voice-${timestamp}.webm`,
         mimeType: "audio/webm",
         buffer: Buffer.from("fake webm payload")
-      }
+      },
+      transcript: "Client asked us to send pricing tomorrow."
     }
   });
   expect(upload.ok(), await upload.text()).toBeTruthy();
-  const uploaded = (await upload.json()) as { voiceNoteId: string };
-  await page.request.post(`/my-day/voice-notes/${uploaded.voiceNoteId}/transcribe`);
+  const uploaded = (await upload.json()) as { voiceNoteId: string; status: string };
+  expect(uploaded.status).toBe("TRANSCRIBED");
 
   await page.goto("/my-day?note=voice");
   await expect(page.getByLabel(`Replay voice note ${uploaded.voiceNoteId}`)).toBeVisible();

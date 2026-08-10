@@ -6,7 +6,7 @@ import { listProductionFormOptions, listProductionWorkItems } from "@/server/pro
 
 export default async function ProductionPage() {
   const user = await requireUser();
-  const [workItems, options] = await Promise.all([listProductionWorkItems(user), listProductionFormOptions()]);
+  const [workItems, options] = await Promise.all([listProductionWorkItems(user), listProductionFormOptions(user)]);
 
   return (
     <ProductionBoard

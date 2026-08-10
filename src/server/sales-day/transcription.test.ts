@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { saveVoiceNoteAudio } from "./storage";
-import { extractSuggestedActions, transcribeVoiceNoteAudio } from "./transcription";
+import { buildTranscriptResult, extractSuggestedActions } from "./transcription";
 
 describe("sales-day voice storage and transcription", () => {
   it("rejects unsupported voice note MIME types before writing audio", async () => {
     await expect(
       saveVoiceNoteAudio({
+        organizationId: "org_test",
         ownerId: "sales_1",
         voiceNoteId: "note_1",
         originalFileName: "note.txt",
@@ -17,6 +18,7 @@ describe("sales-day voice storage and transcription", () => {
 
   it("accepts browser recorder MIME parameters and common mobile audio uploads", async () => {
     const recorded = await saveVoiceNoteAudio({
+      organizationId: "org_test",
       ownerId: "sales_1",
       voiceNoteId: "note_recorded",
       originalFileName: "recording.webm",
@@ -24,6 +26,7 @@ describe("sales-day voice storage and transcription", () => {
       buffer: Buffer.from("recorded audio")
     });
     const uploaded = await saveVoiceNoteAudio({
+      organizationId: "org_test",
       ownerId: "sales_1",
       voiceNoteId: "note_uploaded",
       originalFileName: "upload.m4a",
@@ -35,20 +38,6 @@ describe("sales-day voice storage and transcription", () => {
     expect(recorded.storageKey).toMatch(/note_recorded\.webm$/);
     expect(uploaded.mimeType).toBe("audio/mp4");
     expect(uploaded.storageKey).toMatch(/note_uploaded\.m4a$/);
-  });
-
-  it("returns a controlled failure when the transcription provider is not configured", async () => {
-    const result = await transcribeVoiceNoteAudio({
-      fileName: "note.webm",
-      mimeType: "audio/webm",
-      buffer: Buffer.from("audio"),
-      apiKey: ""
-    });
-
-    expect(result).toEqual({
-      ok: false,
-      error: "Transcription provider is not configured."
-    });
   });
 
   it("extracts draft actions for concrete sales follow-ups", () => {
@@ -69,6 +58,18 @@ describe("sales-day voice storage and transcription", () => {
       })
     ]);
     expect(actions[0].suggestedDueAt).toBeInstanceOf(Date);
+  });
+
+  it("builds transcript metadata and suggested actions from browser speech text", () => {
+    const result = buildTranscriptResult(" Client asked us to send pricing tomorrow. ");
+
+    expect(result).toMatchObject({
+      transcript: "Client asked us to send pricing tomorrow.",
+      summary: "Client asked us to send pricing tomorrow",
+      customerAsk: "Client asked us to send pricing tomorrow",
+      nextStep: "Send pricing"
+    });
+    expect(result.suggestedActions).toHaveLength(1);
   });
 
   it("does not extract actions from vague transcript text", () => {

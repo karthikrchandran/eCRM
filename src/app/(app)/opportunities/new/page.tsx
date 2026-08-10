@@ -2,9 +2,11 @@ import Link from "next/link";
 import { OpportunityForm } from "@/components/opportunities/opportunity-form";
 import { createOpportunityAction } from "@/server/opportunities/actions";
 import { listOpportunityFormOptions } from "@/server/opportunities/queries";
+import { requireUser } from "@/server/auth/current-user";
 
 export default async function NewOpportunityPage() {
-  const options = await listOpportunityFormOptions();
+  const user = await requireUser();
+  const options = await listOpportunityFormOptions(user);
 
   return (
     <div className="space-y-6">

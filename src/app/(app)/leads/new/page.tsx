@@ -1,9 +1,11 @@
 import { LeadForm } from "@/components/crm/lead-form";
 import { createLeadCustomerAction } from "@/server/crm/actions";
 import { listCrmOwners } from "@/server/crm/queries";
+import { requireUser } from "@/server/auth/current-user";
 
 export default async function NewLeadPage() {
-  const owners = await listCrmOwners();
+  const user = await requireUser();
+  const owners = await listCrmOwners(user);
 
   return (
     <div className="space-y-6">

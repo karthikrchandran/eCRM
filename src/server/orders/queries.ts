@@ -1,5 +1,5 @@
 import type { Prisma } from "@prisma/client";
-import { db } from "@/server/db";
+import { withOrganization } from "@/server/organizations/with-organization";
 import { assertCanViewProposals } from "@/server/proposals/permissions";
 import type { ProposalUser } from "@/server/proposals/types";
 import { assertCanViewOrders } from "./permissions";
@@ -79,7 +79,7 @@ export type AcceptedProposalForBookingDb = {
 type OrderQueryDb = AcceptedProposalForBookingDb & {
   order: {
     findMany: (args: Prisma.OrderFindManyArgs) => Promise<OrderRecord[]>;
-    findUnique: (args: Prisma.OrderFindUniqueArgs) => Promise<OrderRecord | null>;
+    findFirst: (args: Prisma.OrderFindFirstArgs) => Promise<OrderRecord | null>;
   };
 };
 
@@ -100,13 +100,15 @@ function buildBookedAtFilter(filters: OrderListFilters) {
 export async function listOrders(
   user: OrderUser,
   filters: OrderListFilters = {},
-  database: OrderQueryDb = db as unknown as OrderQueryDb
-) {
+  database?: OrderQueryDb
+): Promise<OrderRecord[]> {
+  if (!database) return withOrganization(user.organizationId, (tx) => listOrders(user, filters, tx as unknown as OrderQueryDb));
   assertCanViewOrders(user);
   const bookedAt = buildBookedAtFilter(filters);
 
   return database.order.findMany({
     where: {
+      organizationId: user.organizationId,
       ...(bookedAt ? { bookedAt } : {}),
       ...(filters.ownerId ? { ownerId: filters.ownerId } : {}),
       ...(filters.status ? { status: filters.status } : {})
@@ -119,12 +121,13 @@ export async function listOrders(
 export async function getOrderDetail(
   user: OrderUser,
   orderId: string,
-  database: OrderQueryDb = db as unknown as OrderQueryDb
-) {
+  database?: OrderQueryDb
+): Promise<OrderRecord | null> {
+  if (!database) return withOrganization(user.organizationId, (tx) => getOrderDetail(user, orderId, tx as unknown as OrderQueryDb));
   assertCanViewOrders(user);
 
-  return database.order.findUnique({
-    where: { id: orderId },
+  return database.order.findFirst({
+    where: { id: orderId, organizationId: user.organizationId },
     include: orderInclude
   });
 }
@@ -132,12 +135,13 @@ export async function getOrderDetail(
 export async function loadAcceptedProposalForBooking(
   user: ProposalUser,
   proposalId: string,
-  database: AcceptedProposalForBookingDb = db as unknown as AcceptedProposalForBookingDb
-) {
+  database?: AcceptedProposalForBookingDb
+): Promise<AcceptedProposalForBooking | null> {
+  if (!database) return withOrganization(user.organizationId, (tx) => loadAcceptedProposalForBooking(user, proposalId, tx as unknown as AcceptedProposalForBookingDb));
   assertCanViewProposals(user);
 
   return database.proposal.findFirst({
-    where: { id: proposalId, status: "ACCEPTED" },
+    where: { id: proposalId, organizationId: user.organizationId, status: "ACCEPTED" },
     include: acceptedProposalForBookingInclude
   });
 }

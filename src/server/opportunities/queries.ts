@@ -1,5 +1,6 @@
 import type { PipelineStage, Prisma, User } from "@prisma/client";
-import { db } from "@/server/db";
+import { withOrganization } from "@/server/organizations/with-organization";
+import { listOrganizationUserOptions } from "@/server/organizations/member-options";
 import { assertCanViewOpportunities, type OpportunityUser } from "./permissions";
 import type { OpportunityFilters } from "./types";
 
@@ -43,7 +44,7 @@ export type SalesTargetRecord = Prisma.SalesTargetGetPayload<{ include: typeof s
 type QueryDb = {
   opportunity: {
     findMany: (args: Prisma.OpportunityFindManyArgs) => Promise<OpportunityListRecord[]>;
-    findUnique?: (args: Prisma.OpportunityFindUniqueArgs) => Promise<OpportunityDetailRecord | null>;
+    findFirst?: (args: Prisma.OpportunityFindFirstArgs) => Promise<OpportunityDetailRecord | null>;
   };
   pipelineStage: {
     findMany: (args: Prisma.PipelineStageFindManyArgs) => Promise<PipelineStageRecord[]>;
@@ -78,8 +79,8 @@ function buildFollowUpFilter(followUp: NonNullable<OpportunityFilters["followUp"
   return { gte: startOfTomorrow };
 }
 
-function buildOpportunityWhere(filters: OpportunityFilters): Prisma.OpportunityWhereInput {
-  const where: Prisma.OpportunityWhereInput = {};
+function buildOpportunityWhere(organizationId: string, filters: OpportunityFilters): Prisma.OpportunityWhereInput {
+  const where: Prisma.OpportunityWhereInput = { organizationId };
 
   if (filters.ownerId) {
     where.ownerId = filters.ownerId;
@@ -109,12 +110,13 @@ function buildOpportunityWhere(filters: OpportunityFilters): Prisma.OpportunityW
 export async function listOpportunities(
   user: OpportunityUser,
   filters: OpportunityFilters,
-  database: QueryDb = db as unknown as QueryDb
-) {
+  database?: QueryDb
+): Promise<OpportunityListRecord[]> {
+  if (!database) return withOrganization(user.organizationId, (tx) => listOpportunities(user, filters, tx as unknown as QueryDb));
   assertCanViewOpportunities(user);
 
   return database.opportunity.findMany({
-    where: buildOpportunityWhere(filters),
+    where: buildOpportunityWhere(user.organizationId, filters),
     orderBy: [{ updatedAt: "desc" }, { title: "asc" }],
     include: opportunityListInclude
   });
@@ -123,14 +125,15 @@ export async function listOpportunities(
 export async function listPipelineBoard(
   user: OpportunityUser,
   filters: OpportunityFilters,
-  database: QueryDb = db as unknown as QueryDb
-) {
+  database?: QueryDb
+): Promise<{ stages: PipelineStageRecord[]; recordsByStage: Record<string, OpportunityListRecord[]> }> {
+  if (!database) return withOrganization(user.organizationId, (tx) => listPipelineBoard(user, filters, tx as unknown as QueryDb));
   assertCanViewOpportunities(user);
-  const where = buildOpportunityWhere(filters);
+  const where = buildOpportunityWhere(user.organizationId, filters);
 
   const [stages, opportunities] = await Promise.all([
     database.pipelineStage.findMany({
-      where: { active: true },
+      where: { organizationId: user.organizationId, active: true },
       orderBy: { sortOrder: "asc" },
       select: { id: true, name: true, sortOrder: true, kind: true, active: true }
     }),
@@ -151,32 +154,44 @@ export async function listPipelineBoard(
   return { stages, recordsByStage };
 }
 
-export async function getOpportunityDetail(user: OpportunityUser, opportunityId: string) {
+export async function getOpportunityDetail(user: OpportunityUser, opportunityId: string, database?: QueryDb): Promise<OpportunityDetailRecord | null> {
+  if (!database) return withOrganization(user.organizationId, (tx) => getOpportunityDetail(user, opportunityId, tx as unknown as QueryDb));
   assertCanViewOpportunities(user);
 
-  return db.opportunity.findUnique({
-    where: { id: opportunityId },
+  return database.opportunity.findFirst!({
+    where: { id: opportunityId, organizationId: user.organizationId },
     include: opportunityDetailInclude
   });
 }
 
-export async function listOpportunityFormOptions() {
+export async function listOpportunityFormOptions(user: OpportunityUser, database?: QueryDb, preloadedOwners?: OpportunityOwner[]): Promise<{
+  leads: Array<{ id: string; name: string; state: string }>;
+  branches: Array<{ id: string; name: string; leadCustomerId: string }>;
+  stages: PipelineStageRecord[];
+  owners: OpportunityOwner[];
+}> {
+  if (!database) {
+    const owners = await listOrganizationUserOptions(user.organizationId, ["ADMIN", "SALES"]);
+    return withOrganization(user.organizationId, (tx) => listOpportunityFormOptions(user, tx as unknown as QueryDb, owners));
+  }
   const [leads, branches, stages, owners] = await Promise.all([
-    db.leadCustomer.findMany({
+    database.leadCustomer!.findMany({
+      where: { organizationId: user.organizationId },
       orderBy: { name: "asc" },
       select: { id: true, name: true, state: true }
     }),
-    db.branch.findMany({
+    database.branch!.findMany({
+      where: { organizationId: user.organizationId },
       orderBy: { name: "asc" },
       select: { id: true, name: true, leadCustomerId: true }
     }),
-    db.pipelineStage.findMany({
-      where: { active: true },
+    database.pipelineStage.findMany({
+      where: { organizationId: user.organizationId, active: true },
       orderBy: { sortOrder: "asc" },
       select: { id: true, name: true, sortOrder: true, kind: true, active: true }
     }),
-    db.user.findMany({
-      where: { active: true, role: { in: ["ADMIN", "SALES"] } },
+    preloadedOwners ? Promise.resolve(preloadedOwners) : database.user!.findMany({
+      where: { active: true, role: { in: ["ADMIN", "SALES"] }, memberships: { some: { organizationId: user.organizationId, status: "ACTIVE" } } },
       orderBy: { name: "asc" },
       select: opportunityOwnerSelect
     })
@@ -185,10 +200,12 @@ export async function listOpportunityFormOptions() {
   return { leads, branches, stages, owners };
 }
 
-export async function listSalesTargets(user: OpportunityUser) {
+export async function listSalesTargets(user: OpportunityUser, database?: QueryDb): Promise<SalesTargetRecord[]> {
+  if (!database) return withOrganization(user.organizationId, (tx) => listSalesTargets(user, tx as unknown as QueryDb));
   assertCanViewOpportunities(user);
 
-  return db.salesTarget.findMany({
+  return database.salesTarget!.findMany({
+    where: { organizationId: user.organizationId },
     orderBy: [{ financialYear: "desc" }, { quarter: "asc" }],
     include: salesTargetInclude
   });

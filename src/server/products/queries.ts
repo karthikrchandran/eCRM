@@ -1,5 +1,5 @@
 import type { Prisma } from "@prisma/client";
-import { db } from "@/server/db";
+import { withOrganization } from "@/server/organizations/with-organization";
 import { assertCanManageProductServices, assertCanViewProductServices } from "./permissions";
 import type { ProductUser } from "./types";
 
@@ -22,15 +22,16 @@ export type ProductServiceRecord = Prisma.ProductServiceGetPayload<{ select: typ
 type ProductQueryDb = {
   productService: {
     findMany: (args: Prisma.ProductServiceFindManyArgs) => Promise<ProductServiceRecord[]>;
-    findUnique?: (args: Prisma.ProductServiceFindUniqueArgs) => Promise<ProductServiceRecord | null>;
+    findFirst?: (args: Prisma.ProductServiceFindFirstArgs) => Promise<ProductServiceRecord | null>;
   };
 };
 
-export async function listActiveProductServices(user: ProductUser, database: ProductQueryDb = db as unknown as ProductQueryDb) {
+export async function listActiveProductServices(user: ProductUser, database?: ProductQueryDb): Promise<ProductServiceRecord[]> {
+  if (!database) return withOrganization(user.organizationId, (tx) => listActiveProductServices(user, tx as unknown as ProductQueryDb));
   assertCanViewProductServices(user);
 
   return database.productService.findMany({
-    where: { active: true },
+    where: { organizationId: user.organizationId, active: true },
     orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     select: productServiceSelect
   });
@@ -38,21 +39,24 @@ export async function listActiveProductServices(user: ProductUser, database: Pro
 
 export async function listProductServicesForAdmin(
   user: ProductUser,
-  database: ProductQueryDb = db as unknown as ProductQueryDb
-) {
+  database?: ProductQueryDb
+): Promise<ProductServiceRecord[]> {
+  if (!database) return withOrganization(user.organizationId, (tx) => listProductServicesForAdmin(user, tx as unknown as ProductQueryDb));
   assertCanManageProductServices(user);
 
   return database.productService.findMany({
+    where: { organizationId: user.organizationId },
     orderBy: [{ active: "desc" }, { sortOrder: "asc" }, { name: "asc" }],
     select: productServiceSelect
   });
 }
 
-export async function getProductServiceForAdmin(user: ProductUser, productServiceId: string) {
+export async function getProductServiceForAdmin(user: ProductUser, productServiceId: string, database?: ProductQueryDb): Promise<ProductServiceRecord | null> {
+  if (!database) return withOrganization(user.organizationId, (tx) => getProductServiceForAdmin(user, productServiceId, tx as unknown as ProductQueryDb));
   assertCanManageProductServices(user);
 
-  return db.productService.findUnique({
-    where: { id: productServiceId },
+  return database.productService.findFirst!({
+    where: { id: productServiceId, organizationId: user.organizationId },
     select: productServiceSelect
   });
 }

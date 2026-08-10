@@ -1,7 +1,8 @@
 import type { Prisma, User } from "@prisma/client";
-import { db } from "@/server/db";
+import { withOrganization } from "@/server/organizations/with-organization";
+import { listOrganizationUserOptions } from "@/server/organizations/member-options";
 import { assertCanViewCrmRecords, type CrmUser } from "./permissions";
-import type { LeadFilters } from "./types";
+import type { ContactFilters, LeadFilters } from "./types";
 
 const crmOwnerSelect = {
   id: true,
@@ -71,9 +72,31 @@ const leadDetailInclude = {
   }
 } satisfies Prisma.LeadCustomerInclude;
 
+const contactListInclude = {
+  branch: { select: { id: true, name: true, city: true, region: true } },
+  leadCustomer: {
+    select: {
+      id: true,
+      name: true,
+      state: true,
+      owner: { select: crmOwnerSelect },
+      _count: { select: { contacts: true, opportunities: true } }
+    }
+  }
+} satisfies Prisma.ContactInclude;
+
+const contactDetailInclude = {
+  branch: { select: { id: true, name: true, city: true, region: true } },
+  leadCustomer: {
+    select: { id: true, name: true }
+  },
+} satisfies Prisma.ContactInclude;
+
 export type CrmOwner = Pick<User, "id" | "name" | "email" | "role">;
 export type LeadCustomerListRecord = Prisma.LeadCustomerGetPayload<{ include: typeof leadListInclude }>;
 export type LeadCustomerDetail = Prisma.LeadCustomerGetPayload<{ include: typeof leadDetailInclude }>;
+export type ContactListRecord = Prisma.ContactGetPayload<{ include: typeof contactListInclude }>;
+export type ContactDetailRecord = Prisma.ContactGetPayload<{ include: typeof contactDetailInclude }>;
 export type CustomerTimelineKind =
   | "activity"
   | "follow_up"
@@ -105,8 +128,18 @@ type QueryDb = {
     findMany: (args: Prisma.LeadCustomerFindManyArgs) => Promise<LeadCustomerListRecord[]>;
     count?: (args?: Prisma.LeadCustomerCountArgs) => Promise<number>;
   };
+  contact: {
+    findMany: (args: Prisma.ContactFindManyArgs) => Promise<ContactListRecord[]>;
+  };
   user: {
     findMany: (args: Prisma.UserFindManyArgs) => Promise<CrmOwner[]>;
+  };
+};
+
+type ContactDetailDb = {
+  contact: {
+    findFirst?: (args: Prisma.ContactFindFirstArgs) => Promise<ContactDetailRecord | null>;
+    findUnique?: (args: Prisma.ContactFindUniqueArgs) => Promise<ContactDetailRecord | null>;
   };
 };
 
@@ -205,8 +238,8 @@ type CustomerTimelineDb = {
   };
 };
 
-function buildLeadWhere(filters: LeadFilters): Prisma.LeadCustomerWhereInput {
-  const where: Prisma.LeadCustomerWhereInput = {};
+function buildLeadWhere(organizationId: string, filters: LeadFilters): Prisma.LeadCustomerWhereInput {
+  const where: Prisma.LeadCustomerWhereInput = { organizationId };
 
   if (filters.ownerId) {
     where.ownerId = filters.ownerId;
@@ -247,13 +280,35 @@ function buildLeadWhere(filters: LeadFilters): Prisma.LeadCustomerWhereInput {
   return where;
 }
 
+function buildContactWhere(organizationId: string, filters: ContactFilters): Prisma.ContactWhereInput {
+  const where: Prisma.ContactWhereInput = { organizationId };
+
+  if (filters.q) {
+    where.OR = [
+      { name: { contains: filters.q, mode: "insensitive" } },
+      { designation: { contains: filters.q, mode: "insensitive" } },
+      { email: { contains: filters.q, mode: "insensitive" } },
+      { phone: { contains: filters.q, mode: "insensitive" } },
+      { leadCustomer: { name: { contains: filters.q, mode: "insensitive" } } },
+      { branch: { name: { contains: filters.q, mode: "insensitive" } } }
+    ];
+  }
+
+  return where;
+}
+
 export async function listLeadCustomers(
   user: CrmUser,
   filters: LeadFilters,
-  database: QueryDb = db as unknown as QueryDb
-) {
+  database?: QueryDb,
+  preloadedOwners?: CrmOwner[]
+): Promise<{ records: LeadCustomerListRecord[]; owners: CrmOwner[] }> {
+  if (!database) {
+    const owners = await listOrganizationUserOptions(user.organizationId, ["ADMIN", "SALES"]);
+    return withOrganization(user.organizationId, (tx) => listLeadCustomers(user, filters, tx as unknown as QueryDb, owners));
+  }
   assertCanViewCrmRecords(user);
-  const where = buildLeadWhere(filters);
+  const where = buildLeadWhere(user.organizationId, filters);
 
   const [records, owners] = await Promise.all([
     database.leadCustomer.findMany({
@@ -261,8 +316,8 @@ export async function listLeadCustomers(
       orderBy: [{ updatedAt: "desc" }, { name: "asc" }],
       include: leadListInclude
     }),
-    database.user.findMany({
-      where: { active: true, role: { in: ["ADMIN", "SALES"] } },
+    preloadedOwners ? Promise.resolve(preloadedOwners) : database.user.findMany({
+      where: { active: true, role: { in: ["ADMIN", "SALES"] }, memberships: { some: { organizationId: user.organizationId, status: "ACTIVE" } } },
       orderBy: { name: "asc" },
       select: crmOwnerSelect
     })
@@ -271,11 +326,67 @@ export async function listLeadCustomers(
   return { records, owners };
 }
 
-export async function getLeadCustomerDetail(user: CrmUser, leadCustomerId: string) {
+export async function listContacts(
+  user: CrmUser,
+  filters: ContactFilters,
+  database?: QueryDb,
+  preloadedOwners?: CrmOwner[]
+): Promise<{ records: ContactListRecord[]; owners: CrmOwner[] }> {
+  if (!database) {
+    const owners = await listOrganizationUserOptions(user.organizationId, ["ADMIN", "SALES"]);
+    return withOrganization(user.organizationId, (tx) => listContacts(user, filters, tx as unknown as QueryDb, owners));
+  }
+  assertCanViewCrmRecords(user);
+  const where = buildContactWhere(user.organizationId, filters);
+
+  const [records, owners] = await Promise.all([
+    database.contact.findMany({
+      where,
+      orderBy: [{ updatedAt: "desc" }, { name: "asc" }],
+      include: contactListInclude
+    }),
+    preloadedOwners ? Promise.resolve(preloadedOwners) : database.user.findMany({
+      where: { active: true, role: { in: ["ADMIN", "SALES"] }, memberships: { some: { organizationId: user.organizationId, status: "ACTIVE" } } },
+      orderBy: { name: "asc" },
+      select: crmOwnerSelect
+    })
+  ]);
+
+  const filteredRecords = records.filter((contact) => {
+    if (filters.ownerId && contact.leadCustomer.owner.id !== filters.ownerId) {
+      return false;
+    }
+
+    if (filters.state && contact.leadCustomer.state !== filters.state) {
+      return false;
+    }
+
+    return true;
+  });
+
+  return { records: filteredRecords, owners };
+}
+
+export async function getContactDetail(
+  user: CrmUser,
+  contactId: string,
+  database?: ContactDetailDb
+): Promise<ContactDetailRecord | null> {
+  if (!database) return withOrganization(user.organizationId, (tx) => getContactDetail(user, contactId, tx as unknown as ContactDetailDb));
   assertCanViewCrmRecords(user);
 
-  return db.leadCustomer.findUnique({
-    where: { id: leadCustomerId },
+  return (database.contact.findFirst ?? database.contact.findUnique!)({
+    where: { id: contactId, organizationId: user.organizationId },
+    include: contactDetailInclude
+  });
+}
+
+export async function getLeadCustomerDetail(user: CrmUser, leadCustomerId: string, database?: Pick<Prisma.TransactionClient, "leadCustomer">): Promise<LeadCustomerDetail | null> {
+  if (!database) return withOrganization(user.organizationId, (tx) => getLeadCustomerDetail(user, leadCustomerId, tx));
+  assertCanViewCrmRecords(user);
+
+  return database.leadCustomer.findFirst({
+    where: { id: leadCustomerId, organizationId: user.organizationId },
     include: leadDetailInclude
   });
 }
@@ -303,13 +414,14 @@ const timelineKindRank: Record<CustomerTimelineKind, number> = {
 export async function getCustomer360Timeline(
   user: CrmUser,
   leadCustomerId: string,
-  database: CustomerTimelineDb = db as unknown as CustomerTimelineDb
+  database?: CustomerTimelineDb
 ): Promise<CustomerTimelineItem[]> {
+  if (!database) return withOrganization(user.organizationId, (tx) => getCustomer360Timeline(user, leadCustomerId, tx as unknown as CustomerTimelineDb));
   assertCanViewCrmRecords(user);
 
   const [activities, salesTasks, textNotes, voiceNotes, workflowEvents, opportunities, proposals, orders] = await Promise.all([
     database.activity.findMany({
-      where: { leadCustomerId },
+      where: { leadCustomerId, organizationId: user.organizationId },
       orderBy: { createdAt: "desc" },
       take: 50,
       select: {
@@ -324,7 +436,7 @@ export async function getCustomer360Timeline(
       }
     }),
     database.salesTask.findMany({
-      where: { leadCustomerId },
+      where: { leadCustomerId, organizationId: user.organizationId },
       orderBy: [{ dueAt: "asc" }, { updatedAt: "desc" }],
       take: 50,
       select: {
@@ -339,13 +451,13 @@ export async function getCustomer360Timeline(
       }
     }),
     database.salesTextNote.findMany({
-      where: { leadCustomerId },
+      where: { leadCustomerId, organizationId: user.organizationId },
       orderBy: { createdAt: "desc" },
       take: 50,
       select: { id: true, body: true, createdAt: true, owner: { select: { id: true, name: true } } }
     }),
     database.salesVoiceNote.findMany({
-      where: { leadCustomerId },
+      where: { leadCustomerId, organizationId: user.organizationId },
       orderBy: { createdAt: "desc" },
       take: 50,
       select: {
@@ -359,6 +471,7 @@ export async function getCustomer360Timeline(
     }),
     database.workflowEvent?.findMany({
       where: {
+        organizationId: user.organizationId,
         OR: [{ entityId: leadCustomerId }, { relatedRecordId: leadCustomerId }]
       },
       orderBy: [{ occurredAt: "desc" }, { createdAt: "desc" }],
@@ -374,7 +487,7 @@ export async function getCustomer360Timeline(
       }
     }) ?? [],
     database.opportunity.findMany({
-      where: { leadCustomerId },
+      where: { leadCustomerId, organizationId: user.organizationId },
       orderBy: { updatedAt: "desc" },
       take: 50,
       select: {
@@ -387,13 +500,13 @@ export async function getCustomer360Timeline(
       }
     }),
     database.proposal.findMany({
-      where: { opportunity: { leadCustomerId } },
+      where: { organizationId: user.organizationId, opportunity: { leadCustomerId } },
       orderBy: { updatedAt: "desc" },
       take: 50,
       select: { id: true, title: true, status: true, totalPaisa: true, currency: true, updatedAt: true }
     }),
     database.order.findMany({
-      where: { leadCustomerId },
+      where: { leadCustomerId, organizationId: user.organizationId },
       orderBy: { bookedAt: "desc" },
       take: 50,
       select: {
@@ -475,7 +588,7 @@ export async function getCustomer360Timeline(
         id: event.id,
         kind: "workflow_event",
         title: event.summary,
-        detail: `${event.sourceApp} • ${event.sourceEventType}`,
+        detail: `${event.sourceApp} â€¢ ${event.sourceEventType}`,
         occurredAt: event.occurredAt ?? event.createdAt,
         actor: event.sourceApp
       })
@@ -586,34 +699,37 @@ export async function getCustomer360Timeline(
   });
 }
 
-export async function listCrmOwners(): Promise<CrmOwner[]> {
-  return db.user.findMany({
-    where: { active: true, role: { in: ["ADMIN", "SALES"] } },
+export async function listCrmOwners(user: CrmUser, database?: Pick<Prisma.TransactionClient, "user">): Promise<CrmOwner[]> {
+  if (!database) return listOrganizationUserOptions(user.organizationId, ["ADMIN", "SALES"]);
+  return database.user.findMany({
+    where: { active: true, role: { in: ["ADMIN", "SALES"] }, memberships: { some: { organizationId: user.organizationId, status: "ACTIVE" } } },
     orderBy: { name: "asc" },
     select: crmOwnerSelect
   });
 }
 
-export async function listBranchOptions(user: CrmUser, leadCustomerId: string) {
+export async function listBranchOptions(user: CrmUser, leadCustomerId: string, database?: Pick<Prisma.TransactionClient, "branch">): Promise<Array<{ id: string; name: string; city: string | null; region: string | null }>> {
+  if (!database) return withOrganization(user.organizationId, (tx) => listBranchOptions(user, leadCustomerId, tx));
   assertCanViewCrmRecords(user);
 
-  return db.branch.findMany({
-    where: { leadCustomerId },
+  return database.branch.findMany({
+    where: { leadCustomerId, organizationId: user.organizationId },
     orderBy: { name: "asc" },
     select: { id: true, name: true, city: true, region: true }
   });
 }
 
-export async function getDashboardFollowUpCounts(user: CrmUser) {
+export async function getDashboardFollowUpCounts(user: CrmUser, database?: Pick<Prisma.TransactionClient, "activity">): Promise<{ overdue: number; today: number; upcoming: number }> {
+  if (!database) return withOrganization(user.organizationId, (tx) => getDashboardFollowUpCounts(user, tx));
   assertCanViewCrmRecords(user);
   const now = new Date();
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const startOfTomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
 
   const [overdue, today, upcoming] = await Promise.all([
-    db.activity.count({ where: { status: "OPEN", dueAt: { lt: startOfToday } } }),
-    db.activity.count({ where: { status: "OPEN", dueAt: { gte: startOfToday, lt: startOfTomorrow } } }),
-    db.activity.count({ where: { status: "OPEN", dueAt: { gte: startOfTomorrow } } })
+    database.activity.count({ where: { organizationId: user.organizationId, status: "OPEN", dueAt: { lt: startOfToday } } }),
+    database.activity.count({ where: { organizationId: user.organizationId, status: "OPEN", dueAt: { gte: startOfToday, lt: startOfTomorrow } } }),
+    database.activity.count({ where: { organizationId: user.organizationId, status: "OPEN", dueAt: { gte: startOfTomorrow } } })
   ]);
 
   return { overdue, today, upcoming };

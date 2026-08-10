@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { listRepPerformanceSummaries } from "./rep-performance-queries";
 
-const admin = { id: "admin", email: "admin@example.com", name: "Admin User", role: "ADMIN" as const };
-const sales = { id: "sales", email: "sales@example.com", name: "Sales User", role: "SALES" as const };
+const admin = { id: "admin", email: "admin@example.com", name: "Admin User", organizationId: "org_test", role: "ADMIN" as const };
+const sales = { id: "sales", email: "sales@example.com", name: "Sales User", organizationId: "org_test", role: "SALES" as const };
 
 const repPriya = { id: "rep_priya", name: "Priya Menon", email: "priya@example.com" };
 const repArun = { id: "rep_arun", name: "Arun Kumar", email: "arun@example.com" };
@@ -106,7 +106,7 @@ describe("listRepPerformanceSummaries", () => {
 
     expect(db.salesTarget.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { financialYear: 2026, quarter: 1 }
+        where: { financialYear: 2026, organizationId: "org_test", quarter: 1 }
       })
     );
   });
