@@ -11,7 +11,7 @@ import {
   type TenantPublicOperationScenario
 } from "./tenant-public-operation-matrix";
 import { tenantOpaqueOwnedRelationships, tenantOwnedRelationships, tenantUserRelationships } from "./tenant-relationships";
-import { hasCreatedRow, hasDuplicateBusinessKey, resultContainsIdentity } from "./tenant-operation-proof";
+import { hasCreatedRow, hasDuplicateBusinessKey, resultHasExactEvidence, type ExactEvidence } from "./tenant-operation-proof";
 
 const controlUrl = process.env.TEST_DATABASE_URL;
 const tenantUrlValue = process.env.TEST_TENANT_DATABASE_URL;
@@ -240,6 +240,7 @@ integration("executable organization A/B adversarial matrix", () => {
         }
         await transaction.salesTextNote.updateMany({ where: { organizationId }, data: { createdAt: new Date("2026-08-09T12:00:00.000Z") } });
         await transaction.salesVoiceNote.updateMany({ where: { organizationId }, data: { createdAt: new Date("2026-08-09T12:00:00.000Z") } });
+        await transaction.activity.updateMany({ where: { organizationId }, data: { dueAt: new Date("2030-01-01T00:00:00.000Z"), status: "OPEN" } });
         await transaction.sharedRecordExportSnapshot.updateMany({ where: { organizationId }, data: { expiresAt: new Date("2030-01-01T00:00:00.000Z") } });
 
         if (tenantName === "B") {
@@ -610,15 +611,38 @@ integration("executable organization A/B adversarial matrix", () => {
         SharedRecordExportSnapshotItem: completeFixtureId("SharedBusinessRecord", "A"),
         SharedBusinessRecordVersion: completeFixtureId("SharedBusinessRecord", "A"),
         IncentiveSplit: userA,
-        Incentive: scenario.exportName === "listRepPerformanceSummaries" ? "matrix-a@example.test" : completeFixtureId("Incentive", "A"),
-        Proposal: scenario.exportName === "getReportsOverview" ? '"proposalConversion":{"accepted":0,"total":1}' : completeFixtureId("Proposal", "A"),
-        Invoice: scenario.exportName === "getReportsOverview" ? '"invoiceStatus":[{"count":1,"status":"DRAFT","totalPaisa":100}]' : completeFixtureId("Invoice", "A"),
-        Payment: scenario.exportName === "getReportsOverview" ? '"paymentCount":1' : completeFixtureId("Payment", "A"),
-        PaymentAllocation: scenario.exportName === "getReportsOverview" ? '"collectedPaisa":10' : completeFixtureId("PaymentAllocation", "A"),
-        CostComponent: scenario.exportName === "getReportsOverview" ? '"costLeakagePaisa":1' : completeFixtureId("CostComponent", "A")
+        Incentive: scenario.exportName === "listRepPerformanceSummaries" ? "matrix-a@example.test" : completeFixtureId("Incentive", "A")
       }[scenario.model] ?? (scenario.model === "Activity" && scenario.exportName === "listLeadCustomers"
         ? completeFixtureId("LeadCustomer", "A")
         : completeFixtureId(scenario.model, "A")));
+      const resultEvidence = (scenario: TenantPublicOperationScenario): ExactEvidence[] => {
+        if (scenario.exportName === "getDashboardFollowUpCounts") return [
+          { path: ["overdue"], value: 0 }, { path: ["today"], value: 0 }, { path: ["upcoming"], value: 1 }
+        ];
+        if (scenario.exportName === "getReportsOverview") {
+          const reportsEvidence: Partial<Record<string, ExactEvidence[]>> = {
+            Proposal: [{ path: ["sales", "proposalConversion", "total"], value: 1 }],
+            Order: [{ path: ["recentOrders", "*", "orderId"], value: completeFixtureId("Order", "A") }],
+            OrderLineItem: [{ path: ["products", "topProducts", "*", "productName"], value: "same_OrderLineItem_productNameSnapshot" }],
+            ProductionWorkItem: [{ path: ["pendingProduction", "*", "workItemId"], value: completeFixtureId("ProductionWorkItem", "A") }],
+            ProductionStageInstance: [{ path: ["production", "pendingByStage", "*", "stageName"], value: "same_ProductionStageInstance_name" }],
+            Activity: [{ path: ["upcomingFollowUps", "*", "activityId"], value: completeFixtureId("Activity", "A") }],
+            Invoice: [{ path: ["finance", "invoiceStatus", "*", "status"], value: "DRAFT" }, { path: ["finance", "invoiceStatus", "*", "count"], value: 1 }],
+            Payment: [{ path: ["collections", "paymentCount"], value: 1 }],
+            PaymentAllocation: [{ path: ["collections", "collectedPaisa"], value: 10 }],
+            CostComponent: [{ path: ["finance", "costLeakagePaisa"], value: 1 }]
+          };
+          const evidence = reportsEvidence[scenario.model];
+          if (evidence) return evidence;
+        }
+        const identity = fixtureIdentity(scenario);
+        if (identity === "matrix-a@example.test") return [{ path: ["**", "email"], value: identity }];
+        if (scenario.exportName === "listRepPerformanceSummaries") return [{ path: ["*", "rep", "id"], value: userA }];
+        if (["OpportunityOwnerSplit", "OrderOwnerSplitSnapshot", "IncentiveSplit"].includes(scenario.model)) {
+          return [{ path: ["**", "userId"], value: identity }];
+        }
+        return [{ path: ["**", "id"], value: identity }];
+      };
       const assertBUnchanged = (scenario: TenantPublicOperationScenario, execution: Awaited<ReturnType<typeof runScenario>>) => {
         expect(execution.afterB, `${scenario.model}:${scenario.category} changed tenant B state`).toEqual(execution.beforeB);
       };
@@ -631,61 +655,52 @@ integration("executable organization A/B adversarial matrix", () => {
           expect(Object.keys(execution.result), `${scenario.model}:${scenario.category} returned an empty object`).not.toHaveLength(0);
         }
       };
-      const createdRowFragments = (scenario: TenantPublicOperationScenario): string[] => ({
-        SharedBusinessRecord: [`public-${scenario.model}-create`],
-        SharedRecordExportSnapshot: [orgA],
-        SharedRecordExportSnapshotItem: [orgA],
-        WorkflowEvent: [`public-${scenario.model}-create`],
-        LeadCustomer: [`Created ${scenario.model}`],
-        Branch: [`Created ${scenario.model}`],
-        Contact: [`Created ${scenario.model}`],
-        Activity: [`Created ${scenario.model}`],
-        LeadOwnershipHistory: [marker],
-        SalesTask: [`Created ${scenario.model}`],
-        SalesTextNote: [`Created ${scenario.model}`],
-        SalesVoiceNote: [`matrix/${scenario.model}/create/A`],
-        SalesVoiceNoteAction: [marker],
-        SalesDayReview: ["2026-08-10"],
-        SalesDayReviewItem: [completeFixtureId("SalesTask", "A"), "Matrix create"],
-        PipelineStage: ["Matrix isolated create"],
-        Opportunity: [`Created ${scenario.model}`],
-        OpportunityOwnerSplit: [userA],
-        SalesTarget: [userA, '"financialYear": 2026', '"quarter": 4'],
-        ProductService: [`MATRIX-CREATE-${scenario.model}`],
-        Proposal: [`Created ${scenario.model}`],
-        ProposalLineItem: [orgA],
-        ProposalPdfAttachment: [`matrix/${scenario.model}/create/A.pdf`],
-        Order: [orgA],
-        OrderLineItem: [orgA],
-        OrderOwnerSplitSnapshot: [orgA],
-        ProductionTemplate: [`MATRIX-CREATE-${scenario.model}`],
-        ProductionTemplateStage: [`MATRIX-CREATE-${scenario.model}`],
-        ProductionWorkItem: [orgA],
-        ProductionStageInstance: [orgA],
-        ProductionNote: [marker],
-        Invoice: [`MATRIX-CREATE-${scenario.model}`],
-        Payment: [orgA],
-        PaymentAllocation: [orgA],
-        CostComponent: [marker],
-        IncentiveSplit: [userA]
-      }[scenario.model] ?? (() => { throw new Error(`Missing created-row identity for ${scenario.model}.`); })());
-      const duplicateKeyAppearsInAState = (model: string, rows: Array<{ row: string }>) => {
-        const state = rows.map(({ row }) => row).join("\n");
-        switch (model) {
-          case "SharedBusinessRecord":
-          case "WorkflowEvent":
-          case "PipelineStage":
-          case "ProductService":
-          case "ProductionTemplate":
-          case "ProductionTemplateStage": return state.includes("MATRIX-PUBLIC-DUP");
-          case "SalesDayReview": return state.includes(userA) && state.includes("2026-08-09");
-          case "SalesDayReviewItem": return state.includes(completeFixtureId("SalesTask", "A"));
-          case "SalesTarget": return state.includes(userA) && state.includes('"financialYear": 2026') && state.includes('"quarter": 4');
-          case "Proposal": return state.includes(completeFixtureId("Opportunity", "A")) && state.includes('"sequenceNumber": 2');
-          case "Order": return state.includes("ORD-2026-0002");
-          case "Invoice": return state.includes("MATRIX-PUBLIC-DUP");
-          default: throw new Error(`Missing tenant-A business-key assertion for ${model}.`);
+      const createdRowEvidence = (scenario: TenantPublicOperationScenario, result: unknown): ExactEvidence[] => {
+        const resultId = result && typeof result === "object" && "id" in result && typeof result.id === "string" ? result.id : null;
+        const resultOrderNumber = result && typeof result === "object" && "orderNumber" in result && typeof result.orderNumber === "string" ? result.orderNumber : null;
+        const byModel: Partial<Record<string, ExactEvidence[]>> = {
+          SharedBusinessRecord: [{ path: ["externalKey"], value: `public-${scenario.model}-create` }],
+          SharedRecordExportSnapshot: [{ path: ["entityType"], value: null }, { path: ["itemCount"], value: 1 }],
+          SharedRecordExportSnapshotItem: [{ path: ["position"], value: 0 }, { path: ["payload", "id"], value: completeFixtureId("SharedBusinessRecord", "A") }],
+          WorkflowEvent: [{ path: ["sourceEventId"], value: `public-${scenario.model}-create` }],
+          LeadCustomer: [{ path: ["name"], value: `Created ${scenario.model}` }],
+          Branch: [{ path: ["name"], value: `Created ${scenario.model}` }],
+          Contact: [{ path: ["name"], value: `Created ${scenario.model}` }],
+          Activity: [{ path: ["subject"], value: `Created ${scenario.model}` }],
+          LeadOwnershipHistory: [{ path: ["leadCustomerId"], value: completeFixtureId("LeadCustomer", "A") }, { path: ["reason"], value: marker }],
+          SalesTask: [{ path: ["title"], value: `Created ${scenario.model}` }],
+          SalesTextNote: [{ path: ["body"], value: `Created ${scenario.model}` }],
+          SalesVoiceNote: [{ path: ["audioStorageKey"], value: `matrix/${scenario.model}/create/A` }],
+          SalesVoiceNoteAction: [{ path: ["voiceNoteId"], value: completeFixtureId("SalesVoiceNote", "A") }, { path: ["title"], value: marker }],
+          SalesDayReview: [{ path: ["id"], value: resultId }],
+          SalesDayReviewItem: [{ path: ["reviewId"], value: resultId }, { path: ["taskId"], value: completeFixtureId("SalesTask", "A") }],
+          PipelineStage: [{ path: ["name"], value: "Matrix isolated create" }],
+          Opportunity: [{ path: ["title"], value: `Created ${scenario.model}` }],
+          OpportunityOwnerSplit: [{ path: ["opportunityId"], value: resultId }, { path: ["userId"], value: userA }],
+          SalesTarget: [{ path: ["ownerId"], value: userA }, { path: ["financialYear"], value: 2026 }, { path: ["quarter"], value: 4 }],
+          ProductService: [{ path: ["code"], value: `MATRIX-CREATE-${scenario.model}` }],
+          Proposal: [{ path: ["title"], value: `Created ${scenario.model}` }],
+          ProposalLineItem: [{ path: ["proposalId"], value: resultId }, { path: ["productServiceId"], value: completeFixtureId("ProductService", "A") }],
+          ProposalPdfAttachment: [{ path: ["storageKey"], value: `matrix/${scenario.model}/create/A.pdf` }],
+          Order: [{ path: ["orderNumber"], value: resultOrderNumber }],
+          OrderLineItem: [{ path: ["orderId"], value: resultId }],
+          OrderOwnerSplitSnapshot: [{ path: ["orderId"], value: resultId }, { path: ["userId"], value: userA }],
+          ProductionTemplate: [{ path: ["key"], value: `MATRIX-CREATE-${scenario.model}` }],
+          ProductionTemplateStage: [{ path: ["key"], value: `MATRIX-CREATE-${scenario.model}` }],
+          ProductionWorkItem: [{ path: ["orderLineItemId"], value: `matrix_public_order_line_${scenario.model}_${scenario.category}` }],
+          ProductionStageInstance: [{ path: ["workItemId"], value: resultId }, { path: ["templateStageId"], value: completeFixtureId("ProductionTemplateStage", "A") }],
+          ProductionNote: [{ path: ["stageInstanceId"], value: completeFixtureId("ProductionStageInstance", "A") }, { path: ["body"], value: marker }],
+          Invoice: [{ path: ["invoiceNumber"], value: `MATRIX-CREATE-${scenario.model}` }],
+          Payment: [{ path: ["paymentDate"], value: "2026-08-09T12:00:00" }, { path: ["amountPaisa"], value: 1 }],
+          PaymentAllocation: [{ path: ["paymentId"], value: resultId }, { path: ["amountPaisa"], value: 1 }],
+          CostComponent: [{ path: ["description"], value: marker }, { path: ["amountPaisa"], value: 1 }],
+          IncentiveSplit: [{ path: ["incentiveId"], value: completeFixtureId("Incentive", "A") }, { path: ["userId"], value: userA }]
+        };
+        const evidence = byModel[scenario.model];
+        if (!evidence || evidence.some(({ value }) => value === null && !["SharedRecordExportSnapshot"].includes(scenario.model))) {
+          throw new Error(`Missing created-row identity for ${scenario.model}.`);
         }
+        return evidence;
       };
 
       const semanticHandler = (
@@ -704,10 +719,7 @@ integration("executable organization A/B adversarial matrix", () => {
           assertNoTenantB(scenario, execution.rendered);
           assertBUnchanged(scenario, execution);
           assertNonEmptyResult(scenario, execution);
-          const identity = fixtureIdentity(scenario);
-          const returnedOrStoredIdentity = scenario.exportName === "getDashboardFollowUpCounts"
-            ? JSON.stringify(execution.result) === JSON.stringify({ overdue: 0, today: 0, upcoming: 0 })
-            : resultContainsIdentity(execution.result, identity);
+          const returnedOrStoredIdentity = resultHasExactEvidence(execution.result, resultEvidence(scenario));
           expect(returnedOrStoredIdentity, `${scenario.model}:${category} did not prove its exact A fixture identity in ${execution.rendered}`).toBe(true);
           return "success";
         }
@@ -732,7 +744,7 @@ integration("executable organization A/B adversarial matrix", () => {
           assertNoTenantB(scenario, execution.rendered);
           assertBUnchanged(scenario, execution);
           assertNonEmptyResult(scenario, execution);
-          expect(hasCreatedRow(execution.beforeA, execution.afterA, createdRowFragments(scenario)), `${scenario.model}:${scenario.exportName} did not create its declared A row`).toBe(true);
+          expect(hasCreatedRow(execution.beforeA, execution.afterA, createdRowEvidence(scenario, execution.result)), `${scenario.model}:${scenario.exportName} did not create its declared A row`).toBe(true);
           return "success";
         }
 
@@ -799,24 +811,40 @@ integration("executable organization A/B adversarial matrix", () => {
         assertNoTenantB(scenario, execution.rendered);
         assertBUnchanged(scenario, execution);
         assertNonEmptyResult(scenario, execution);
-        const duplicateFragments = (() => {
+        const duplicateEvidence = (() => {
           switch (scenario.model) {
-            case "SharedBusinessRecord":
-            case "WorkflowEvent":
-            case "PipelineStage":
-            case "ProductService":
-            case "ProductionTemplate":
-            case "ProductionTemplateStage":
-            case "Invoice": return ["MATRIX-PUBLIC-DUP"];
-            case "SalesDayReview": return [userA, "2026-08-09"];
-            case "SalesTarget": return [userA, '"financialYear": 2026', '"quarter": 4'];
-            case "Proposal": return [completeFixtureId("Opportunity", "A"), '"sequenceNumber": 2'];
-            case "Order": return ["ORD-2026-0002"];
+            case "SharedBusinessRecord": return {
+              a: [{ path: ["externalKey"], value: "MATRIX-PUBLIC-DUP" }], b: [{ path: ["externalKey"], value: "MATRIX-PUBLIC-DUP" }]
+            };
+            case "WorkflowEvent": return {
+              a: [{ path: ["sourceApp"], value: "matrix" }, { path: ["sourceEventId"], value: "MATRIX-PUBLIC-DUP" }],
+              b: [{ path: ["sourceApp"], value: "matrix" }, { path: ["sourceEventId"], value: "MATRIX-PUBLIC-DUP" }]
+            };
+            case "PipelineStage": return { a: [{ path: ["name"], value: "MATRIX-PUBLIC-DUP" }], b: [{ path: ["name"], value: "MATRIX-PUBLIC-DUP" }] };
+            case "ProductService": return { a: [{ path: ["code"], value: "MATRIX-PUBLIC-DUP" }], b: [{ path: ["code"], value: "MATRIX-PUBLIC-DUP" }] };
+            case "ProductionTemplate": return { a: [{ path: ["key"], value: "MATRIX-PUBLIC-DUP" }], b: [{ path: ["key"], value: "MATRIX-PUBLIC-DUP" }] };
+            case "ProductionTemplateStage": return {
+              a: [{ path: ["templateId"], value: completeFixtureId("ProductionTemplate", "A") }, { path: ["key"], value: "MATRIX-PUBLIC-DUP" }],
+              b: [{ path: ["templateId"], value: completeFixtureId("ProductionTemplate", "B") }, { path: ["key"], value: "MATRIX-PUBLIC-DUP" }]
+            };
+            case "Invoice": return { a: [{ path: ["invoiceNumber"], value: "MATRIX-PUBLIC-DUP" }], b: [{ path: ["invoiceNumber"], value: "MATRIX-PUBLIC-DUP" }] };
+            case "SalesDayReview": return {
+              a: [{ path: ["ownerId"], value: userA }, { path: ["reviewDate"], value: "2026-08-09T00:00:00" }],
+              b: [{ path: ["ownerId"], value: userA }, { path: ["reviewDate"], value: "2026-08-09T00:00:00" }]
+            };
+            case "SalesTarget": return {
+              a: [{ path: ["ownerId"], value: userA }, { path: ["financialYear"], value: 2026 }, { path: ["quarter"], value: 4 }],
+              b: [{ path: ["ownerId"], value: userA }, { path: ["financialYear"], value: 2026 }, { path: ["quarter"], value: 4 }]
+            };
+            case "Proposal": return {
+              a: [{ path: ["opportunityId"], value: completeFixtureId("Opportunity", "A") }, { path: ["sequenceNumber"], value: 2 }],
+              b: [{ path: ["opportunityId"], value: completeFixtureId("Opportunity", "B") }, { path: ["sequenceNumber"], value: 2 }]
+            };
+            case "Order": return { a: [{ path: ["orderNumber"], value: "ORD-2026-0002" }], b: [{ path: ["orderNumber"], value: "ORD-2026-0002" }] };
             default: throw new Error(`Missing duplicate-key identity for ${scenario.model}.`);
           }
         })();
-        expect(hasDuplicateBusinessKey(execution.beforeA, execution.afterA, execution.beforeB, duplicateFragments), `${scenario.model} did not create the same business key in tenant A while B retained it`).toBe(true);
-        expect(duplicateKeyAppearsInAState(scenario.model, execution.afterA), `${scenario.model} did not persist the same business key in tenant A`).toBe(true);
+        expect(hasDuplicateBusinessKey(execution.beforeA, execution.afterA, execution.beforeB, execution.afterB, duplicateEvidence.a, duplicateEvidence.b), `${scenario.model} did not create the same business key in tenant A while B retained it`).toBe(true);
         return "duplicate";
       };
 

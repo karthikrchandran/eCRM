@@ -1,4 +1,5 @@
 export type TenantStateRow = { row: string };
+export type ExactEvidence = { path: readonly string[]; value: unknown };
 
 function isEmptyResult(result: unknown) {
   if (result === null || result === undefined) return true;
@@ -7,33 +8,66 @@ function isEmptyResult(result: unknown) {
   return false;
 }
 
-export function resultContainsIdentity(result: unknown, identity: string) {
-  if (isEmptyResult(result)) return false;
-  return JSON.stringify(result, (_key, value) => typeof value === "bigint" ? value.toString() : value).includes(identity);
+function valuesAtPath(value: unknown, path: readonly string[]): unknown[] {
+  if (path.length === 0) return [value];
+  const [segment, ...rest] = path;
+  if (segment === "**") {
+    const direct = valuesAtPath(value, rest);
+    if (Array.isArray(value)) return [...direct, ...value.flatMap((item) => valuesAtPath(item, path))];
+    if (value && typeof value === "object") return [...direct, ...Object.values(value).flatMap((item) => valuesAtPath(item, path))];
+    return direct;
+  }
+  if (segment === "*") {
+    if (Array.isArray(value)) return value.flatMap((item) => valuesAtPath(item, rest));
+    if (value && typeof value === "object") return Object.values(value).flatMap((item) => valuesAtPath(item, rest));
+    return [];
+  }
+  if (!value || typeof value !== "object" || !(segment! in value)) return [];
+  return valuesAtPath((value as Record<string, unknown>)[segment!], rest);
 }
 
-function rowContainsEvery(row: TenantStateRow, fragments: readonly string[]) {
-  return fragments.every((fragment) => row.row.includes(fragment));
+function matchesEvidence(value: unknown, evidence: readonly ExactEvidence[]) {
+  return evidence.length > 0 && evidence.every(({ path, value: expected }) =>
+    valuesAtPath(value, path).some((actual) => Object.is(actual, expected))
+  );
+}
+
+export function resultHasExactEvidence(result: unknown, evidence: readonly ExactEvidence[]) {
+  return !isEmptyResult(result) && matchesEvidence(result, evidence);
+}
+
+function parseRow(row: TenantStateRow) {
+  return JSON.parse(row.row) as unknown;
+}
+
+function matchingRows(rows: readonly TenantStateRow[], evidence: readonly ExactEvidence[]) {
+  return rows.filter((row) => matchesEvidence(parseRow(row), evidence));
 }
 
 export function hasCreatedRow(
   before: readonly TenantStateRow[],
   after: readonly TenantStateRow[],
-  expectedFragments: readonly string[]
+  expectedIdentity: readonly ExactEvidence[]
 ) {
-  const newMatchingRows = after.filter((row) =>
-    rowContainsEvery(row, expectedFragments) && !before.some((existing) => existing.row === row.row)
-  );
-  return after.length === before.length + 1 && newMatchingRows.length === 1;
+  const hasModelIdentity = expectedIdentity.some(({ path }) => path.join(".") !== "organizationId");
+  return hasModelIdentity && after.length === before.length + 1 &&
+    matchingRows(before, expectedIdentity).length === 0 &&
+    matchingRows(after, expectedIdentity).length === 1;
 }
 
 export function hasDuplicateBusinessKey(
   beforeA: readonly TenantStateRow[],
   afterA: readonly TenantStateRow[],
-  rowsB: readonly TenantStateRow[],
-  expectedAFragments: readonly string[]
+  beforeB: readonly TenantStateRow[],
+  afterB: readonly TenantStateRow[],
+  expectedAKey: readonly ExactEvidence[],
+  expectedBKey: readonly ExactEvidence[]
 ) {
-  return !beforeA.some((row) => rowContainsEvery(row, expectedAFragments)) &&
-    afterA.some((row) => rowContainsEvery(row, expectedAFragments)) &&
-    rowsB.length > 0;
+  const matchingBeforeB = matchingRows(beforeB, expectedBKey);
+  const matchingAfterB = matchingRows(afterB, expectedBKey);
+  return afterA.length === beforeA.length + 1 &&
+    matchingRows(beforeA, expectedAKey).length === 0 &&
+    matchingRows(afterA, expectedAKey).length === 1 &&
+    matchingBeforeB.length === 1 && matchingAfterB.length === 1 &&
+    matchingAfterB[0]!.row === matchingBeforeB[0]!.row;
 }
