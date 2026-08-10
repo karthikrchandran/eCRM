@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { tenantIsolationCategories } from "./tenant-adversarial-matrix";
 import {
   tenantPublicOperationMatrix,
+  resolveTenantPublicEquivalent,
   type TenantPublicOperationContext,
   type TenantPublicOperationOutcome
 } from "./tenant-public-operation-matrix";
@@ -33,7 +34,7 @@ describe("public tenant isolation operation matrix", () => {
     expect(scenarios.reduce<Record<string, number>>((counts, scenario) => {
       counts[scenario.expectedOutcome] = (counts[scenario.expectedOutcome] ?? 0) + 1;
       return counts;
-    }, {})).toEqual({ success: 183, denied: 59, duplicate: 12, "na-equivalent": 126 });
+    }, {})).toEqual({ success: 183, denied: 58, duplicate: 12, "na-equivalent": 127 });
 
     for (const [modelName, matrix] of Object.entries(tenantPublicOperationMatrix)) {
       expect(Object.keys(matrix)).toEqual(expect.arrayContaining([...tenantIsolationCategories]));
@@ -54,10 +55,13 @@ describe("public tenant isolation operation matrix", () => {
     const calls: string[] = [];
     const handlers = Object.fromEntries(tenantIsolationCategories.map((category) => [
       category,
-      vi.fn(async (scenario) => {
-        calls.push(`${scenario.model}:${scenario.category}:${scenario.exportName}`);
-        return scenario.expectedOutcome;
-      })
+      {
+        category,
+        run: vi.fn(async (scenario) => {
+          calls.push(`${scenario.model}:${scenario.category}:${scenario.exportName}`);
+          return scenario.expectedOutcome;
+        })
+      }
     ])) as unknown as TenantPublicOperationContext;
     for (const matrix of Object.values(tenantPublicOperationMatrix)) {
       for (const category of tenantIsolationCategories) {
@@ -67,22 +71,56 @@ describe("public tenant isolation operation matrix", () => {
     }
 
     expect(calls).toHaveLength(380);
-    expect(new Set(calls).size).toBe(380);
     for (const category of tenantIsolationCategories) {
-      expect(handlers[category]).toHaveBeenCalledTimes(38);
+      const expectedCalls = Object.entries(tenantPublicOperationMatrix).reduce((count, [model, matrix]) =>
+        count + tenantIsolationCategories.filter((sourceCategory) => {
+          const source = matrix[sourceCategory];
+          if (source.disposition === "executable") return sourceCategory === category;
+          return resolveTenantPublicEquivalent(
+            tenantPublicOperationMatrix,
+            model,
+            sourceCategory
+          ).category === category;
+        }).length, 0);
+      expect(handlers[category].run).toHaveBeenCalledTimes(expectedCalls);
     }
   });
 
   it("fails closed when a cell is routed to the wrong category handler or reports the wrong semantic outcome", async () => {
     const create = tenantPublicOperationMatrix.LeadCustomer.create;
-    const wrongCategory = { list: vi.fn().mockResolvedValue("success") } as unknown as TenantPublicOperationContext;
+    const wrongCategory = { list: { category: "list", run: vi.fn().mockResolvedValue("success") } } as unknown as TenantPublicOperationContext;
     await expect(create.run(wrongCategory)).rejects.toThrow("Missing create tenant-isolation handler");
 
     const handlers = Object.fromEntries(tenantIsolationCategories.map((category) => [
       category,
-      vi.fn().mockResolvedValue("success" satisfies TenantPublicOperationOutcome)
+      { category, run: vi.fn().mockResolvedValue("success" satisfies TenantPublicOperationOutcome) }
     ])) as unknown as TenantPublicOperationContext;
-    handlers.create = vi.fn().mockResolvedValue("denied");
+    handlers.create = { category: "create", run: vi.fn().mockResolvedValue("denied") };
     await expect(create.run(handlers)).rejects.toThrow("expected success but observed denied");
+
+    handlers.create = handlers.list as unknown as TenantPublicOperationContext["create"];
+    await expect(create.run(handlers)).rejects.toThrow("Create handler is bound to list");
+  });
+
+  it("executes the named executable equivalent and rejects cyclic N/A graphs", async () => {
+    const calls: string[] = [];
+    const handlers = Object.fromEntries(tenantIsolationCategories.map((category) => [
+      category,
+      { category, run: vi.fn(async (scenario) => {
+        calls.push(`${scenario.category}:${scenario.exportName}`);
+        return scenario.expectedOutcome;
+      }) }
+    ])) as unknown as TenantPublicOperationContext;
+
+    const execution = await tenantPublicOperationMatrix.SharedBusinessRecord.delete.run(handlers);
+    expect(execution.outcome).toBe("na-equivalent");
+    expect(calls).toEqual(["direct-id:getSharedRecord"]);
+
+    expect(() => resolveTenantPublicEquivalent({
+      Example: {
+        list: { disposition: "reviewed-na", equivalentCategory: "search" },
+        search: { disposition: "reviewed-na", equivalentCategory: "list" }
+      }
+    }, "Example", "list")).toThrow("Cyclic tenant-isolation N/A equivalent");
   });
 });

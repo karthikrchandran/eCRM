@@ -158,7 +158,7 @@ integration("executable organization A/B adversarial matrix", () => {
         await transaction.$executeRaw`SELECT set_config('app.organization_id', ${organizationId}, true)`;
         await transaction.leadCustomer.create({ data: { id: id("lead", tenantName), organizationId, name: marker, ownerId, createdById: ownerId, updatedById: ownerId } });
         await transaction.branch.create({ data: { id: id("branch", tenantName), organizationId, leadCustomerId: id("lead", tenantName), name: marker } });
-        await transaction.salesTask.create({ data: { id: id("task", tenantName), organizationId, ownerId, title: marker, type: "FOLLOW_UP" } });
+        await transaction.salesTask.create({ data: { id: id("task", tenantName), organizationId, ownerId, title: marker, type: "FOLLOW_UP", dueAt: new Date("2026-08-09T12:00:00.000Z") } });
         await transaction.salesTextNote.create({ data: { id: id("text", tenantName), organizationId, ownerId, taskId: id("task", tenantName), body: marker } });
         await transaction.pipelineStage.create({ data: { id: id("stage", tenantName), organizationId, name: `Matrix Stage ${tenantName}`, sortOrder: 1 } });
         await transaction.opportunity.create({ data: { id: id("opportunity", tenantName), organizationId, leadCustomerId: id("lead", tenantName), stageId: id("stage", tenantName), ownerId, title: marker, createdById: ownerId, updatedById: ownerId } });
@@ -171,9 +171,9 @@ integration("executable organization A/B adversarial matrix", () => {
         await transaction.paymentAllocation.create({ data: { id: id("allocation", tenantName), organizationId, paymentId: id("payment", tenantName), invoiceId: id("invoice", tenantName), amountPaisa: 10 } });
         await transaction.productionTemplate.create({ data: { id: id("template", tenantName), organizationId, key: "MATRIX-TEMPLATE", name: marker } });
         await transaction.productionTemplateStage.create({ data: { id: id("template_stage", tenantName), organizationId, templateId: id("template", tenantName), key: "matrix-stage", name: marker } });
-        await transaction.sharedBusinessRecord.create({ data: { id: id("shared", tenantName), organizationId, entityType: "CUSTOMER", displayName: marker, status: "ACTIVE", sourceApp: "matrix", externalKey: "matrix-shared", searchText: marker, data: { tenantName } } });
+        await transaction.sharedBusinessRecord.create({ data: { id: id("shared", tenantName), organizationId, entityType: "CUSTOMER", displayName: marker, status: "ACTIVE", sourceApp: "matrix", externalKey: "matrix-shared", searchText: marker.toLowerCase(), data: { tenantName } } });
         await transaction.sharedBusinessRecordVersion.create({ data: { id: id("shared_version", tenantName), organizationId, recordId: id("shared", tenantName), versionNumber: 1, entityType: "CUSTOMER", sourceApp: "matrix", changeType: "CREATED", changedFields: [], snapshot: { tenantName } } });
-        await transaction.workflowEvent.create({ data: { id: id("workflow", tenantName), organizationId, sourceApp: "matrix", sourceEventId: "matrix-event", sourceEventType: "matrix.test", entityType: "customer", summary: marker, payload: { tenantName } } });
+        await transaction.workflowEvent.create({ data: { id: id("workflow", tenantName), organizationId, sourceApp: "matrix", sourceEventId: "matrix-event", sourceEventType: "matrix.test", entityId: id("lead", tenantName), entityType: "LEAD", summary: marker, payload: { tenantName } } });
 
         for (const model of tenantModelOrder.filter((candidate) => !manuallyCreatedModels.has(candidate.name))) {
           const table = model.dbName ?? model.name;
@@ -237,6 +237,8 @@ integration("executable organization A/B adversarial matrix", () => {
             ...(childHasId ? [completeFixtureId(relation.child, tenantName), organizationId] : [organizationId])
           );
         }
+        await transaction.salesTextNote.updateMany({ where: { organizationId }, data: { createdAt: new Date("2026-08-09T12:00:00.000Z") } });
+        await transaction.salesVoiceNote.updateMany({ where: { organizationId }, data: { createdAt: new Date("2026-08-09T12:00:00.000Z") } });
 
         if (tenantName === "B") {
           const duplicateProposalId = "matrix_duplicate_proposal_B";
@@ -375,6 +377,19 @@ integration("executable organization A/B adversarial matrix", () => {
       };
 
       let savepointIndex = 0;
+      const modelTable = (modelName: string) => {
+        const model = tenantModels.find((candidate) => candidate.name === modelName);
+        if (!model) throw new Error(`Unknown tenant model ${modelName}.`);
+        return model.dbName ?? model.name;
+      };
+      const tenantState = async (modelName: string) => transaction.$queryRawUnsafe<Array<{ row: string }>>(
+        `SELECT to_jsonb(t)::text AS row FROM ${quoted(modelTable(modelName))} t WHERE "organizationId" = $1 ORDER BY to_jsonb(t)::text`,
+        orgA
+      );
+      const controlState = async (modelName: string) => control.$queryRawUnsafe<Array<{ row: string }>>(
+        `SELECT to_jsonb(t)::text AS row FROM ${quoted(modelTable(modelName))} t WHERE "organizationId" = $1 ORDER BY to_jsonb(t)::text`,
+        orgB
+      );
       const runScenario = async (scenario: TenantPublicOperationScenario, suffix: "A" | "B") => {
         const savepoint = `public_operation_${savepointIndex++}`;
         await transaction.$executeRawUnsafe(`SAVEPOINT ${savepoint}`);
@@ -460,10 +475,15 @@ integration("executable organization A/B adversarial matrix", () => {
             gstRateBps: 0,
             lineSubtotalPaisa: 0,
             lineGstPaisa: 0,
-            lineTotalPaisa: 0
+            lineTotalPaisa: 0,
+            productionTemplateKeySnapshot: scenario.model === "ProductionStageInstance" ? "MATRIX-TEMPLATE" : null
           } });
         }
 
+        const beforeA = await tenantState(scenario.model);
+        const beforeB = await controlState(scenario.model);
+        let afterA = beforeA;
+        let afterB = beforeB;
         try {
           switch (scenario.exportName) {
             case "listLeadCustomers": result = await callOperation(scenario, user, scenario.category === "search" ? { q: marker } : {}, transaction, []); break;
@@ -492,7 +512,7 @@ integration("executable organization A/B adversarial matrix", () => {
             case "listProductionTemplateConfig": result = await callOperation(scenario, user, transaction); break;
             case "getOrderFinanceSummary": result = await callOperation(scenario, user, orderTarget, transaction); break;
             case "getReportsOverview": result = await callOperation(scenario, user, transaction, {}, now, []); break;
-            case "listRepPerformanceSummaries": result = await callOperation(scenario, user, {}, transaction, []); break;
+            case "listRepPerformanceSummaries": result = await callOperation(scenario, user, {}, transaction, [{ id: userA, name: "Matrix A", email: "matrix-a@example.test" }]); break;
             case "listSharedRecords": result = await callOperation(scenario, orgA, { q: marker }, transaction); break;
             case "getSharedRecord": result = await callOperation(scenario, orgA, completeFixtureId("SharedBusinessRecord", suffix), transaction); break;
             case "buildSharedRecordExportPage": result = await callOperation(scenario, orgA, { limit: 10 }, exportDatabase); break;
@@ -519,27 +539,27 @@ integration("executable organization A/B adversarial matrix", () => {
             case "createSuggestedActionsForVoiceNote": result = await callOperation(scenario, user, voiceTarget, [{ title: marker, type: "FOLLOW_UP" }], transaction); break;
             case "acceptSuggestedAction":
             case "rejectSuggestedAction": result = await callOperation(scenario, user, actionTarget, transaction); break;
-            case "saveEndOfDayReview": result = await callOperation(scenario, user, { reviewDate: now, items: [{ taskId: taskTarget, status: "DONE" }] }, transaction); break;
-            case "createOpportunity": result = await callOperation(scenario, user, { leadCustomerId: leadTarget, branchId: branchTarget, stageId: stageTarget, ownerId: targetUser, title: `Created ${scenario.model}` }, [], transaction); break;
+            case "saveEndOfDayReview": result = await callOperation(scenario, user, { reviewDate: scenario.category === "create" ? new Date("2026-08-10T12:00:00.000Z") : now, notes: `Matrix ${scenario.category}`, items: [{ taskId: taskTarget, status: scenario.category === "update" ? "BLOCKED" : "DONE", note: `Matrix ${scenario.category}` }] }, transaction); break;
+            case "createOpportunity": result = await callOperation(scenario, user, { leadCustomerId: leadTarget, branchId: branchTarget, stageId: stageTarget, ownerId: targetUser, title: `Created ${scenario.model}` }, scenario.model === "OpportunityOwnerSplit" ? [{ userId: userA, percent: 100 }] : [], transaction); break;
             case "updateOpportunity": result = await callOperation(scenario, user, opportunityTarget, { leadCustomerId: leadTarget, branchId: branchTarget, stageId: stageTarget, ownerId: targetUser, title: `Updated ${scenario.model}` }, [], transaction); break;
             case "moveOpportunityStage": result = await callOperation(scenario, user, opportunityTarget, stageTarget, transaction); break;
             case "upsertPipelineStage": result = await callOperation(scenario, user, { name: scenario.category === "duplicate-identifier" ? "MATRIX-PUBLIC-DUP" : suffix === "B" && scenario.category === "update" ? "Matrix Stage B" : `Matrix isolated ${scenario.category}`, sortOrder: 99, kind: "OPEN", active: true }, transaction); break;
-            case "upsertSalesTarget": result = await callOperation(scenario, user, { ownerId: targetUser, financialYear: 2026, quarter: 4, targetValueInr: "1.00" }, transaction); break;
+            case "upsertSalesTarget": result = await callOperation(scenario, user, { ownerId: targetUser, financialYear: scenario.category === "update" ? 1 : 2026, quarter: scenario.category === "update" ? 1 : 4, targetValueInr: scenario.category === "update" ? "2.00" : "1.00" }, transaction); break;
             case "createProductService": result = await callOperation(scenario, user, { name: marker, code: scenario.category === "duplicate-identifier" ? "MATRIX-PUBLIC-DUP" : `MATRIX-CREATE-${scenario.model}`, category: "Matrix", defaultGstRateBps: 0, active: true, sortOrder: 1 }, transaction); break;
             case "updateProductService": result = await callOperation(scenario, user, productTarget, { name: `Updated ${scenario.model}`, code: "MATRIX-CODE", category: "Matrix", defaultGstRateBps: 0, active: true, sortOrder: 1 }, transaction); break;
             case "setProductServiceActive": result = await callOperation(scenario, user, productTarget, false, transaction); break;
             case "createProposal": result = await callOperation(scenario, user, { opportunityId: opportunityTarget, title: `Created ${scenario.model}` }, [{ productServiceId: productTarget, quantity: 1, unitPricePaisa: 1, gstRateBps: 0, manualTaxPaisa: 0, gstOverrideReason: "Matrix zero tax" }], transaction); break;
             case "addProposalPdfMetadata": result = await callOperation(scenario, user, proposalTarget, { originalFileName: "matrix.pdf", storedFileName: "matrix.pdf", storageProvider: "local", storageKey: `matrix/${scenario.model}/${scenario.category}/${suffix}.pdf`, mimeType: "application/pdf", fileSizeBytes: 1 }, transaction); break;
-            case "changeProposalStatus": result = await callOperation(scenario, user, proposalTarget, "DRAFT", transaction); break;
+            case "changeProposalStatus": result = await callOperation(scenario, user, proposalTarget, "REJECTED", transaction); break;
             case "createOrderFromAcceptedProposal": result = await callOperation(scenario, user, { proposalId: proposalTarget }, transaction); break;
             case "updateOrderPoMetadata": result = await callOperation(scenario, user, orderTarget, { poNumber: `Updated ${scenario.model}` }, transaction); break;
             case "changeOrderStatus": result = await callOperation(scenario, user, orderTarget, "IN_PRODUCTION", transaction); break;
             case "instantiateProductionForOrderLineItem": result = await callOperation(scenario, user, orderLineTarget, transaction); break;
             case "updateProductionStageStatus": result = await callOperation(scenario, user, stageInstanceTarget, { status: "IN_PROGRESS", assignedToId: targetUser, noteBody: marker }, transaction); break;
             case "saveProductionTemplate": result = await callOperation(scenario, user, { ...(scenario.category === "create" || scenario.category === "duplicate-identifier" ? {} : { id: templateTarget }), key: scenario.category === "duplicate-identifier" ? "MATRIX-PUBLIC-DUP" : scenario.category === "create" ? `MATRIX-CREATE-${scenario.model}` : "MATRIX-TEMPLATE", name: `Updated ${scenario.model}`, active: true, sortOrder: 1 }, transaction); break;
-            case "saveProductionTemplateStage": result = await callOperation(scenario, user, { templateId: templateTarget, key: scenario.category === "duplicate-identifier" ? "MATRIX-PUBLIC-DUP" : scenario.category === "create" ? `MATRIX-CREATE-${scenario.model}` : "matrix", name: `Updated ${scenario.model}`, required: true, sortOrder: 1 }, transaction); break;
+            case "saveProductionTemplateStage": result = await callOperation(scenario, user, { ...(scenario.category === "update" ? { id: completeFixtureId("ProductionTemplateStage", "A") } : {}), templateId: templateTarget, key: scenario.category === "duplicate-identifier" ? "MATRIX-PUBLIC-DUP" : scenario.category === "create" ? `MATRIX-CREATE-${scenario.model}` : "matrix-stage", name: `Updated ${scenario.model}`, required: true, sortOrder: 1 }, transaction); break;
             case "createInvoice": result = await callOperation(scenario, user, { orderId: orderTarget, invoiceNumber: scenario.category === "duplicate-identifier" ? "MATRIX-PUBLIC-DUP" : `MATRIX-CREATE-${scenario.model}`, invoiceDate: now, subtotalPaisa: 0, gstPaisa: 0 }, transaction); break;
-            case "updateInvoice": result = await callOperation(scenario, user, invoiceTarget, { orderId: orderTarget, invoiceNumber: marker, invoiceDate: now, subtotalPaisa: 1, gstPaisa: 0 }, transaction); break;
+            case "updateInvoice": result = await callOperation(scenario, user, invoiceTarget, { orderId: orderTarget, invoiceNumber: marker, invoiceDate: now, subtotalPaisa: 1, gstPaisa: 0, notes: `Updated ${scenario.model}` }, transaction); break;
             case "recordPayment": result = await callOperation(scenario, user, { orderId: orderTarget, paymentDate: now, amountPaisa: 1, mode: "BANK_TRANSFER", allocations: [{ invoiceId: invoiceTarget, amountPaisa: 1 }] }, transaction); break;
             case "createCostComponent": result = await callOperation(scenario, user, { orderId: orderTarget, orderLineItemId: orderLineTarget, category: "Matrix", description: marker, amountPaisa: 1 }, transaction); break;
             case "changeCostComponentStatus": result = await callOperation(scenario, user, costTarget, { status: "APPROVED" }, transaction); break;
@@ -556,31 +576,61 @@ integration("executable organization A/B adversarial matrix", () => {
         } catch (error) {
           rejected = true;
           rejection = error;
+          // A public withOrganization transaction rolls the whole unit of work back on denial.
+          // Rewind before observing state so the matrix proves that same atomic boundary.
+          await transaction.$executeRawUnsafe(`ROLLBACK TO SAVEPOINT ${savepoint}`);
         } finally {
+          afterA = await tenantState(scenario.model);
+          afterB = await controlState(scenario.model);
           await transaction.$executeRawUnsafe(`ROLLBACK TO SAVEPOINT ${savepoint}`);
         }
 
         const rendered = JSON.stringify(result, (_key, value) => typeof value === "bigint" ? value.toString() : value);
         expect(executorMissing, `${scenario.model}:${scenario.category} has no real exported-operation executor`).toBe(false);
-        return { rejected, rejection, rendered: rendered ?? "", result };
+        return { afterA, afterB, beforeA, beforeB, rejected, rejection, rendered: rendered ?? "", result };
       };
 
       const assertNoTenantB = (scenario: TenantPublicOperationScenario, rendered: string) => {
         expect(rendered, `${scenario.model}:${scenario.category}:${scenario.exportName} leaked tenant B`).not.toContain("_B");
       };
-
-      const assertEquivalent = async (scenario: TenantPublicOperationScenario): Promise<TenantPublicOperationOutcome> => {
-        const equivalent = scenario.equivalentCategory;
-        if (!equivalent) throw new Error(`${scenario.model}:${scenario.category} has no reviewed equivalent.`);
-        const suffix = equivalent === "direct-id" || equivalent === "foreign-attachment" ? "B" : "A";
-        const execution = await runScenario(scenario, suffix);
-        assertNoTenantB(scenario, execution.rendered);
-        if (suffix === "A") {
-          expect(execution.rejected, `${scenario.model}:${scenario.category} N/A equivalent ${equivalent} failed`).toBe(false);
-        } else if (!readExports.has(scenario.exportName)) {
-          expect(execution.rejected, `${scenario.model}:${scenario.category} N/A equivalent did not deny B`).toBe(true);
+      const fixtureIdentity = (scenario: TenantPublicOperationScenario) => ({
+        OpportunityOwnerSplit: userA,
+        OrderOwnerSplitSnapshot: userA,
+        SalesDayReviewItem: completeFixtureId("SalesTask", "A"),
+        SalesTarget: userA,
+        SharedRecordExportSnapshot: completeFixtureId("SharedBusinessRecord", "A"),
+        SharedRecordExportSnapshotItem: completeFixtureId("SharedBusinessRecord", "A"),
+        SharedBusinessRecordVersion: completeFixtureId("SharedBusinessRecord", "A"),
+        IncentiveSplit: userA,
+        Incentive: scenario.exportName === "listRepPerformanceSummaries" ? "matrix-a@example.test" : completeFixtureId("Incentive", "A")
+      }[scenario.model] ?? (scenario.model === "Activity" && scenario.exportName === "listLeadCustomers"
+        ? completeFixtureId("LeadCustomer", "A")
+        : completeFixtureId(scenario.model, "A")));
+      const assertBUnchanged = (scenario: TenantPublicOperationScenario, execution: Awaited<ReturnType<typeof runScenario>>) => {
+        expect(execution.afterB, `${scenario.model}:${scenario.category} changed tenant B state`).toEqual(execution.beforeB);
+      };
+      const assertNonEmptyResult = (scenario: TenantPublicOperationScenario, execution: Awaited<ReturnType<typeof runScenario>>) => {
+        expect(execution.result, `${scenario.model}:${scenario.category}:${scenario.exportName} returned no asserted result`).not.toBeNull();
+        expect(execution.result, `${scenario.model}:${scenario.category}:${scenario.exportName} returned no asserted result`).not.toBeUndefined();
+        expect(execution.rendered, `${scenario.model}:${scenario.category}:${scenario.exportName} rendered an empty result`).not.toBe("");
+      };
+      const duplicateKeyAppearsInAState = (model: string, rows: Array<{ row: string }>) => {
+        const state = rows.map(({ row }) => row).join("\n");
+        switch (model) {
+          case "SharedBusinessRecord":
+          case "WorkflowEvent":
+          case "PipelineStage":
+          case "ProductService":
+          case "ProductionTemplate":
+          case "ProductionTemplateStage": return state.includes("MATRIX-PUBLIC-DUP");
+          case "SalesDayReview": return state.includes(userA) && state.includes("2026-08-09");
+          case "SalesDayReviewItem": return state.includes(completeFixtureId("SalesTask", "A"));
+          case "SalesTarget": return state.includes(userA) && state.includes('"financialYear": 2026') && state.includes('"quarter": 4');
+          case "Proposal": return state.includes(completeFixtureId("Opportunity", "A")) && state.includes('"sequenceNumber": 2');
+          case "Order": return state.includes("ORD-2026-0002");
+          case "Invoice": return state.includes("MATRIX-PUBLIC-DUP");
+          default: throw new Error(`Missing tenant-A business-key assertion for ${model}.`);
         }
-        return "na-equivalent";
       };
 
       const semanticHandler = (
@@ -589,20 +639,39 @@ integration("executable organization A/B adversarial matrix", () => {
         if (scenario.category !== category) {
           throw new Error(`Wrong semantic handler: ${scenario.model}:${scenario.category} was sent to ${category}.`);
         }
-        if (scenario.disposition === "reviewed-na") return assertEquivalent(scenario);
+        if (scenario.disposition !== "executable") {
+          throw new Error(`${scenario.model}:${scenario.category} reached a handler without an executable endpoint.`);
+        }
 
         if (["list", "search", "aggregate", "nested-include"].includes(category)) {
           const execution = await runScenario(scenario, "A");
           expect(execution.rejected, `${scenario.model}:${category}:${scenario.exportName} failed its A read`).toBe(false);
           assertNoTenantB(scenario, execution.rendered);
+          assertBUnchanged(scenario, execution);
+          assertNonEmptyResult(scenario, execution);
+          const identity = fixtureIdentity(scenario);
+          const returnedOrStoredIdentity = scenario.model === "SalesDayReview" && category === "nested-include"
+            ? execution.afterA.some(({ row }) => {
+                const storedId = (JSON.parse(row) as { id?: string }).id;
+                return Boolean(storedId && execution.rendered.includes(storedId));
+              })
+            : scenario.model === "SalesDayReviewItem" && category === "nested-include"
+              ? execution.afterA.some(({ row }) => row.includes(completeFixtureId("SalesTask", "A")))
+              : category === "aggregate"
+            ? execution.rendered.includes(identity) || execution.beforeA.some(({ row }) => row.includes(identity))
+            : execution.rendered.includes(identity);
+          expect(returnedOrStoredIdentity, `${scenario.model}:${category} did not prove its exact A fixture identity in ${execution.rendered}`).toBe(true);
           return "success";
         }
 
         if (category === "direct-id") {
           const execution = await runScenario(scenario, "B");
           assertNoTenantB(scenario, execution.rendered);
+          assertBUnchanged(scenario, execution);
+          expect(execution.afterA, `${scenario.model}:direct-id changed tenant A state`).toEqual(execution.beforeA);
           if (readExports.has(scenario.exportName)) {
             expect(execution.rejected, `${scenario.model}:${scenario.exportName} errored instead of returning opaque absence`).toBe(false);
+            expect(execution.result === null || (Array.isArray(execution.result) && execution.result.length === 0), `${scenario.model}:${scenario.exportName} did not return explicit opaque absence`).toBe(true);
           } else {
             expect(execution.rejected, `${scenario.model}:${scenario.exportName} accepted a B target`).toBe(true);
           }
@@ -613,6 +682,10 @@ integration("executable organization A/B adversarial matrix", () => {
           const execution = await runScenario(scenario, "A");
           expect(execution.rejected, `${scenario.model}:${scenario.exportName} did not successfully create A data: ${String(execution.rejection)}`).toBe(false);
           assertNoTenantB(scenario, execution.rendered);
+          assertBUnchanged(scenario, execution);
+          assertNonEmptyResult(scenario, execution);
+          expect(execution.afterA.length, `${scenario.model}:${scenario.exportName} did not persist A state`).toBeGreaterThan(0);
+          expect(execution.afterA, `${scenario.model}:${scenario.exportName} did not create or materialize A state`).not.toEqual(execution.beforeA);
           return "success";
         }
 
@@ -620,6 +693,13 @@ integration("executable organization A/B adversarial matrix", () => {
           const own = await runScenario(scenario, "A");
           expect(own.rejected, `${scenario.model}:${scenario.exportName} did not successfully ${category} A data: ${String(own.rejection)}`).toBe(false);
           assertNoTenantB(scenario, own.rendered);
+          assertBUnchanged(scenario, own);
+          assertNonEmptyResult(scenario, own);
+          if (category === "update") {
+            expect(own.afterA, `${scenario.model}:${scenario.exportName} was an A no-op`).not.toEqual(own.beforeA);
+          } else {
+            expect(own.afterA.length, `${scenario.model}:${scenario.exportName} did not delete A state`).toBeLessThan(own.beforeA.length);
+          }
           const protectedB = scenario.exportName === "upsertSharedRecord"
             ? await control.sharedBusinessRecord.findFirst({ where: { id: completeFixtureId("SharedBusinessRecord", "B") }, select: { displayName: true, updatedAt: true } })
             : scenario.exportName === "upsertPipelineStage"
@@ -642,6 +722,8 @@ integration("executable organization A/B adversarial matrix", () => {
         if (category === "foreign-attachment") {
           const execution = await runScenario(scenario, "B");
           expect(execution.rejected, `${scenario.model}:${scenario.exportName} accepted a B attachment`).toBe(true);
+          expect(execution.afterA, `${scenario.model}:${scenario.exportName} created A state after a denied B attachment`).toEqual(execution.beforeA);
+          assertBUnchanged(scenario, execution);
           return "denied";
         }
 
@@ -666,12 +748,15 @@ integration("executable organization A/B adversarial matrix", () => {
         const execution = await runScenario(scenario, "A");
         expect(execution.rejected, `${scenario.model}:${scenario.exportName} rejected tenant-B's business key in A`).toBe(false);
         assertNoTenantB(scenario, execution.rendered);
+        assertBUnchanged(scenario, execution);
+        assertNonEmptyResult(scenario, execution);
+        expect(duplicateKeyAppearsInAState(scenario.model, execution.afterA), `${scenario.model} did not persist the same business key in tenant A`).toBe(true);
         return "duplicate";
       };
 
       const handlers = Object.fromEntries(tenantIsolationCategories.map((category) => [
         category,
-        semanticHandler(category)
+        { category, run: semanticHandler(category) }
       ])) as unknown as TenantPublicOperationContext;
 
       for (const modelMatrix of Object.values(tenantPublicOperationMatrix)) {
@@ -702,12 +787,12 @@ integration("executable organization A/B adversarial matrix", () => {
     expect(completeFixtureCounts.filter(({ count }) => count < 2)).toEqual([]);
     expect(executedCells).toHaveLength(380);
     expect(new Set(executedCells).size).toBe(380);
-    expect(executedExports.size).toBe(82);
+    expect(executedExports.size).toBe(77);
     const outcomeCounts = executedCells.reduce<Record<string, number>>((counts, cell) => {
       const outcome = cell.split(":")[2]!;
       counts[outcome] = (counts[outcome] ?? 0) + 1;
       return counts;
     }, {});
-    expect(outcomeCounts).toEqual({ success: 183, denied: 59, duplicate: 12, "na-equivalent": 126 });
+    expect(outcomeCounts).toEqual({ success: 183, denied: 58, duplicate: 12, "na-equivalent": 127 });
   }, 60_000);
 });

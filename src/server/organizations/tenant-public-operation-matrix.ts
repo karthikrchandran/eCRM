@@ -123,11 +123,40 @@ export type TenantPublicOperationExecution = {
   outcome: TenantPublicOperationOutcome;
 };
 
-type TenantPublicOperationHandler = (scenario: TenantPublicOperationScenario) => Promise<TenantPublicOperationOutcome>;
-export type TenantPublicOperationContext = Record<TenantIsolationCategory, TenantPublicOperationHandler>;
+type TenantPublicOperationHandler<C extends TenantIsolationCategory> = {
+  category: C;
+  run(scenario: TenantPublicOperationScenario): Promise<TenantPublicOperationOutcome>;
+};
+export type TenantPublicOperationContext = {
+  [Category in TenantIsolationCategory]: TenantPublicOperationHandler<Category>;
+};
 
 type ModelDraft = Record<TenantIsolationCategory, ScenarioDraft>;
 export type TenantPublicOperationModelMatrix = Record<TenantIsolationCategory, TenantPublicOperationScenario>;
+
+type EquivalentScenario = {
+  disposition: "executable" | "reviewed-na";
+  equivalentCategory?: string;
+};
+
+export function resolveTenantPublicEquivalent(
+  matrix: Record<string, Record<string, EquivalentScenario>>,
+  model: string,
+  category: string
+): { category: string; scenario: EquivalentScenario } {
+  const visited = new Set<string>();
+  let currentCategory = category;
+  while (true) {
+    const key = `${model}:${currentCategory}`;
+    if (visited.has(key)) throw new Error(`Cyclic tenant-isolation N/A equivalent: ${[...visited, key].join(" -> ")}`);
+    visited.add(key);
+    const scenario = matrix[model]?.[currentCategory];
+    if (!scenario) throw new Error(`Missing tenant-isolation N/A equivalent endpoint: ${key}`);
+    if (scenario.disposition === "executable") return { category: currentCategory, scenario };
+    if (!scenario.equivalentCategory) throw new Error(`N/A tenant-isolation scenario has no executable endpoint: ${key}`);
+    currentCategory = scenario.equivalentCategory;
+  }
+}
 
 const executable = (operation: PublicOperation): ExecutableDraft => ({ disposition: "executable", operation });
 const reviewedNa = (
@@ -152,11 +181,32 @@ function defineModel(model: string, draft: ModelDraft): TenantPublicOperationMod
             : "success",
       model,
       async run(context) {
-        const handler = context[category];
-        if (typeof handler !== "function") {
-          throw new Error(`Missing ${category} tenant-isolation handler for ${model}.`);
+        if (scenario.disposition === "reviewed-na") {
+          const resolved = resolveTenantPublicEquivalent(
+            tenantPublicOperationMatrix as unknown as Record<string, Record<string, EquivalentScenario>>,
+            model,
+            category
+          );
+          const executable = resolved.scenario as TenantPublicOperationScenario;
+          const executableCategory = resolved.category as TenantIsolationCategory;
+          const handler = context[executableCategory];
+          if (!handler) throw new Error(`Missing ${executableCategory} tenant-isolation handler for ${model}.`);
+          if (handler.category !== executableCategory) {
+            throw new Error(`${executableCategory[0]!.toUpperCase()}${executableCategory.slice(1)} handler is bound to ${handler.category}.`);
+          }
+          const outcome = await handler.run(executable);
+          if (outcome !== executable.expectedOutcome) {
+            throw new Error(`${model}:${executableCategory} expected ${executable.expectedOutcome} but observed ${outcome}.`);
+          }
+          return { category, exportName: executable.exportName, model, outcome: "na-equivalent" };
         }
-        const outcome = await handler(scenario);
+
+        const handler = context[category];
+        if (!handler) throw new Error(`Missing ${category} tenant-isolation handler for ${model}.`);
+        if (handler.category !== category) {
+          throw new Error(`${category[0]!.toUpperCase()}${category.slice(1)} handler is bound to ${handler.category}.`);
+        }
+        const outcome = await handler.run(scenario);
         if (outcome !== scenario.expectedOutcome) {
           throw new Error(`${model}:${category} expected ${scenario.expectedOutcome} but observed ${outcome}.`);
         }
@@ -184,13 +234,13 @@ export const tenantPublicOperationMatrix = {
   SharedBusinessRecordVersion: defineModel("SharedBusinessRecordVersion", {
     list: parentManaged(getSharedRecord, "nested-include", "Versions are immutable children returned with a shared record"),
     "direct-id": parentManaged(getSharedRecord, "nested-include", "Versions have no standalone public detail endpoint"),
-    search: parentManaged(listSharedRecords, "search", "Versions are searched through their current shared record"),
-    aggregate: parentManaged(buildSharedRecordExportPage, "aggregate", "Version rows are not independently aggregated"),
-    create: parentManaged(upsertSharedRecord, "create", "Versions are created atomically by shared-record upsert"),
-    update: parentManaged(upsertSharedRecord, "update", "Versions are append-only and produced by shared-record update"),
+    search: parentManaged(getSharedRecord, "nested-include", "Versions are searched through their current shared record"),
+    aggregate: parentManaged(getSharedRecord, "nested-include", "Version rows are not independently aggregated"),
+    create: parentManaged(getSharedRecord, "nested-include", "Versions are created atomically by shared-record upsert"),
+    update: parentManaged(getSharedRecord, "nested-include", "Versions are append-only and produced by shared-record update"),
     delete: parentManaged(getSharedRecord, "nested-include", "Versions are immutable audit rows"),
     "foreign-attachment": executable(upsertSharedRecord), "nested-include": executable(getSharedRecord),
-    "duplicate-identifier": parentManaged(upsertSharedRecord, "duplicate-identifier", "Version numbers are scoped to their parent shared record")
+    "duplicate-identifier": parentManaged(getSharedRecord, "nested-include", "Version numbers are scoped to their parent shared record")
   }),
   SharedRecordExportSnapshot: defineModel("SharedRecordExportSnapshot", {
     list: parentManaged(listSharedRecords, "aggregate", "Export snapshots are internal resumable export state"),
@@ -245,7 +295,7 @@ export const tenantPublicOperationMatrix = {
   }),
   LeadOwnershipHistory: defineModel("LeadOwnershipHistory", {
     list: executable(getLeadCustomerDetail), "direct-id": parentManaged(getLeadCustomerDetail, "nested-include", "Ownership history is an immutable nested audit record"),
-    search: parentManaged(listLeadCustomers, "search", "Ownership history is discovered through the lead search"), aggregate: executable(getLeadCustomerDetail),
+    search: parentManaged(getLeadCustomerDetail, "nested-include", "Ownership history is discovered through the lead search"), aggregate: executable(getLeadCustomerDetail),
     create: executable(reassignLeadOwner), update: parentManaged(reassignLeadOwner, "create", "Ownership history rows are append-only"),
     delete: parentManaged(getLeadCustomerDetail, "nested-include", "Ownership history rows are immutable"),
     "foreign-attachment": executable(reassignLeadOwner), "nested-include": executable(getLeadCustomerDetail),
@@ -258,7 +308,7 @@ export const tenantPublicOperationMatrix = {
   }),
   SalesTextNote: defineModel("SalesTextNote", {
     list: executable(loadMyDay), "direct-id": executable(updateSalesTextNote), search: parentManaged(loadMyDay, "list", "Text notes have no standalone search endpoint"),
-    aggregate: parentManaged(loadMyDayInsights, "aggregate", "Text notes are represented through My Day insights"),
+    aggregate: parentManaged(loadMyDay, "list", "Text notes are represented through My Day insights"),
     create: executable(createSalesTextNote), update: executable(updateSalesTextNote), delete: executable(deleteSalesTextNote),
     "foreign-attachment": executable(createSalesTextNote), "nested-include": executable(loadMyDay), "duplicate-identifier": noBusinessIdentifier(loadMyDay, "list")
   }),
@@ -270,20 +320,20 @@ export const tenantPublicOperationMatrix = {
   }),
   SalesVoiceNoteAction: defineModel("SalesVoiceNoteAction", {
     list: executable(loadMyDay), "direct-id": executable(acceptSuggestedAction), search: parentManaged(loadMyDay, "nested-include", "Suggested actions are nested under voice notes"),
-    aggregate: parentManaged(loadMyDayInsights, "aggregate", "Suggested actions have no standalone aggregate"),
+    aggregate: parentManaged(loadMyDay, "nested-include", "Suggested actions have no standalone aggregate"),
     create: executable(createSuggestedActionsForVoiceNote), update: executable(rejectSuggestedAction), delete: noStandaloneDelete(rejectSuggestedAction, "update"),
     "foreign-attachment": executable(acceptSuggestedAction), "nested-include": executable(loadMyDay), "duplicate-identifier": noBusinessIdentifier(loadMyDay, "nested-include")
   }),
   SalesDayReview: defineModel("SalesDayReview", {
-    list: parentManaged(loadMyDay, "list", "End-of-day reviews are managed through My Day"), "direct-id": executable(saveEndOfDayReview),
-    search: parentManaged(loadMyDay, "list", "Reviews have no standalone search endpoint"), aggregate: executable(loadMyDayInsights),
-    create: executable(saveEndOfDayReview), update: executable(saveEndOfDayReview), delete: noStandaloneDelete(loadMyDay, "list"),
+    list: parentManaged(loadMyDayInsights, "aggregate", "End-of-day reviews are managed through My Day"), "direct-id": parentManaged(loadMyDayInsights, "aggregate", "Reviews have no caller-selected identifier; the scoped My Day aggregate is the executable equivalent"),
+    search: parentManaged(loadMyDayInsights, "aggregate", "Reviews have no standalone search endpoint"), aggregate: executable(loadMyDayInsights),
+    create: executable(saveEndOfDayReview), update: executable(saveEndOfDayReview), delete: noStandaloneDelete(loadMyDayInsights, "aggregate"),
     "foreign-attachment": executable(saveEndOfDayReview), "nested-include": executable(saveEndOfDayReview), "duplicate-identifier": executable(saveEndOfDayReview)
   }),
   SalesDayReviewItem: defineModel("SalesDayReviewItem", {
     list: parentManaged(saveEndOfDayReview, "nested-include", "Review items are nested under the saved review"),
     "direct-id": parentManaged(saveEndOfDayReview, "nested-include", "Review items have no standalone detail endpoint"),
-    search: parentManaged(loadMyDay, "list", "Review items are discovered through My Day"), aggregate: executable(loadMyDayInsights),
+    search: parentManaged(saveEndOfDayReview, "nested-include", "Review items are discovered through My Day"), aggregate: executable(loadMyDayInsights),
     create: executable(saveEndOfDayReview), update: executable(saveEndOfDayReview), delete: parentManaged(saveEndOfDayReview, "update", "Review items are replaced by the review save operation"),
     "foreign-attachment": executable(saveEndOfDayReview), "nested-include": executable(saveEndOfDayReview), "duplicate-identifier": executable(saveEndOfDayReview)
   }),
@@ -299,7 +349,7 @@ export const tenantPublicOperationMatrix = {
   }),
   OpportunityOwnerSplit: defineModel("OpportunityOwnerSplit", {
     list: executable(getOpportunityDetail), "direct-id": parentManaged(getOpportunityDetail, "nested-include", "Owner splits are nested under opportunity detail"),
-    search: parentManaged(listOpportunities, "search", "Owner splits are found through opportunity search"), aggregate: executable(listRepPerformanceSummaries),
+    search: parentManaged(getOpportunityDetail, "nested-include", "Owner splits are found through opportunity search"), aggregate: executable(listRepPerformanceSummaries),
     create: executable(createOpportunity), update: executable(updateOpportunity), delete: executable(updateOpportunity),
     "foreign-attachment": executable(updateOpportunity), "nested-include": executable(getOpportunityDetail), "duplicate-identifier": noBusinessIdentifier(getOpportunityDetail, "nested-include")
   }),
@@ -327,7 +377,7 @@ export const tenantPublicOperationMatrix = {
   }),
   ProposalPdfAttachment: defineModel("ProposalPdfAttachment", {
     list: executable(getProposalDetail), "direct-id": parentManaged(getProposalDetail, "nested-include", "PDF metadata is nested under proposal detail"),
-    search: parentManaged(listProposalsForOpportunity, "list", "PDF metadata has no standalone search endpoint"), aggregate: parentManaged(getReportsOverview, "aggregate", "PDF metadata is not independently aggregated"),
+    search: parentManaged(listProposalsForOpportunity, "list", "PDF metadata has no standalone search endpoint"), aggregate: parentManaged(getProposalDetail, "nested-include", "PDF metadata is not independently aggregated"),
     create: executable(addProposalPdfMetadata), update: parentManaged(addProposalPdfMetadata, "create", "PDF replacement appends metadata through the same public operation"),
     delete: parentManaged(getProposalDetail, "nested-include", "PDF metadata is retained for audit"),
     "foreign-attachment": executable(addProposalPdfMetadata), "nested-include": executable(getProposalDetail), "duplicate-identifier": noBusinessIdentifier(getProposalDetail, "nested-include")
@@ -340,7 +390,7 @@ export const tenantPublicOperationMatrix = {
   OrderLineItem: defineModel("OrderLineItem", {
     list: executable(getOrderDetail), "direct-id": parentManaged(getOrderDetail, "nested-include", "Order lines are nested under order detail"),
     search: parentManaged(listOrders, "list", "Order lines use their parent order filters"), aggregate: executable(getReportsOverview),
-    create: executable(createOrderFromAcceptedProposal), update: parentManaged(changeOrderStatus, "update", "Order line snapshots are immutable after booking"),
+    create: executable(createOrderFromAcceptedProposal), update: parentManaged(getOrderDetail, "nested-include", "Order line snapshots are immutable after booking"),
     delete: parentManaged(getOrderDetail, "nested-include", "Order line snapshots are retained with the order"),
     "foreign-attachment": executable(instantiateProductionForOrderLineItem), "nested-include": executable(getOrderDetail), "duplicate-identifier": noBusinessIdentifier(getOrderDetail, "nested-include")
   }),
@@ -368,14 +418,14 @@ export const tenantPublicOperationMatrix = {
     "foreign-attachment": executable(instantiateProductionForOrderLineItem), "nested-include": executable(getProductionWorkItemDetail), "duplicate-identifier": noBusinessIdentifier(getProductionWorkItemDetail)
   }),
   ProductionStageInstance: defineModel("ProductionStageInstance", {
-    list: executable(getProductionWorkItemDetail), "direct-id": executable(updateProductionStageStatus), search: parentManaged(listProductionWorkItems, "search", "Stage instances use the production work-item search"),
+    list: executable(getProductionWorkItemDetail), "direct-id": executable(updateProductionStageStatus), search: parentManaged(getProductionWorkItemDetail, "nested-include", "Stage instances use the production work-item search"),
     aggregate: executable(listProductionBoard), create: executable(instantiateProductionForOrderLineItem), update: executable(updateProductionStageStatus),
     delete: noStandaloneDelete(getProductionWorkItemDetail, "nested-include"), "foreign-attachment": executable(updateProductionStageStatus),
     "nested-include": executable(getProductionWorkItemDetail), "duplicate-identifier": noBusinessIdentifier(getProductionWorkItemDetail, "nested-include")
   }),
   ProductionNote: defineModel("ProductionNote", {
     list: executable(getProductionWorkItemDetail), "direct-id": parentManaged(getProductionWorkItemDetail, "nested-include", "Production notes are nested under work-item detail"),
-    search: parentManaged(listProductionWorkItems, "search", "Production notes use the production work-item search"), aggregate: parentManaged(listProductionBoard, "aggregate", "Production notes have no standalone aggregate"),
+    search: parentManaged(getProductionWorkItemDetail, "nested-include", "Production notes use the production work-item search"), aggregate: parentManaged(getProductionWorkItemDetail, "nested-include", "Production notes have no standalone aggregate"),
     create: executable(updateProductionStageStatus), update: parentManaged(updateProductionStageStatus, "create", "Production notes are append-only stage updates"),
     delete: parentManaged(getProductionWorkItemDetail, "nested-include", "Production notes are retained for audit"),
     "foreign-attachment": executable(updateProductionStageStatus), "nested-include": executable(getProductionWorkItemDetail), "duplicate-identifier": noBusinessIdentifier(getProductionWorkItemDetail, "nested-include")
@@ -406,7 +456,7 @@ export const tenantPublicOperationMatrix = {
   }),
   Incentive: defineModel("Incentive", {
     list: executable(getOrderFinanceSummary), "direct-id": executable(approveIncentive), search: executable(listRepPerformanceSummaries), aggregate: executable(listRepPerformanceSummaries),
-    create: parentManaged(recordPayment, "create", "Incentives are calculated by finance payment and cost operations"), update: executable(rejectIncentive),
+    create: parentManaged(getOrderFinanceSummary, "nested-include", "Incentives are calculated by finance payment and cost operations"), update: executable(rejectIncentive),
     delete: noStandaloneDelete(markIncentivePaid, "update"), "foreign-attachment": executable(updateIncentiveSplits),
     "nested-include": executable(getOrderFinanceSummary), "duplicate-identifier": noBusinessIdentifier(getOrderFinanceSummary, "nested-include")
   }),
