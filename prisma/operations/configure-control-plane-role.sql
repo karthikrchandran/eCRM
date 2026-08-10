@@ -34,6 +34,9 @@ SELECT format(
   :'control_role'
 ) \gexec
 SELECT format('GRANT SELECT, INSERT, UPDATE ON TABLE "BusinessSettings" TO %I', :'control_role') \gexec
+SELECT format('GRANT EXECUTE ON FUNCTION public.control_auth_user_by_email(TEXT) TO %I', :'control_role') \gexec
+SELECT format('GRANT EXECUTE ON FUNCTION public.control_active_organization_members(TEXT, TEXT[]) TO %I', :'control_role') \gexec
+SELECT format('GRANT EXECUTE ON FUNCTION public.control_organization_context_membership(TEXT) TO %I', :'control_role') \gexec
 SELECT format('GRANT %I TO %I', :'control_role', :'login_role') \gexec
 
 -- Fail if direct, inherited, PUBLIC, or ownership privileges permit business-data access.

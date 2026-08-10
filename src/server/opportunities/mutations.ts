@@ -1,5 +1,4 @@
 import type { Prisma } from "@prisma/client";
-import { tenantBoundary as db } from "@/server/organizations/tenant-boundary";
 import { withOrganization } from "@/server/organizations/with-organization";
 import { assertOrganizationUserEligible } from "@/server/organizations/member-options";
 import { assertTenantMember } from "@/server/organizations/tenant-member-guard";
@@ -169,9 +168,9 @@ export async function createOpportunity(
   user: OpportunityUser,
   input: OpportunityInput,
   splits: OpportunitySplitInput[] = [],
-  database: CreateOpportunityDb = db as unknown as CreateOpportunityDb
+  database?: CreateOpportunityDb
 ): Promise<IdResult> {
-  if (database === (db as unknown as CreateOpportunityDb)) {
+  if (!database) {
     await assertOrganizationUserEligible(user.organizationId, input.ownerId, ["ADMIN", "SALES"]);
     for (const split of splits) await assertOrganizationUserEligible(user.organizationId, split.userId, ["ADMIN", "SALES"]);
     return withOrganization(user.organizationId, (tx) => createOpportunity(user, input, splits, tx as unknown as CreateOpportunityDb));
@@ -216,9 +215,9 @@ export async function updateOpportunity(
   opportunityId: string,
   input: OpportunityInput,
   splits: OpportunitySplitInput[] = [],
-  database: UpdateOpportunityDb = db as unknown as UpdateOpportunityDb
+  database?: UpdateOpportunityDb
 ): Promise<IdResult> {
-  if (database === (db as unknown as UpdateOpportunityDb)) {
+  if (!database) {
     await assertOrganizationUserEligible(user.organizationId, input.ownerId, ["ADMIN", "SALES"]);
     for (const split of splits) await assertOrganizationUserEligible(user.organizationId, split.userId, ["ADMIN", "SALES"]);
     return withOrganization(user.organizationId, (tx) => updateOpportunity(user, opportunityId, input, splits, tx as unknown as UpdateOpportunityDb));
@@ -271,9 +270,9 @@ export async function moveOpportunityStage(
   user: OpportunityUser,
   opportunityId: string,
   stageId: string,
-  database: MoveOpportunityDb = db as unknown as MoveOpportunityDb
+  database?: MoveOpportunityDb
 ): Promise<IdResult> {
-  if (database === (db as unknown as MoveOpportunityDb)) return withOrganization(user.organizationId, (tx) => moveOpportunityStage(user, opportunityId, stageId, tx as unknown as MoveOpportunityDb));
+  if (!database) return withOrganization(user.organizationId, (tx) => moveOpportunityStage(user, opportunityId, stageId, tx as unknown as MoveOpportunityDb));
   assertCanWriteOpportunities(user);
   await assertActiveStage(database, user.organizationId, stageId);
 
@@ -289,9 +288,9 @@ export async function moveOpportunityStage(
 export async function upsertSalesTarget(
   user: OpportunityUser,
   input: SalesTargetInput,
-  database: TargetDb = db as unknown as TargetDb
+  database?: TargetDb
 ): Promise<IdResult> {
-  if (database === (db as unknown as TargetDb)) {
+  if (!database) {
     await assertOrganizationUserEligible(user.organizationId, input.ownerId, ["ADMIN", "SALES"]);
     return withOrganization(user.organizationId, (tx) => upsertSalesTarget(user, input, tx as unknown as TargetDb));
   }
@@ -322,9 +321,9 @@ export async function upsertSalesTarget(
 export async function upsertPipelineStage(
   user: OpportunityUser,
   input: PipelineStageInput,
-  database: StageManagementDb = db as unknown as StageManagementDb
+  database?: StageManagementDb
 ): Promise<IdResult> {
-  if (database === (db as unknown as StageManagementDb)) return withOrganization(user.organizationId, (tx) => upsertPipelineStage(user, input, tx as unknown as StageManagementDb));
+  if (!database) return withOrganization(user.organizationId, (tx) => upsertPipelineStage(user, input, tx as unknown as StageManagementDb));
   assertCanWriteOpportunities(user);
 
   if (user.role !== "ADMIN") {

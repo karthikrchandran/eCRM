@@ -1,5 +1,4 @@
 import type { Prisma, ProductionStageStatus, User } from "@prisma/client";
-import { tenantBoundary as db } from "@/server/organizations/tenant-boundary";
 import { withOrganization } from "@/server/organizations/with-organization";
 import { listOrganizationUserOptions } from "@/server/organizations/member-options";
 import { assertCanManageProductionConfig, assertCanViewProductionRecords } from "./permissions";
@@ -109,9 +108,9 @@ function buildProductionWorkItemWhere(organizationId: string, filters: Productio
 export async function listProductionBoard(
   user: ProductionUser,
   filters: ProductionFilters,
-  database: ProductionQueryDb = db as unknown as ProductionQueryDb
+  database?: ProductionQueryDb
 ): Promise<{ statuses: typeof productionBoardStatuses; recordsByStatus: Record<ProductionStageStatus, ProductionWorkItemRecord[]> }> {
-  if (database === (db as unknown as ProductionQueryDb)) return withOrganization(user.organizationId, (tx) => listProductionBoard(user, filters, tx as unknown as ProductionQueryDb));
+  if (!database) return withOrganization(user.organizationId, (tx) => listProductionBoard(user, filters, tx as unknown as ProductionQueryDb));
   assertCanViewProductionRecords(user);
   const workItems = await database.productionWorkItem.findMany({
     where: buildProductionWorkItemWhere(user.organizationId, filters),
@@ -137,9 +136,9 @@ export async function listProductionBoard(
 export async function listProductionWorkItems(
   user: ProductionUser,
   filters: ProductionFilters = {},
-  database: ProductionQueryDb = db as unknown as ProductionQueryDb
+  database?: ProductionQueryDb
 ): Promise<ProductionWorkItemRecord[]> {
-  if (database === (db as unknown as ProductionQueryDb)) return withOrganization(user.organizationId, (tx) => listProductionWorkItems(user, filters, tx as unknown as ProductionQueryDb));
+  if (!database) return withOrganization(user.organizationId, (tx) => listProductionWorkItems(user, filters, tx as unknown as ProductionQueryDb));
   assertCanViewProductionRecords(user);
 
   return database.productionWorkItem.findMany({
@@ -152,9 +151,9 @@ export async function listProductionWorkItems(
 export async function getProductionWorkItemDetail(
   user: ProductionUser,
   workItemId: string,
-  database: ProductionQueryDb = db as unknown as ProductionQueryDb
+  database?: ProductionQueryDb
 ): Promise<ProductionWorkItemRecord | null> {
-  if (database === (db as unknown as ProductionQueryDb)) return withOrganization(user.organizationId, (tx) => getProductionWorkItemDetail(user, workItemId, tx as unknown as ProductionQueryDb));
+  if (!database) return withOrganization(user.organizationId, (tx) => getProductionWorkItemDetail(user, workItemId, tx as unknown as ProductionQueryDb));
   assertCanViewProductionRecords(user);
 
   if (!database.productionWorkItem.findFirst) {
@@ -167,8 +166,8 @@ export async function getProductionWorkItemDetail(
   });
 }
 
-export async function listProductionFormOptions(user: ProductionUser, database: ProductionQueryDb = db as unknown as ProductionQueryDb): Promise<{ owners: ProductionOwner[] }> {
-  if (database === (db as unknown as ProductionQueryDb)) {
+export async function listProductionFormOptions(user: ProductionUser, database?: ProductionQueryDb): Promise<{ owners: ProductionOwner[] }> {
+  if (!database) {
     return { owners: await listOrganizationUserOptions(user.organizationId, ["ADMIN", "SALES", "PRODUCTION"]) };
   }
   if (!database.user) {
@@ -186,9 +185,9 @@ export async function listProductionFormOptions(user: ProductionUser, database: 
 
 export async function listProductionTemplateConfig(
   user: ProductionUser,
-  database: ProductionQueryDb = db as unknown as ProductionQueryDb
+  database?: ProductionQueryDb
 ): Promise<{ productServices: ProductionProductServiceConfigRecord[]; templates: ProductionTemplateConfigRecord[] }> {
-  if (database === (db as unknown as ProductionQueryDb)) return withOrganization(user.organizationId, (tx) => listProductionTemplateConfig(user, tx as unknown as ProductionQueryDb));
+  if (!database) return withOrganization(user.organizationId, (tx) => listProductionTemplateConfig(user, tx as unknown as ProductionQueryDb));
   assertCanManageProductionConfig(user);
 
   if (!database.productionTemplate || !database.productService) {

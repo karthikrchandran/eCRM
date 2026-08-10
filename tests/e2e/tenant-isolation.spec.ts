@@ -1,13 +1,21 @@
 import { expect, test } from "@playwright/test";
 import { hash } from "bcryptjs";
 import { PrismaClient } from "@prisma/client";
+import { validateDisposableDatabaseUrls } from "../../src/server/organizations/disposable-database";
 
-const ownerUrl = process.env.DATABASE_URL;
-if (!ownerUrl || !/(test|wp4|disposable)/i.test(new URL(ownerUrl).pathname)) {
-  throw new Error("Tenant isolation browser tests require a disposable DATABASE_URL.");
+const safeUrls = validateDisposableDatabaseUrls(
+  process.env.TEST_DATABASE_URL,
+  process.env.TEST_TENANT_DATABASE_URL,
+  process.env.TEST_CONTROL_DATABASE_URL,
+  []
+);
+if (process.env.DATABASE_URL !== safeUrls.ownerUrl
+  || process.env.TENANT_DATABASE_URL !== safeUrls.tenantUrl
+  || process.env.CONTROL_PLANE_DATABASE_URL !== safeUrls.controlUrl) {
+  throw new Error("Tenant isolation browser server URLs must be the validated disposable owner, tenant, and control URLs.");
 }
 
-const db = new PrismaClient({ datasourceUrl: ownerUrl });
+const db = new PrismaClient({ datasourceUrl: safeUrls.ownerUrl });
 const ids = {
   orgA: "e2e_tenant_org_A", orgB: "e2e_tenant_org_B",
   userA: "e2e_tenant_user_A", userB: "e2e_tenant_user_B",

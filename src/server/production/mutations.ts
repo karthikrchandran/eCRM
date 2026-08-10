@@ -1,5 +1,4 @@
 import type { OrderStatus, Prisma, ProductionStageStatus } from "@prisma/client";
-import { tenantBoundary as db } from "@/server/organizations/tenant-boundary";
 import { assertTenantMember } from "@/server/organizations/tenant-member-guard";
 import { assertOrganizationUserEligible } from "@/server/organizations/member-options";
 import { withOrganization } from "@/server/organizations/with-organization";
@@ -219,9 +218,9 @@ function stageUpdateDataForPrismaArgs(input: ProductionStageStatusInput, started
 export async function instantiateProductionForOrderLineItem(
   user: ProductionUser,
   orderLineItemId: string,
-  database: ProductionMutationDb = db as unknown as ProductionMutationDb
+  database?: ProductionMutationDb
 ): Promise<{ id: string }> {
-  if (database === (db as unknown as ProductionMutationDb)) return withOrganization(user.organizationId, (tx) => instantiateProductionForOrderLineItem(user, orderLineItemId, tx as unknown as ProductionMutationDb));
+  if (!database) return withOrganization(user.organizationId, (tx) => instantiateProductionForOrderLineItem(user, orderLineItemId, tx as unknown as ProductionMutationDb));
   assertCanWriteProductionRecords(user);
 
   const existing = await database.productionWorkItem.findFirst({
@@ -295,15 +294,15 @@ export async function updateProductionStageStatus(
   user: ProductionUser,
   stageInstanceId: string,
   input: ProductionStageStatusInput,
-  database: ProductionStageDb = db as unknown as ProductionStageDb
+  database?: ProductionStageDb
 ): Promise<{ id: string; status: ProductionStageStatus | string }> {
   assertCanWriteProductionRecords(user);
 
-  if (input.assignedToId && database === (db as unknown as ProductionStageDb)) {
+  if (input.assignedToId && !database) {
     await assertOrganizationUserEligible(user.organizationId, input.assignedToId, ["ADMIN", "SALES", "PRODUCTION"]);
   }
 
-  if (database === (db as unknown as ProductionStageDb)) {
+  if (!database) {
     return withOrganization(user.organizationId, async (tx) => {
       if (input.assignedToId) {
         await assertTenantMember(tx, input.assignedToId, ["ADMIN", "SALES", "PRODUCTION"]);
@@ -404,9 +403,9 @@ async function updateProductionStageStatusInTenant(
 export async function saveProductionTemplate(
   user: ProductionUser,
   input: ProductionTemplateInput,
-  database: ProductionConfigDb = db as unknown as ProductionConfigDb
+  database?: ProductionConfigDb
 ): Promise<{ id: string }> {
-  if (database === (db as unknown as ProductionConfigDb)) return withOrganization(user.organizationId, (tx) => saveProductionTemplate(user, input, tx as unknown as ProductionConfigDb));
+  if (!database) return withOrganization(user.organizationId, (tx) => saveProductionTemplate(user, input, tx as unknown as ProductionConfigDb));
   assertCanManageProductionConfig(user);
 
   const data = {
@@ -437,9 +436,9 @@ export async function saveProductionTemplate(
 export async function saveProductionTemplateStage(
   user: ProductionUser,
   input: ProductionTemplateStageInput,
-  database: ProductionConfigDb = db as unknown as ProductionConfigDb
+  database?: ProductionConfigDb
 ): Promise<{ id: string }> {
-  if (database === (db as unknown as ProductionConfigDb)) return withOrganization(user.organizationId, (tx) => saveProductionTemplateStage(user, input, tx as unknown as ProductionConfigDb));
+  if (!database) return withOrganization(user.organizationId, (tx) => saveProductionTemplateStage(user, input, tx as unknown as ProductionConfigDb));
   assertCanManageProductionConfig(user);
 
   const template = await database.productionTemplate.findFirst({

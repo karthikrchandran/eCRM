@@ -1,5 +1,4 @@
 import type { Prisma } from "@prisma/client";
-import { tenantBoundary as db } from "@/server/organizations/tenant-boundary";
 import { withOrganization } from "@/server/organizations/with-organization";
 import { assertOrganizationUserEligible } from "@/server/organizations/member-options";
 import { assertTenantMember } from "@/server/organizations/tenant-member-guard";
@@ -131,9 +130,9 @@ async function assertContactBelongsToLead(database: CreateActivityDb, organizati
 export async function createLeadCustomer(
   user: CrmUser,
   input: LeadCustomerInput,
-  database: CreateLeadDb = db as unknown as CreateLeadDb
+  database?: CreateLeadDb
 ): Promise<IdResult> {
-  if (database === (db as unknown as CreateLeadDb)) {
+  if (!database) {
     await assertOrganizationUserEligible(user.organizationId, input.ownerId, ["ADMIN", "SALES"]);
     return withOrganization(user.organizationId, (tx) => createLeadCustomer(user, input, tx as unknown as CreateLeadDb));
   }
@@ -159,9 +158,9 @@ export async function updateLeadCustomer(
   user: CrmUser,
   leadCustomerId: string,
   input: LeadCustomerInput,
-  database: UpdateLeadDb = db as unknown as UpdateLeadDb
+  database?: UpdateLeadDb
 ): Promise<IdResult> {
-  if (database === (db as unknown as UpdateLeadDb)) {
+  if (!database) {
     await assertOrganizationUserEligible(user.organizationId, input.ownerId, ["ADMIN", "SALES"]);
     return withOrganization(user.organizationId, (tx) => updateLeadCustomer(user, leadCustomerId, input, tx as unknown as UpdateLeadDb));
   }
@@ -186,9 +185,9 @@ export async function updateLeadCustomer(
 export async function createBranch(
   user: CrmUser,
   input: BranchInput,
-  database: CreateBranchDb = db as unknown as CreateBranchDb
+  database?: CreateBranchDb
 ): Promise<IdResult> {
-  if (database === (db as unknown as CreateBranchDb)) return withOrganization(user.organizationId, (tx) => createBranch(user, input, tx as unknown as CreateBranchDb));
+  if (!database) return withOrganization(user.organizationId, (tx) => createBranch(user, input, tx as unknown as CreateBranchDb));
   assertCanWriteCrmRecords(user);
   await assertLeadExists(database, user.organizationId, input.leadCustomerId);
 
@@ -198,9 +197,9 @@ export async function createBranch(
 export async function createContact(
   user: CrmUser,
   input: ContactInput,
-  database: CreateContactDb = db as unknown as CreateContactDb
+  database?: CreateContactDb
 ): Promise<IdResult> {
-  if (database === (db as unknown as CreateContactDb)) return withOrganization(user.organizationId, (tx) => createContact(user, input, tx as unknown as CreateContactDb));
+  if (!database) return withOrganization(user.organizationId, (tx) => createContact(user, input, tx as unknown as CreateContactDb));
   assertCanWriteCrmRecords(user);
   await assertLeadExists(database, user.organizationId, input.leadCustomerId);
 
@@ -214,9 +213,9 @@ export async function createContact(
 export async function createActivity(
   user: CrmUser,
   input: ActivityInput,
-  database: CreateActivityDb = db as unknown as CreateActivityDb
+  database?: CreateActivityDb
 ): Promise<IdResult> {
-  if (database === (db as unknown as CreateActivityDb)) {
+  if (!database) {
     await assertOrganizationUserEligible(user.organizationId, input.ownerId, ["ADMIN", "SALES"]);
     return withOrganization(user.organizationId, (tx) => createActivity(user, input, tx as unknown as CreateActivityDb));
   }
@@ -244,9 +243,9 @@ export async function createActivity(
 export async function completeActivity(
   user: CrmUser,
   activityId: string,
-  database: CompleteActivityDb = db as unknown as CompleteActivityDb
+  database?: CompleteActivityDb
 ): Promise<IdResult> {
-  if (database === (db as unknown as CompleteActivityDb)) return withOrganization(user.organizationId, (tx) => completeActivity(user, activityId, tx as unknown as CompleteActivityDb));
+  if (!database) return withOrganization(user.organizationId, (tx) => completeActivity(user, activityId, tx as unknown as CompleteActivityDb));
   assertCanWriteCrmRecords(user);
   const activity = await (database.activity.findFirst ?? database.activity.findUnique!)({
     where: { id: activityId, organizationId: user.organizationId },
@@ -270,9 +269,9 @@ export async function completeActivity(
 export async function reassignLeadOwner(
   user: CrmUser,
   input: ReassignmentInput,
-  database: ReassignDb = db as unknown as ReassignDb
+  database?: ReassignDb
 ): Promise<unknown> {
-  if (database === (db as unknown as ReassignDb)) {
+  if (!database) {
     await assertOrganizationUserEligible(user.organizationId, input.toOwnerId, ["ADMIN", "SALES"]);
     return withOrganization(user.organizationId, (tx) => reassignLeadOwner(user, input, tx as unknown as ReassignDb));
   }

@@ -1,5 +1,4 @@
 import type { Prisma } from "@prisma/client";
-import { tenantBoundary as db } from "@/server/organizations/tenant-boundary";
 import { withOrganization } from "@/server/organizations/with-organization";
 import { assertCanManageProductServices, assertCanViewProductServices } from "./permissions";
 import type { ProductUser } from "./types";
@@ -27,8 +26,8 @@ type ProductQueryDb = {
   };
 };
 
-export async function listActiveProductServices(user: ProductUser, database: ProductQueryDb = db as unknown as ProductQueryDb): Promise<ProductServiceRecord[]> {
-  if (database === (db as unknown as ProductQueryDb)) return withOrganization(user.organizationId, (tx) => listActiveProductServices(user, tx as unknown as ProductQueryDb));
+export async function listActiveProductServices(user: ProductUser, database?: ProductQueryDb): Promise<ProductServiceRecord[]> {
+  if (!database) return withOrganization(user.organizationId, (tx) => listActiveProductServices(user, tx as unknown as ProductQueryDb));
   assertCanViewProductServices(user);
 
   return database.productService.findMany({
@@ -40,9 +39,9 @@ export async function listActiveProductServices(user: ProductUser, database: Pro
 
 export async function listProductServicesForAdmin(
   user: ProductUser,
-  database: ProductQueryDb = db as unknown as ProductQueryDb
+  database?: ProductQueryDb
 ): Promise<ProductServiceRecord[]> {
-  if (database === (db as unknown as ProductQueryDb)) return withOrganization(user.organizationId, (tx) => listProductServicesForAdmin(user, tx as unknown as ProductQueryDb));
+  if (!database) return withOrganization(user.organizationId, (tx) => listProductServicesForAdmin(user, tx as unknown as ProductQueryDb));
   assertCanManageProductServices(user);
 
   return database.productService.findMany({
@@ -52,8 +51,8 @@ export async function listProductServicesForAdmin(
   });
 }
 
-export async function getProductServiceForAdmin(user: ProductUser, productServiceId: string, database: ProductQueryDb = db as unknown as ProductQueryDb): Promise<ProductServiceRecord | null> {
-  if (database === (db as unknown as ProductQueryDb)) return withOrganization(user.organizationId, (tx) => getProductServiceForAdmin(user, productServiceId, tx as unknown as ProductQueryDb));
+export async function getProductServiceForAdmin(user: ProductUser, productServiceId: string, database?: ProductQueryDb): Promise<ProductServiceRecord | null> {
+  if (!database) return withOrganization(user.organizationId, (tx) => getProductServiceForAdmin(user, productServiceId, tx as unknown as ProductQueryDb));
   assertCanManageProductServices(user);
 
   return database.productService.findFirst!({

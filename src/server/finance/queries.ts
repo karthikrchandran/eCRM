@@ -1,5 +1,4 @@
 import type { Prisma } from "@prisma/client";
-import { tenantBoundary as db } from "@/server/organizations/tenant-boundary";
 import { withOrganization } from "@/server/organizations/with-organization";
 import { assertCanViewFinance } from "./permissions";
 import type { FinanceUser } from "./types";
@@ -59,9 +58,9 @@ type FinanceQueryDb = {
 export async function getOrderFinanceSummary(
   user: FinanceUser,
   orderId: string,
-  database: FinanceQueryDb = db as unknown as FinanceQueryDb
+  database?: FinanceQueryDb
 ): Promise<OrderFinanceSummary | null> {
-  if (database === (db as unknown as FinanceQueryDb)) return withOrganization(user.organizationId, (tx) => getOrderFinanceSummary(user, orderId, tx as unknown as FinanceQueryDb));
+  if (!database) return withOrganization(user.organizationId, (tx) => getOrderFinanceSummary(user, orderId, tx as unknown as FinanceQueryDb));
   assertCanViewFinance(user);
 
   return (database.order.findFirst ?? database.order.findUnique!)({

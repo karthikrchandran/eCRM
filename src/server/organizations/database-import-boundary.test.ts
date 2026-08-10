@@ -15,4 +15,11 @@ describe("database import boundary", () => {
       .filter((file) => readFileSync(path.join(process.cwd(), file), "utf8").includes('@/server/db'));
     expect(violations).toEqual([]);
   });
+
+  it("has no fake database sentinel in runtime source", () => {
+    const violations = globSync("src/server/**/*.{ts,tsx}")
+      .filter((file) => !file.endsWith(".test.ts"))
+      .filter((file) => readFileSync(path.join(process.cwd(), file), "utf8").includes("tenantBoundary"));
+    expect(violations).toEqual([]);
+  });
 });

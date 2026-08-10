@@ -16,7 +16,8 @@ import { validateDisposableDatabaseUrls } from "./disposable-database";
 
 const controlUrl = process.env.TEST_DATABASE_URL;
 const tenantUrlValue = process.env.TEST_TENANT_DATABASE_URL;
-const integration = describe.runIf(Boolean(controlUrl && tenantUrlValue));
+const controlPlaneUrlValue = process.env.TEST_CONTROL_DATABASE_URL;
+const integration = describe.runIf(Boolean(controlUrl && tenantUrlValue && controlPlaneUrlValue));
 
 const orgA = "matrix_org_A";
 const orgB = "matrix_org_B";
@@ -107,8 +108,8 @@ const probes = {
 } satisfies Record<(typeof tenantIsolationDomains)[number], TenantDomainProbe>;
 
 integration("executable organization A/B adversarial matrix", () => {
-  if (!controlUrl || !tenantUrlValue) return;
-  const safeUrls = validateDisposableDatabaseUrls(controlUrl, tenantUrlValue);
+  if (!controlUrl || !tenantUrlValue || !controlPlaneUrlValue) return;
+  const safeUrls = validateDisposableDatabaseUrls(controlUrl, tenantUrlValue, controlPlaneUrlValue);
 
   const control = new PrismaClient({ datasourceUrl: safeUrls.ownerUrl });
   const tenantUrl = new URL(safeUrls.tenantUrl);

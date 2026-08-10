@@ -1,5 +1,4 @@
 import type { Prisma } from "@prisma/client";
-import { tenantBoundary as db } from "@/server/organizations/tenant-boundary";
 import { withOrganization } from "@/server/organizations/with-organization";
 import { assertCanUseSalesWorkspace, type SalesDayUser } from "./permissions";
 import type { MyDayInsightsViewModel, MyDayLinkedRecord, MyDayTaskRecord, MyDayTextNoteRecord, MyDayViewModel } from "./types";
@@ -189,9 +188,9 @@ function mapLookup(record: LookupRecord): MyDayLinkedRecord {
 export async function loadMyDay(
   user: SalesDayUser,
   date: Date,
-  database: QueryDb = db as unknown as QueryDb
+  database?: QueryDb
 ): Promise<MyDayViewModel> {
-  if (database === (db as unknown as QueryDb)) return withOrganization(user.organizationId, (tx) => loadMyDay(user, date, tx as unknown as QueryDb));
+  if (!database) return withOrganization(user.organizationId, (tx) => loadMyDay(user, date, tx as unknown as QueryDb));
   assertCanUseSalesWorkspace(user);
   const dayStart = startOfDay(date);
   const dayEnd = addDays(dayStart, 1);
@@ -268,9 +267,9 @@ export async function loadMyDay(
 
 export async function loadMyDayLookups(
   user: SalesDayUser,
-  database: QueryDb = db as unknown as QueryDb
+  database?: QueryDb
 ): Promise<MyDayLookups> {
-  if (database === (db as unknown as QueryDb)) return withOrganization(user.organizationId, (tx) => loadMyDayLookups(user, tx as unknown as QueryDb));
+  if (!database) return withOrganization(user.organizationId, (tx) => loadMyDayLookups(user, tx as unknown as QueryDb));
   assertCanUseSalesWorkspace(user);
 
   const [leadCustomers, opportunities, proposals, orders] = await Promise.all([
@@ -307,9 +306,9 @@ export async function loadMyDayLookups(
 export async function loadMyDayInsights(
   user: SalesDayUser,
   date: Date,
-  database: QueryDb = db as unknown as QueryDb
+  database?: QueryDb
 ): Promise<MyDayInsightsViewModel> {
-  if (database === (db as unknown as QueryDb)) return withOrganization(user.organizationId, (tx) => loadMyDayInsights(user, date, tx as unknown as QueryDb));
+  if (!database) return withOrganization(user.organizationId, (tx) => loadMyDayInsights(user, date, tx as unknown as QueryDb));
   assertCanUseSalesWorkspace(user);
   const today = startOfDay(date);
   const tomorrow = addDays(today, 1);

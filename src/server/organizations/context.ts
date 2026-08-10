@@ -5,7 +5,7 @@ import type {
 } from "@prisma/client";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { getControlPlaneDb } from "@/server/db";
+import { findOrganizationContextMembership } from "@/server/auth/control-plane-identity";
 import {
   SESSION_COOKIE_NAME,
   membershipSessionVersion,
@@ -47,36 +47,11 @@ type OrganizationContextDependencies = {
   findMembershipById?: (membershipId: string) => Promise<OrganizationMembershipRecord | null>;
 };
 
-async function findMembershipById(membershipId: string) {
-  return getControlPlaneDb().organizationMembership.findUnique({
-    where: { id: membershipId },
-    select: {
-      id: true,
-      userId: true,
-      organizationId: true,
-      role: true,
-      status: true,
-      updatedAt: true,
-      user: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          active: true
-        }
-      },
-      organization: {
-        select: { status: true }
-      }
-    }
-  });
-}
-
 export async function resolveOrganizationContext(
   session: SessionUser,
   dependencies: OrganizationContextDependencies = {}
 ): Promise<OrganizationContext | null> {
-  const lookupMembership = dependencies.findMembershipById ?? findMembershipById;
+  const lookupMembership = dependencies.findMembershipById ?? findOrganizationContextMembership;
   const membership = await lookupMembership(session.membershipId);
 
   if (

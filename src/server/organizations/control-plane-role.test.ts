@@ -15,6 +15,7 @@ describe("control-plane runtime role operation", () => {
   it("grants only control tables and asserts all business tables are inaccessible", () => {
     expect(sql).toContain('GRANT SELECT ON TABLE "User", "Organization", "OrganizationMembership"');
     expect(sql).toContain('GRANT SELECT, INSERT, UPDATE ON TABLE "BusinessSettings"');
+    expect(sql).toContain("control_organization_context_membership(TEXT)");
     for (const table of ["LeadCustomer", "Opportunity", "Order", "Invoice", "WorkflowEvent"]) {
       expect(sql).toContain(`('${table}')`);
     }

@@ -1,5 +1,4 @@
 import type { Prisma, User } from "@prisma/client";
-import { tenantBoundary as db } from "@/server/organizations/tenant-boundary";
 import { withOrganization } from "@/server/organizations/with-organization";
 import { listOrganizationUserOptions } from "@/server/organizations/member-options";
 import { assertCanViewCrmRecords, type CrmUser } from "./permissions";
@@ -301,10 +300,10 @@ function buildContactWhere(organizationId: string, filters: ContactFilters): Pri
 export async function listLeadCustomers(
   user: CrmUser,
   filters: LeadFilters,
-  database: QueryDb = db as unknown as QueryDb,
+  database?: QueryDb,
   preloadedOwners?: CrmOwner[]
 ): Promise<{ records: LeadCustomerListRecord[]; owners: CrmOwner[] }> {
-  if (database === (db as unknown as QueryDb)) {
+  if (!database) {
     const owners = await listOrganizationUserOptions(user.organizationId, ["ADMIN", "SALES"]);
     return withOrganization(user.organizationId, (tx) => listLeadCustomers(user, filters, tx as unknown as QueryDb, owners));
   }
@@ -330,10 +329,10 @@ export async function listLeadCustomers(
 export async function listContacts(
   user: CrmUser,
   filters: ContactFilters,
-  database: QueryDb = db as unknown as QueryDb,
+  database?: QueryDb,
   preloadedOwners?: CrmOwner[]
 ): Promise<{ records: ContactListRecord[]; owners: CrmOwner[] }> {
-  if (database === (db as unknown as QueryDb)) {
+  if (!database) {
     const owners = await listOrganizationUserOptions(user.organizationId, ["ADMIN", "SALES"]);
     return withOrganization(user.organizationId, (tx) => listContacts(user, filters, tx as unknown as QueryDb, owners));
   }
@@ -371,9 +370,9 @@ export async function listContacts(
 export async function getContactDetail(
   user: CrmUser,
   contactId: string,
-  database: ContactDetailDb = db as unknown as ContactDetailDb
+  database?: ContactDetailDb
 ): Promise<ContactDetailRecord | null> {
-  if (database === (db as unknown as ContactDetailDb)) return withOrganization(user.organizationId, (tx) => getContactDetail(user, contactId, tx as unknown as ContactDetailDb));
+  if (!database) return withOrganization(user.organizationId, (tx) => getContactDetail(user, contactId, tx as unknown as ContactDetailDb));
   assertCanViewCrmRecords(user);
 
   return (database.contact.findFirst ?? database.contact.findUnique!)({
@@ -382,8 +381,8 @@ export async function getContactDetail(
   });
 }
 
-export async function getLeadCustomerDetail(user: CrmUser, leadCustomerId: string, database: Pick<Prisma.TransactionClient, "leadCustomer"> = db as unknown as Pick<Prisma.TransactionClient, "leadCustomer">): Promise<LeadCustomerDetail | null> {
-  if (database === (db as unknown as typeof database)) return withOrganization(user.organizationId, (tx) => getLeadCustomerDetail(user, leadCustomerId, tx));
+export async function getLeadCustomerDetail(user: CrmUser, leadCustomerId: string, database?: Pick<Prisma.TransactionClient, "leadCustomer">): Promise<LeadCustomerDetail | null> {
+  if (!database) return withOrganization(user.organizationId, (tx) => getLeadCustomerDetail(user, leadCustomerId, tx));
   assertCanViewCrmRecords(user);
 
   return database.leadCustomer.findFirst({
@@ -415,9 +414,9 @@ const timelineKindRank: Record<CustomerTimelineKind, number> = {
 export async function getCustomer360Timeline(
   user: CrmUser,
   leadCustomerId: string,
-  database: CustomerTimelineDb = db as unknown as CustomerTimelineDb
+  database?: CustomerTimelineDb
 ): Promise<CustomerTimelineItem[]> {
-  if (database === (db as unknown as CustomerTimelineDb)) return withOrganization(user.organizationId, (tx) => getCustomer360Timeline(user, leadCustomerId, tx as unknown as CustomerTimelineDb));
+  if (!database) return withOrganization(user.organizationId, (tx) => getCustomer360Timeline(user, leadCustomerId, tx as unknown as CustomerTimelineDb));
   assertCanViewCrmRecords(user);
 
   const [activities, salesTasks, textNotes, voiceNotes, workflowEvents, opportunities, proposals, orders] = await Promise.all([
@@ -589,7 +588,7 @@ export async function getCustomer360Timeline(
         id: event.id,
         kind: "workflow_event",
         title: event.summary,
-        detail: `${event.sourceApp} • ${event.sourceEventType}`,
+        detail: `${event.sourceApp} â€¢ ${event.sourceEventType}`,
         occurredAt: event.occurredAt ?? event.createdAt,
         actor: event.sourceApp
       })
@@ -700,8 +699,8 @@ export async function getCustomer360Timeline(
   });
 }
 
-export async function listCrmOwners(user: CrmUser, database: Pick<Prisma.TransactionClient, "user"> = db as unknown as Pick<Prisma.TransactionClient, "user">): Promise<CrmOwner[]> {
-  if (database === (db as unknown as typeof database)) return listOrganizationUserOptions(user.organizationId, ["ADMIN", "SALES"]);
+export async function listCrmOwners(user: CrmUser, database?: Pick<Prisma.TransactionClient, "user">): Promise<CrmOwner[]> {
+  if (!database) return listOrganizationUserOptions(user.organizationId, ["ADMIN", "SALES"]);
   return database.user.findMany({
     where: { active: true, role: { in: ["ADMIN", "SALES"] }, memberships: { some: { organizationId: user.organizationId, status: "ACTIVE" } } },
     orderBy: { name: "asc" },
@@ -709,8 +708,8 @@ export async function listCrmOwners(user: CrmUser, database: Pick<Prisma.Transac
   });
 }
 
-export async function listBranchOptions(user: CrmUser, leadCustomerId: string, database: Pick<Prisma.TransactionClient, "branch"> = db as unknown as Pick<Prisma.TransactionClient, "branch">): Promise<Array<{ id: string; name: string; city: string | null; region: string | null }>> {
-  if (database === (db as unknown as typeof database)) return withOrganization(user.organizationId, (tx) => listBranchOptions(user, leadCustomerId, tx));
+export async function listBranchOptions(user: CrmUser, leadCustomerId: string, database?: Pick<Prisma.TransactionClient, "branch">): Promise<Array<{ id: string; name: string; city: string | null; region: string | null }>> {
+  if (!database) return withOrganization(user.organizationId, (tx) => listBranchOptions(user, leadCustomerId, tx));
   assertCanViewCrmRecords(user);
 
   return database.branch.findMany({
@@ -720,8 +719,8 @@ export async function listBranchOptions(user: CrmUser, leadCustomerId: string, d
   });
 }
 
-export async function getDashboardFollowUpCounts(user: CrmUser, database: Pick<Prisma.TransactionClient, "activity"> = db as unknown as Pick<Prisma.TransactionClient, "activity">): Promise<{ overdue: number; today: number; upcoming: number }> {
-  if (database === (db as unknown as typeof database)) return withOrganization(user.organizationId, (tx) => getDashboardFollowUpCounts(user, tx));
+export async function getDashboardFollowUpCounts(user: CrmUser, database?: Pick<Prisma.TransactionClient, "activity">): Promise<{ overdue: number; today: number; upcoming: number }> {
+  if (!database) return withOrganization(user.organizationId, (tx) => getDashboardFollowUpCounts(user, tx));
   assertCanViewCrmRecords(user);
   const now = new Date();
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());

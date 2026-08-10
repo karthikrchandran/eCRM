@@ -1,5 +1,4 @@
 import type { PipelineStage, Prisma, User } from "@prisma/client";
-import { tenantBoundary as db } from "@/server/organizations/tenant-boundary";
 import { withOrganization } from "@/server/organizations/with-organization";
 import { listOrganizationUserOptions } from "@/server/organizations/member-options";
 import { assertCanViewOpportunities, type OpportunityUser } from "./permissions";
@@ -111,9 +110,9 @@ function buildOpportunityWhere(organizationId: string, filters: OpportunityFilte
 export async function listOpportunities(
   user: OpportunityUser,
   filters: OpportunityFilters,
-  database: QueryDb = db as unknown as QueryDb
+  database?: QueryDb
 ): Promise<OpportunityListRecord[]> {
-  if (database === (db as unknown as QueryDb)) return withOrganization(user.organizationId, (tx) => listOpportunities(user, filters, tx as unknown as QueryDb));
+  if (!database) return withOrganization(user.organizationId, (tx) => listOpportunities(user, filters, tx as unknown as QueryDb));
   assertCanViewOpportunities(user);
 
   return database.opportunity.findMany({
@@ -126,9 +125,9 @@ export async function listOpportunities(
 export async function listPipelineBoard(
   user: OpportunityUser,
   filters: OpportunityFilters,
-  database: QueryDb = db as unknown as QueryDb
+  database?: QueryDb
 ): Promise<{ stages: PipelineStageRecord[]; recordsByStage: Record<string, OpportunityListRecord[]> }> {
-  if (database === (db as unknown as QueryDb)) return withOrganization(user.organizationId, (tx) => listPipelineBoard(user, filters, tx as unknown as QueryDb));
+  if (!database) return withOrganization(user.organizationId, (tx) => listPipelineBoard(user, filters, tx as unknown as QueryDb));
   assertCanViewOpportunities(user);
   const where = buildOpportunityWhere(user.organizationId, filters);
 
@@ -155,8 +154,8 @@ export async function listPipelineBoard(
   return { stages, recordsByStage };
 }
 
-export async function getOpportunityDetail(user: OpportunityUser, opportunityId: string, database: QueryDb = db as unknown as QueryDb): Promise<OpportunityDetailRecord | null> {
-  if (database === (db as unknown as QueryDb)) return withOrganization(user.organizationId, (tx) => getOpportunityDetail(user, opportunityId, tx as unknown as QueryDb));
+export async function getOpportunityDetail(user: OpportunityUser, opportunityId: string, database?: QueryDb): Promise<OpportunityDetailRecord | null> {
+  if (!database) return withOrganization(user.organizationId, (tx) => getOpportunityDetail(user, opportunityId, tx as unknown as QueryDb));
   assertCanViewOpportunities(user);
 
   return database.opportunity.findFirst!({
@@ -165,13 +164,13 @@ export async function getOpportunityDetail(user: OpportunityUser, opportunityId:
   });
 }
 
-export async function listOpportunityFormOptions(user: OpportunityUser, database: QueryDb = db as unknown as QueryDb, preloadedOwners?: OpportunityOwner[]): Promise<{
+export async function listOpportunityFormOptions(user: OpportunityUser, database?: QueryDb, preloadedOwners?: OpportunityOwner[]): Promise<{
   leads: Array<{ id: string; name: string; state: string }>;
   branches: Array<{ id: string; name: string; leadCustomerId: string }>;
   stages: PipelineStageRecord[];
   owners: OpportunityOwner[];
 }> {
-  if (database === (db as unknown as QueryDb)) {
+  if (!database) {
     const owners = await listOrganizationUserOptions(user.organizationId, ["ADMIN", "SALES"]);
     return withOrganization(user.organizationId, (tx) => listOpportunityFormOptions(user, tx as unknown as QueryDb, owners));
   }
@@ -201,8 +200,8 @@ export async function listOpportunityFormOptions(user: OpportunityUser, database
   return { leads, branches, stages, owners };
 }
 
-export async function listSalesTargets(user: OpportunityUser, database: QueryDb = db as unknown as QueryDb): Promise<SalesTargetRecord[]> {
-  if (database === (db as unknown as QueryDb)) return withOrganization(user.organizationId, (tx) => listSalesTargets(user, tx as unknown as QueryDb));
+export async function listSalesTargets(user: OpportunityUser, database?: QueryDb): Promise<SalesTargetRecord[]> {
+  if (!database) return withOrganization(user.organizationId, (tx) => listSalesTargets(user, tx as unknown as QueryDb));
   assertCanViewOpportunities(user);
 
   return database.salesTarget!.findMany({

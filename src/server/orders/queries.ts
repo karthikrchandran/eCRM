@@ -1,5 +1,4 @@
 import type { Prisma } from "@prisma/client";
-import { tenantBoundary as db } from "@/server/organizations/tenant-boundary";
 import { withOrganization } from "@/server/organizations/with-organization";
 import { assertCanViewProposals } from "@/server/proposals/permissions";
 import type { ProposalUser } from "@/server/proposals/types";
@@ -101,9 +100,9 @@ function buildBookedAtFilter(filters: OrderListFilters) {
 export async function listOrders(
   user: OrderUser,
   filters: OrderListFilters = {},
-  database: OrderQueryDb = db as unknown as OrderQueryDb
+  database?: OrderQueryDb
 ): Promise<OrderRecord[]> {
-  if (database === (db as unknown as OrderQueryDb)) return withOrganization(user.organizationId, (tx) => listOrders(user, filters, tx as unknown as OrderQueryDb));
+  if (!database) return withOrganization(user.organizationId, (tx) => listOrders(user, filters, tx as unknown as OrderQueryDb));
   assertCanViewOrders(user);
   const bookedAt = buildBookedAtFilter(filters);
 
@@ -122,9 +121,9 @@ export async function listOrders(
 export async function getOrderDetail(
   user: OrderUser,
   orderId: string,
-  database: OrderQueryDb = db as unknown as OrderQueryDb
+  database?: OrderQueryDb
 ): Promise<OrderRecord | null> {
-  if (database === (db as unknown as OrderQueryDb)) return withOrganization(user.organizationId, (tx) => getOrderDetail(user, orderId, tx as unknown as OrderQueryDb));
+  if (!database) return withOrganization(user.organizationId, (tx) => getOrderDetail(user, orderId, tx as unknown as OrderQueryDb));
   assertCanViewOrders(user);
 
   return database.order.findFirst({
@@ -136,9 +135,9 @@ export async function getOrderDetail(
 export async function loadAcceptedProposalForBooking(
   user: ProposalUser,
   proposalId: string,
-  database: AcceptedProposalForBookingDb = db as unknown as AcceptedProposalForBookingDb
+  database?: AcceptedProposalForBookingDb
 ): Promise<AcceptedProposalForBooking | null> {
-  if (database === (db as unknown as AcceptedProposalForBookingDb)) return withOrganization(user.organizationId, (tx) => loadAcceptedProposalForBooking(user, proposalId, tx as unknown as AcceptedProposalForBookingDb));
+  if (!database) return withOrganization(user.organizationId, (tx) => loadAcceptedProposalForBooking(user, proposalId, tx as unknown as AcceptedProposalForBookingDb));
   assertCanViewProposals(user);
 
   return database.proposal.findFirst({

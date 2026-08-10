@@ -7,7 +7,8 @@ import { validateDisposableDatabaseUrls } from "./disposable-database";
 
 const testDatabaseUrl = process.env.TEST_DATABASE_URL;
 const testTenantDatabaseUrl = process.env.TEST_TENANT_DATABASE_URL;
-const integration = describe.runIf(Boolean(testDatabaseUrl && testTenantDatabaseUrl));
+const testControlDatabaseUrl = process.env.TEST_CONTROL_DATABASE_URL;
+const integration = describe.runIf(Boolean(testDatabaseUrl && testTenantDatabaseUrl && testControlDatabaseUrl));
 const ownedTables = [
   "SharedBusinessRecord", "SharedBusinessRecordVersion", "SharedRecordExportSnapshot",
   "SharedRecordExportSnapshotItem", "WorkflowEvent", "LeadCustomer", "Branch", "Contact",
@@ -36,8 +37,8 @@ const legacyGlobalBusinessIndexes = [
 ] as const;
 
 integration("PostgreSQL tenant RLS", () => {
-  if (!testDatabaseUrl || !testTenantDatabaseUrl) return;
-  const safeUrls = validateDisposableDatabaseUrls(testDatabaseUrl, testTenantDatabaseUrl);
+  if (!testDatabaseUrl || !testTenantDatabaseUrl || !testControlDatabaseUrl) return;
+  const safeUrls = validateDisposableDatabaseUrls(testDatabaseUrl, testTenantDatabaseUrl, testControlDatabaseUrl);
 
   const database = new PrismaClient({ datasourceUrl: safeUrls.ownerUrl });
   const tenantUrl = new URL(safeUrls.tenantUrl);

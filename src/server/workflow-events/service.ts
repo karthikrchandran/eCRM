@@ -1,5 +1,4 @@
 import type { Prisma } from "@prisma/client";
-import { tenantBoundary as db } from "@/server/organizations/tenant-boundary";
 import { assertTenantMember } from "@/server/organizations/tenant-member-guard";
 import { withOrganization } from "@/server/organizations/with-organization";
 
@@ -93,12 +92,12 @@ async function validateWorkflowReference(
 export async function ingestWorkflowEvent(
   organizationId: string,
   input: WorkflowEventInput,
-  database: WorkflowEventDb = db as unknown as WorkflowEventDb
+  database?: WorkflowEventDb
 ): Promise<WorkflowEventRecord> {
   if (Boolean(input.relatedRecordType) !== Boolean(input.relatedRecordId)) {
     throw new Error("Workflow related record type and identifier must be provided together.");
   }
-  if (database === (db as unknown as WorkflowEventDb)) {
+  if (!database) {
     return withOrganization(organizationId, (tx) => ingestWorkflowEvent(organizationId, input, tx as unknown as WorkflowEventDb));
   }
   if (input.sourceEventId && database.workflowEvent.findFirst) {
@@ -186,9 +185,9 @@ export async function ingestWorkflowEvent(
 export async function listWorkflowEventsForEntity(
   organizationId: string,
   entityId: string,
-  database: WorkflowEventDb = db as unknown as WorkflowEventDb
+  database?: WorkflowEventDb
 ): Promise<WorkflowEventRecord[]> {
-  if (database === (db as unknown as WorkflowEventDb)) {
+  if (!database) {
     return withOrganization(organizationId, (tx) => listWorkflowEventsForEntity(organizationId, entityId, tx as unknown as WorkflowEventDb));
   }
   return database.workflowEvent.findMany({

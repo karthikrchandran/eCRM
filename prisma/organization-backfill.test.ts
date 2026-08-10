@@ -13,6 +13,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PrismaClient } from "@prisma/client";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
+import { validateDisposableDatabaseUrls } from "../src/server/organizations/disposable-database";
 
 const prismaRoot = join(process.cwd(), "prisma");
 const schema = readFileSync(join(prismaRoot, "schema.prisma"), "utf8");
@@ -371,7 +372,11 @@ describe("organization tenancy integration safety", () => {
 });
 
 const integrationDatabaseUrl = process.env.ECRM_TENANCY_TEST_DATABASE_URL;
-const integrationDescribe = integrationDatabaseUrl ? describe.sequential : describe.skip;
+const integrationTenantDatabaseUrl = process.env.ECRM_TENANCY_TEST_TENANT_DATABASE_URL;
+const integrationControlDatabaseUrl = process.env.ECRM_TENANCY_TEST_CONTROL_DATABASE_URL;
+const integrationDescribe = integrationDatabaseUrl && integrationTenantDatabaseUrl && integrationControlDatabaseUrl
+  ? describe.sequential
+  : describe.skip;
 
 type CommandResult = {
   output: string;
@@ -832,12 +837,17 @@ integrationDescribe("organization tenancy PostgreSQL integration", () => {
   let preWp2SchemaPath: string;
 
   beforeAll(async () => {
-    if (!integrationDatabaseUrl) {
-      throw new Error("ECRM_TENANCY_TEST_DATABASE_URL is required for integration mode");
+    if (!integrationDatabaseUrl || !integrationTenantDatabaseUrl || !integrationControlDatabaseUrl) {
+      throw new Error("Explicit owner, tenant, and control ECRM tenancy test URLs are required for integration mode");
     }
 
-    databaseIdentity = validateIntegrationDatabaseUrl(integrationDatabaseUrl, process.env.DATABASE_URL);
-    client = new PrismaClient({ datasources: { db: { url: integrationDatabaseUrl } } });
+    const safeUrls = validateDisposableDatabaseUrls(
+      integrationDatabaseUrl,
+      integrationTenantDatabaseUrl,
+      integrationControlDatabaseUrl
+    );
+    databaseIdentity = validateIntegrationDatabaseUrl(safeUrls.ownerUrl);
+    client = new PrismaClient({ datasources: { db: { url: safeUrls.ownerUrl } } });
 
     const [actualDatabase] = await client.$queryRawUnsafe<
       Array<{ databaseName: string; port: number; schemaName: string; targetTableCount: number }>

@@ -1,5 +1,4 @@
 import type { IncentiveStatus, Prisma } from "@prisma/client";
-import { tenantBoundary as db } from "@/server/organizations/tenant-boundary";
 import { withOrganization } from "@/server/organizations/with-organization";
 import { assertCanViewFinance } from "./permissions";
 import type { FinanceUser } from "./types";
@@ -68,9 +67,9 @@ function buildBookedAtFilter(filters: IncentiveListFilters) {
 export async function listIncentives(
   user: FinanceUser,
   filters: IncentiveListFilters = {},
-  database: IncentiveQueryDb = db as unknown as IncentiveQueryDb
+  database?: IncentiveQueryDb
 ): Promise<IncentiveListRecord[]> {
-  if (database === (db as unknown as IncentiveQueryDb)) return withOrganization(user.organizationId, (tx) => listIncentives(user, filters, tx as unknown as IncentiveQueryDb));
+  if (!database) return withOrganization(user.organizationId, (tx) => listIncentives(user, filters, tx as unknown as IncentiveQueryDb));
   assertCanViewFinance(user);
   const bookedAt = buildBookedAtFilter(filters);
   const orderWhere = {

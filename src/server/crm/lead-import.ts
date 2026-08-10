@@ -1,6 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { z } from "zod";
-import { tenantBoundary as db } from "@/server/organizations/tenant-boundary";
+import { findOrganizationMemberByEmail } from "@/server/organizations/member-options";
 import { withOrganization } from "@/server/organizations/with-organization";
 import { assertCanWriteCrmRecords, type CrmUser } from "./permissions";
 import { createBranch, createContact, createLeadCustomer } from "./mutations";
@@ -311,11 +311,17 @@ async function resolveOwner(database: OwnerLookupDb, organizationId: string, own
   });
 }
 
+async function resolvePreviewOwner(database: OwnerLookupDb | undefined, organizationId: string, ownerEmail: string) {
+  return database
+    ? resolveOwner(database, organizationId, ownerEmail)
+    : findOrganizationMemberByEmail(organizationId, ownerEmail, ["ADMIN", "SALES"]);
+}
+
 async function prepareRow(
   user: CrmUser,
   rowNumber: number,
   row: LeadImportCsvRow,
-  database: OwnerLookupDb
+  database?: OwnerLookupDb
 ): Promise<{ row?: LeadImportPreparedRow; errors: LeadImportRowError[] }> {
   assertCanWriteCrmRecords(user);
   const errors: LeadImportRowError[] = [];
@@ -327,7 +333,7 @@ async function prepareRow(
     addZodErrors(rowNumber, ownerEmailResult.error, errors, { "": "ownerEmail" });
   }
 
-  const owner = ownerEmailResult.success ? await resolveOwner(database, user.organizationId, ownerEmailResult.data) : null;
+  const owner = ownerEmailResult.success ? await resolvePreviewOwner(database, user.organizationId, ownerEmailResult.data) : null;
   if (ownerEmailResult.success && !owner) {
     errors.push({ rowNumber, field: "ownerEmail", reason: "Choose an active Admin or Sales owner." });
   }
@@ -438,7 +444,7 @@ async function prepareRow(
 export async function previewLeadImportCsv(
   user: CrmUser,
   csvText: string,
-  database: LeadImportDatabase = db as unknown as LeadImportDatabase
+  database?: LeadImportDatabase
 ): Promise<LeadImportPreviewResult> {
   assertCanWriteCrmRecords(user);
   const parsed = parseCsv(csvText);
@@ -501,7 +507,7 @@ export async function previewLeadImportCsv(
 export async function importLeadCsv(
   user: CrmUser,
   csvText: string,
-  database: LeadImportDatabase = db as unknown as LeadImportDatabase
+  database?: LeadImportDatabase
 ): Promise<LeadImportResult> {
   assertCanWriteCrmRecords(user);
   const preview = await previewLeadImportCsv(user, csvText, database);
@@ -510,10 +516,6 @@ export async function importLeadCsv(
 
   for (const row of preview.rows) {
     try {
-      if (!database.$transaction) {
-        throw new Error("CSV import requires transaction support.");
-      }
-
       const importRow = async (tx: LeadImportTransactionDb) => {
         const lead = await createLeadCustomer(user, row.lead, tx);
         let branchId: string | undefined;
@@ -527,9 +529,10 @@ export async function importLeadCsv(
           await createContact(user, { ...row.contact, leadCustomerId: lead.id, branchId }, tx);
         }
       };
-      if (database === (db as unknown as LeadImportDatabase)) {
+      if (!database) {
         await withOrganization(user.organizationId, (tx) => importRow(tx as unknown as LeadImportTransactionDb));
       } else {
+        if (!database.$transaction) throw new Error("CSV import requires transaction support.");
         await database.$transaction(importRow);
       }
       importedRows += 1;

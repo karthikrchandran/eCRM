@@ -1,6 +1,6 @@
 import type { MembershipStatus, OrganizationRole, OrganizationStatus, UserRole } from "@prisma/client";
 import { z } from "zod";
-import { getControlPlaneDb } from "@/server/db";
+import { findActiveLoginMemberships, findAuthenticationUserByEmail } from "./control-plane-identity";
 import { verifyPassword as verifyPasswordHash } from "./password";
 import { membershipSessionVersion, type SessionUser } from "./session";
 
@@ -45,34 +45,9 @@ type LoginDependencies = {
 };
 
 async function findUserByEmail(email: string) {
-  return getControlPlaneDb().user.findUnique({
-    where: { email },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      passwordHash: true,
-      role: true,
-      active: true,
-      memberships: {
-        where: {
-          status: "ACTIVE",
-          organization: { status: "ACTIVE" }
-        },
-        select: {
-          id: true,
-          organizationId: true,
-          role: true,
-          status: true,
-          updatedAt: true,
-          organization: {
-            select: { status: true }
-          }
-        },
-        orderBy: [{ updatedAt: "desc" }, { id: "asc" }]
-      }
-    }
-  });
+  const user = await findAuthenticationUserByEmail(email);
+  if (!user) return null;
+  return { ...user, memberships: await findActiveLoginMemberships(user.id) };
 }
 
 function selectLoginMembership(user: LoginUserRecord) {

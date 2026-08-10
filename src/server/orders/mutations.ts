@@ -1,5 +1,4 @@
 import type { Prisma } from "@prisma/client";
-import { tenantBoundary as db } from "@/server/organizations/tenant-boundary";
 import { assertTenantMember } from "@/server/organizations/tenant-member-guard";
 import { withOrganization } from "@/server/organizations/with-organization";
 import type { AcceptedProposalForBookingDb } from "./queries";
@@ -35,9 +34,9 @@ function generateOrderNumber(sequence: number, date = new Date()) {
 export async function createOrderFromAcceptedProposal(
   user: OrderUser,
   input: OrderBookingInput,
-  database: OrderBookingDb = db as unknown as OrderBookingDb
+  database?: OrderBookingDb
 ): Promise<{ id: string; orderNumber: string }> {
-  if (database === (db as unknown as OrderBookingDb)) return withOrganization(user.organizationId, (tx) => createOrderFromAcceptedProposal(user, input, tx as unknown as OrderBookingDb));
+  if (!database) return withOrganization(user.organizationId, (tx) => createOrderFromAcceptedProposal(user, input, tx as unknown as OrderBookingDb));
   assertCanWriteOrders(user);
 
   const work = async (transaction: OrderBookingTransaction) => {
@@ -124,9 +123,9 @@ export async function updateOrderPoMetadata(
   user: OrderUser,
   orderId: string,
   input: PoMetadataInput,
-  database: OrderUpdateDb = db as unknown as OrderUpdateDb
+  database?: OrderUpdateDb
 ): Promise<{ id: string }> {
-  if (database === (db as unknown as OrderUpdateDb)) return withOrganization(user.organizationId, (tx) => updateOrderPoMetadata(user, orderId, input, tx as unknown as OrderUpdateDb));
+  if (!database) return withOrganization(user.organizationId, (tx) => updateOrderPoMetadata(user, orderId, input, tx as unknown as OrderUpdateDb));
   assertCanWriteOrders(user);
 
   const existing = await database.order.findFirst({ where: { id: orderId, organizationId: user.organizationId }, select: { id: true } });
@@ -151,9 +150,9 @@ export async function changeOrderStatus(
   user: OrderUser,
   orderId: string,
   status: OrderStatusValue,
-  database: OrderUpdateDb = db as unknown as OrderUpdateDb
+  database?: OrderUpdateDb
 ): Promise<{ id: string }> {
-  if (database === (db as unknown as OrderUpdateDb)) return withOrganization(user.organizationId, (tx) => changeOrderStatus(user, orderId, status, tx as unknown as OrderUpdateDb));
+  if (!database) return withOrganization(user.organizationId, (tx) => changeOrderStatus(user, orderId, status, tx as unknown as OrderUpdateDb));
   assertCanWriteOrders(user);
 
   const existing = await database.order.findFirst({ where: { id: orderId, organizationId: user.organizationId }, select: { id: true } });

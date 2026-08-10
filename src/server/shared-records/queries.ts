@@ -1,5 +1,4 @@
 import type { Prisma } from "@prisma/client";
-import { tenantBoundary as db } from "@/server/organizations/tenant-boundary";
 import { withOrganization } from "@/server/organizations/with-organization";
 import { mapSharedRecordRow } from "./mappers";
 import type { SharedBusinessRecordDto, SharedBusinessRecordRow, SharedRecordListFilters } from "./types";
@@ -16,9 +15,9 @@ const DEFAULT_LIMIT = 50;
 export async function listSharedRecords(
   organizationId: string,
   filters: SharedRecordListFilters = {},
-  database: SharedRecordQueryDb = db as unknown as SharedRecordQueryDb
+  database?: SharedRecordQueryDb
 ): Promise<SharedBusinessRecordDto[]> {
-  if (database === (db as unknown as SharedRecordQueryDb)) {
+  if (!database) {
     return withOrganization(organizationId, (tx) => listSharedRecords(organizationId, filters, tx as unknown as SharedRecordQueryDb));
   }
   const limit = filters.limit ?? DEFAULT_LIMIT;
@@ -44,9 +43,9 @@ export async function listSharedRecords(
 export async function getSharedRecord(
   organizationId: string,
   recordId: string,
-  database: SharedRecordQueryDb = db as unknown as SharedRecordQueryDb
+  database?: SharedRecordQueryDb
 ): Promise<SharedBusinessRecordDto | null> {
-  if (database === (db as unknown as SharedRecordQueryDb)) {
+  if (!database) {
     return withOrganization(organizationId, (tx) => getSharedRecord(organizationId, recordId, tx as unknown as SharedRecordQueryDb));
   }
   const row = await database.sharedBusinessRecord.findFirst({

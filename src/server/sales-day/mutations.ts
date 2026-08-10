@@ -1,5 +1,4 @@
 import type { Prisma, SalesDayReviewItemStatus, SalesTaskType } from "@prisma/client";
-import { tenantBoundary as db } from "@/server/organizations/tenant-boundary";
 import { assertTenantMember } from "@/server/organizations/tenant-member-guard";
 import { withOrganization } from "@/server/organizations/with-organization";
 import {
@@ -213,9 +212,9 @@ async function findOwnedTask(database: TaskLifecycleDb, user: SalesDayUser, task
 export async function createSalesTask(
   user: SalesDayUser,
   input: SalesTaskInput,
-  database: CreateTaskDb = db as unknown as CreateTaskDb
+  database?: CreateTaskDb
 ): Promise<IdResult> {
-  if (database === (db as unknown as CreateTaskDb)) return withOrganization(user.organizationId, (tx) => createSalesTask(user, input, tx as unknown as CreateTaskDb));
+  if (!database) return withOrganization(user.organizationId, (tx) => createSalesTask(user, input, tx as unknown as CreateTaskDb));
   assertCanUseSalesWorkspace(user);
   await assertActiveSalesDayOwner(database, user.id);
   await assertRelatedRecords(database, user.organizationId, input);
@@ -243,9 +242,9 @@ export async function updateSalesTask(
   user: SalesDayUser,
   taskId: string,
   input: SalesTaskUpdateInput,
-  database: UpdateTaskDb = db as unknown as UpdateTaskDb
+  database?: UpdateTaskDb
 ): Promise<IdResult> {
-  if (database === (db as unknown as UpdateTaskDb)) return withOrganization(user.organizationId, (tx) => updateSalesTask(user, taskId, input, tx as unknown as UpdateTaskDb));
+  if (!database) return withOrganization(user.organizationId, (tx) => updateSalesTask(user, taskId, input, tx as unknown as UpdateTaskDb));
   await findOwnedTask(database, user, taskId);
   await assertRelatedRecords(database, user.organizationId, input);
 
@@ -296,9 +295,9 @@ function textNoteData(user: SalesDayUser, input: SalesTextNoteInput) {
 export async function createSalesTextNote(
   user: SalesDayUser,
   input: SalesTextNoteInput,
-  database: CreateTextNoteDb = db as unknown as CreateTextNoteDb
+  database?: CreateTextNoteDb
 ): Promise<IdResult> {
-  if (database === (db as unknown as CreateTextNoteDb)) return withOrganization(user.organizationId, (tx) => createSalesTextNote(user, input, tx as unknown as CreateTextNoteDb));
+  if (!database) return withOrganization(user.organizationId, (tx) => createSalesTextNote(user, input, tx as unknown as CreateTextNoteDb));
   assertCanUseSalesWorkspace(user);
   await assertActiveSalesDayOwner(database, user.id);
   await assertRelatedRecords(database, user.organizationId, input);
@@ -313,9 +312,9 @@ export async function updateSalesTextNote(
   user: SalesDayUser,
   noteId: string,
   input: SalesTextNoteInput,
-  database: TextNoteDb = db as unknown as TextNoteDb
+  database?: TextNoteDb
 ): Promise<IdResult> {
-  if (database === (db as unknown as TextNoteDb)) return withOrganization(user.organizationId, (tx) => updateSalesTextNote(user, noteId, input, tx as unknown as TextNoteDb));
+  if (!database) return withOrganization(user.organizationId, (tx) => updateSalesTextNote(user, noteId, input, tx as unknown as TextNoteDb));
   await assertOwnedTextNote(database, user, noteId);
   await assertRelatedRecords(database, user.organizationId, input);
 
@@ -336,9 +335,9 @@ export async function updateSalesTextNote(
 export async function deleteSalesTextNote(
   user: SalesDayUser,
   noteId: string,
-  database: TextNoteDb = db as unknown as TextNoteDb
+  database?: TextNoteDb
 ): Promise<IdResult> {
-  if (database === (db as unknown as TextNoteDb)) return withOrganization(user.organizationId, (tx) => deleteSalesTextNote(user, noteId, tx as unknown as TextNoteDb));
+  if (!database) return withOrganization(user.organizationId, (tx) => deleteSalesTextNote(user, noteId, tx as unknown as TextNoteDb));
   await assertOwnedTextNote(database, user, noteId);
 
   return database.salesTextNote.delete({
@@ -350,9 +349,9 @@ export async function deleteSalesTextNote(
 export async function completeSalesTask(
   user: SalesDayUser,
   taskId: string,
-  database: TaskLifecycleDb = db as unknown as TaskLifecycleDb
+  database?: TaskLifecycleDb
 ): Promise<IdResult> {
-  if (database === (db as unknown as TaskLifecycleDb)) return withOrganization(user.organizationId, (tx) => completeSalesTask(user, taskId, tx as unknown as TaskLifecycleDb));
+  if (!database) return withOrganization(user.organizationId, (tx) => completeSalesTask(user, taskId, tx as unknown as TaskLifecycleDb));
   await findOwnedTask(database, user, taskId);
 
   return database.salesTask.update({
@@ -369,9 +368,9 @@ export async function completeSalesTask(
 export async function reopenSalesTask(
   user: SalesDayUser,
   taskId: string,
-  database: TaskLifecycleDb = db as unknown as TaskLifecycleDb
+  database?: TaskLifecycleDb
 ): Promise<IdResult> {
-  if (database === (db as unknown as TaskLifecycleDb)) return withOrganization(user.organizationId, (tx) => reopenSalesTask(user, taskId, tx as unknown as TaskLifecycleDb));
+  if (!database) return withOrganization(user.organizationId, (tx) => reopenSalesTask(user, taskId, tx as unknown as TaskLifecycleDb));
   await findOwnedTask(database, user, taskId);
 
   return database.salesTask.update({
@@ -388,9 +387,9 @@ export async function reopenSalesTask(
 export async function cancelSalesTask(
   user: SalesDayUser,
   taskId: string,
-  database: TaskLifecycleDb = db as unknown as TaskLifecycleDb
+  database?: TaskLifecycleDb
 ): Promise<IdResult> {
-  if (database === (db as unknown as TaskLifecycleDb)) return withOrganization(user.organizationId, (tx) => cancelSalesTask(user, taskId, tx as unknown as TaskLifecycleDb));
+  if (!database) return withOrganization(user.organizationId, (tx) => cancelSalesTask(user, taskId, tx as unknown as TaskLifecycleDb));
   await findOwnedTask(database, user, taskId);
 
   return database.salesTask.update({
@@ -408,9 +407,9 @@ export async function carryForwardSalesTask(
   user: SalesDayUser,
   taskId: string,
   nextDueAt: Date,
-  database: ReviewDb = db as unknown as ReviewDb
+  database?: ReviewDb
 ): Promise<IdResult> {
-  if (database === (db as unknown as ReviewDb)) return withOrganization(user.organizationId, (tx) => carryForwardSalesTask(user, taskId, nextDueAt, tx as unknown as ReviewDb));
+  if (!database) return withOrganization(user.organizationId, (tx) => carryForwardSalesTask(user, taskId, nextDueAt, tx as unknown as ReviewDb));
   const task = await database.salesTask.findFirst({
     where: { id: taskId, organizationId: user.organizationId },
     select: {
@@ -464,9 +463,9 @@ export async function carryForwardSalesTask(
 export async function createSalesVoiceNote(
   user: SalesDayUser,
   input: VoiceNoteInput,
-  database: VoiceNoteDb = db as unknown as VoiceNoteDb
+  database?: VoiceNoteDb
 ): Promise<IdResult> {
-  if (database === (db as unknown as VoiceNoteDb)) return withOrganization(user.organizationId, (tx) => createSalesVoiceNote(user, input, tx as unknown as VoiceNoteDb));
+  if (!database) return withOrganization(user.organizationId, (tx) => createSalesVoiceNote(user, input, tx as unknown as VoiceNoteDb));
   assertCanUseSalesWorkspace(user);
   await assertActiveSalesDayOwner(database, user.id);
   await assertRelatedRecords(database, user.organizationId, input);
@@ -513,9 +512,9 @@ async function assertOwnedVoiceNote(database: VoiceNoteDb, user: SalesDayUser, v
 export async function markVoiceNoteTranscribing(
   user: SalesDayUser,
   voiceNoteId: string,
-  database: VoiceNoteDb = db as unknown as VoiceNoteDb
+  database?: VoiceNoteDb
 ): Promise<IdResult> {
-  if (database === (db as unknown as VoiceNoteDb)) return withOrganization(user.organizationId, (tx) => markVoiceNoteTranscribing(user, voiceNoteId, tx as unknown as VoiceNoteDb));
+  if (!database) return withOrganization(user.organizationId, (tx) => markVoiceNoteTranscribing(user, voiceNoteId, tx as unknown as VoiceNoteDb));
   await assertOwnedVoiceNote(database, user, voiceNoteId);
 
   return database.salesVoiceNote.update({
@@ -529,9 +528,9 @@ export async function saveVoiceNoteTranscript(
   user: SalesDayUser,
   voiceNoteId: string,
   result: TranscriptResult,
-  database: VoiceNoteDb = db as unknown as VoiceNoteDb
+  database?: VoiceNoteDb
 ): Promise<IdResult> {
-  if (database === (db as unknown as VoiceNoteDb)) return withOrganization(user.organizationId, (tx) => saveVoiceNoteTranscript(user, voiceNoteId, result, tx as unknown as VoiceNoteDb));
+  if (!database) return withOrganization(user.organizationId, (tx) => saveVoiceNoteTranscript(user, voiceNoteId, result, tx as unknown as VoiceNoteDb));
   await assertOwnedVoiceNote(database, user, voiceNoteId);
 
   return database.salesVoiceNote.update({
@@ -552,9 +551,9 @@ export async function markVoiceNoteFailed(
   user: SalesDayUser,
   voiceNoteId: string,
   message: string,
-  database: VoiceNoteDb = db as unknown as VoiceNoteDb
+  database?: VoiceNoteDb
 ): Promise<IdResult> {
-  if (database === (db as unknown as VoiceNoteDb)) return withOrganization(user.organizationId, (tx) => markVoiceNoteFailed(user, voiceNoteId, message, tx as unknown as VoiceNoteDb));
+  if (!database) return withOrganization(user.organizationId, (tx) => markVoiceNoteFailed(user, voiceNoteId, message, tx as unknown as VoiceNoteDb));
   await assertOwnedVoiceNote(database, user, voiceNoteId);
 
   return database.salesVoiceNote.update({
@@ -568,9 +567,9 @@ export async function createSuggestedActionsForVoiceNote(
   user: SalesDayUser,
   voiceNoteId: string,
   actions: SuggestedVoiceActionInput[],
-  database: SuggestedActionDb = db as unknown as SuggestedActionDb
+  database?: SuggestedActionDb
 ): Promise<{ count: number }> {
-  if (database === (db as unknown as SuggestedActionDb)) return withOrganization(user.organizationId, (tx) => createSuggestedActionsForVoiceNote(user, voiceNoteId, actions, tx as unknown as SuggestedActionDb));
+  if (!database) return withOrganization(user.organizationId, (tx) => createSuggestedActionsForVoiceNote(user, voiceNoteId, actions, tx as unknown as SuggestedActionDb));
   const note = await database.salesVoiceNote?.findFirst({
     where: { id: voiceNoteId, organizationId: user.organizationId, ownerId: user.id },
     select: { id: true, ownerId: true }
@@ -598,9 +597,9 @@ export async function createSuggestedActionsForVoiceNote(
 export async function acceptSuggestedAction(
   user: SalesDayUser,
   actionId: string,
-  database: AcceptActionDb = db as unknown as AcceptActionDb
+  database?: AcceptActionDb
 ): Promise<IdResult> {
-  if (database === (db as unknown as AcceptActionDb)) return withOrganization(user.organizationId, (tx) => acceptSuggestedAction(user, actionId, tx as unknown as AcceptActionDb));
+  if (!database) return withOrganization(user.organizationId, (tx) => acceptSuggestedAction(user, actionId, tx as unknown as AcceptActionDb));
   assertCanUseSalesWorkspace(user);
   const action = await database.salesVoiceNoteAction.findFirst({
     where: { id: actionId, organizationId: user.organizationId },
@@ -653,9 +652,9 @@ export async function acceptSuggestedAction(
 export async function rejectSuggestedAction(
   user: SalesDayUser,
   actionId: string,
-  database: TenantMemberDb & Pick<AcceptActionDb, "salesVoiceNoteAction"> = db as unknown as TenantMemberDb & Pick<AcceptActionDb, "salesVoiceNoteAction">
+  database?: TenantMemberDb & Pick<AcceptActionDb, "salesVoiceNoteAction">
 ): Promise<IdResult> {
-  if (database === (db as unknown as TenantMemberDb & Pick<AcceptActionDb, "salesVoiceNoteAction">)) return withOrganization(user.organizationId, (tx) => rejectSuggestedAction(user, actionId, tx as unknown as TenantMemberDb & Pick<AcceptActionDb, "salesVoiceNoteAction">));
+  if (!database) return withOrganization(user.organizationId, (tx) => rejectSuggestedAction(user, actionId, tx as unknown as TenantMemberDb & Pick<AcceptActionDb, "salesVoiceNoteAction">));
   assertCanUseSalesWorkspace(user);
   const action = await database.salesVoiceNoteAction.findFirst({
     where: { id: actionId, organizationId: user.organizationId },
@@ -706,9 +705,9 @@ async function applyReviewItem(
 export async function saveEndOfDayReview(
   user: SalesDayUser,
   input: SalesDayReviewInput,
-  database: ReviewDb = db as unknown as ReviewDb
+  database?: ReviewDb
 ): Promise<IdResult> {
-  if (database === (db as unknown as ReviewDb)) return withOrganization(user.organizationId, (tx) => saveEndOfDayReview(user, input, tx as unknown as ReviewDb));
+  if (!database) return withOrganization(user.organizationId, (tx) => saveEndOfDayReview(user, input, tx as unknown as ReviewDb));
   assertCanUseSalesWorkspace(user);
   await assertActiveSalesDayOwner(database, user.id);
   const reviewDate = normalizeDateToDay(input.reviewDate);

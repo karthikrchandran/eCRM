@@ -1,5 +1,4 @@
 import type { Prisma, User } from "@prisma/client";
-import { tenantBoundary as db } from "@/server/organizations/tenant-boundary";
 import { withOrganization } from "@/server/organizations/with-organization";
 import { listOrganizationUserOptions } from "@/server/organizations/member-options";
 import { calculateOrderPaymentSummary } from "@/server/finance/calculations";
@@ -50,9 +49,9 @@ export type RepPerformanceDb = {
 
 export async function listSalesRepOptions(
   user: ReportsUser,
-  database: RepPerformanceDb = db as unknown as RepPerformanceDb
+  database?: RepPerformanceDb
 ): Promise<SalesRepOption[]> {
-  if (database === (db as unknown as RepPerformanceDb)) {
+  if (!database) {
     assertAdminOnly(user);
     return listOrganizationUserOptions(user.organizationId, ["SALES"]);
   }
@@ -82,10 +81,10 @@ function buildBookedAtFilter(filters: RepPerformanceFilters) {
 export async function listRepPerformanceSummaries(
   user: ReportsUser,
   filters: RepPerformanceFilters = {},
-  database: RepPerformanceDb = db as unknown as RepPerformanceDb,
+  database?: RepPerformanceDb,
   preloadedReps?: SalesRepOption[]
 ): Promise<RepPerformanceSummary[]> {
-  if (database === (db as unknown as RepPerformanceDb)) {
+  if (!database) {
     const reps = (await listOrganizationUserOptions(user.organizationId, ["SALES"]))
       .filter((rep) => !filters.ownerId || rep.id === filters.ownerId);
     return withOrganization(user.organizationId, (tx) => listRepPerformanceSummaries(user, filters, tx as unknown as RepPerformanceDb, reps));

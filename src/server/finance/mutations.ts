@@ -1,5 +1,4 @@
 import type { CostComponentStatus, IncentiveStatus, InvoiceStatus, Prisma } from "@prisma/client";
-import { tenantBoundary as db } from "@/server/organizations/tenant-boundary";
 import { assertTenantMember } from "@/server/organizations/tenant-member-guard";
 import { withOrganization } from "@/server/organizations/with-organization";
 import {
@@ -166,8 +165,8 @@ async function recalculateIncentiveForOrder(transaction: FinanceTransaction, org
   });
 }
 
-export async function createInvoice(user: FinanceUser, input: InvoiceInput, database: InvoiceCreateDb = db as unknown as InvoiceCreateDb): Promise<{ id: string }> {
-  if (database === (db as unknown as InvoiceCreateDb)) return withOrganization(user.organizationId, (tx) => createInvoice(user, input, tx as unknown as InvoiceCreateDb));
+export async function createInvoice(user: FinanceUser, input: InvoiceInput, database?: InvoiceCreateDb): Promise<{ id: string }> {
+  if (!database) return withOrganization(user.organizationId, (tx) => createInvoice(user, input, tx as unknown as InvoiceCreateDb));
   assertCanManageFinance(user);
 
   const order = await loadFinanceOrder(database, user.organizationId, input.orderId);
@@ -200,9 +199,9 @@ export async function updateInvoice(
   user: FinanceUser,
   invoiceId: string,
   input: InvoiceInput,
-  database: InvoiceCreateDb = db as unknown as InvoiceCreateDb
+  database?: InvoiceCreateDb
 ): Promise<{ id: string } | undefined> {
-  if (database === (db as unknown as InvoiceCreateDb)) return withOrganization(user.organizationId, (tx) => updateInvoice(user, invoiceId, input, tx as unknown as InvoiceCreateDb));
+  if (!database) return withOrganization(user.organizationId, (tx) => updateInvoice(user, invoiceId, input, tx as unknown as InvoiceCreateDb));
   assertCanManageFinance(user);
 
   await loadFinanceOrder(database, user.organizationId, input.orderId);
@@ -228,8 +227,8 @@ export async function updateInvoice(
   });
 }
 
-export async function recordPayment(user: FinanceUser, input: PaymentInput, database: FinanceTransactionDb = db as unknown as FinanceTransactionDb): Promise<{ id: string }> {
-  if (database === (db as unknown as FinanceTransactionDb)) return withOrganization(user.organizationId, (tx) => recordPayment(user, input, tx as unknown as FinanceTransactionDb));
+export async function recordPayment(user: FinanceUser, input: PaymentInput, database?: FinanceTransactionDb): Promise<{ id: string }> {
+  if (!database) return withOrganization(user.organizationId, (tx) => recordPayment(user, input, tx as unknown as FinanceTransactionDb));
   assertCanManageFinance(user);
 
   return inFinanceTransaction(database, async (transaction) => {
@@ -280,9 +279,9 @@ export async function recordPayment(user: FinanceUser, input: PaymentInput, data
 export async function createCostComponent(
   user: FinanceUser,
   input: CostComponentInput,
-  database: FinanceTransactionDb = db as unknown as FinanceTransactionDb
+  database?: FinanceTransactionDb
 ): Promise<{ id: string }> {
-  if (database === (db as unknown as FinanceTransactionDb)) return withOrganization(user.organizationId, (tx) => createCostComponent(user, input, tx as unknown as FinanceTransactionDb));
+  if (!database) return withOrganization(user.organizationId, (tx) => createCostComponent(user, input, tx as unknown as FinanceTransactionDb));
   assertCanManageFinance(user);
 
   return inFinanceTransaction(database, async (transaction) => {
@@ -317,9 +316,9 @@ export async function changeCostComponentStatus(
   user: FinanceUser,
   costComponentId: string,
   input: CostStatusInput,
-  database: FinanceTransactionDb = db as unknown as FinanceTransactionDb
+  database?: FinanceTransactionDb
 ): Promise<{ id: string; orderId?: string } | undefined> {
-  if (database === (db as unknown as FinanceTransactionDb)) return withOrganization(user.organizationId, (tx) => changeCostComponentStatus(user, costComponentId, input, tx as unknown as FinanceTransactionDb));
+  if (!database) return withOrganization(user.organizationId, (tx) => changeCostComponentStatus(user, costComponentId, input, tx as unknown as FinanceTransactionDb));
   assertCanManageFinance(user);
 
   return inFinanceTransaction(database, async (transaction) => {
@@ -354,9 +353,9 @@ export async function approveIncentive(
   user: FinanceUser,
   incentiveId: string,
   input: IncentiveApprovalInput,
-  database: IncentiveApprovalDb = db as unknown as IncentiveApprovalDb
+  database?: IncentiveApprovalDb
 ): Promise<{ id: string; orderId?: string } | undefined> {
-  if (database === (db as unknown as IncentiveApprovalDb)) return withOrganization(user.organizationId, (tx) => approveIncentive(user, incentiveId, input, tx as unknown as IncentiveApprovalDb));
+  if (!database) return withOrganization(user.organizationId, (tx) => approveIncentive(user, incentiveId, input, tx as unknown as IncentiveApprovalDb));
   assertCanManageFinance(user);
 
   const incentive = await (database.incentive.findFirst ?? database.incentive.findUnique!)({ where: { id: incentiveId, organizationId: user.organizationId } });
@@ -390,9 +389,9 @@ export async function updateIncentiveSplits(
   user: FinanceUser,
   incentiveId: string,
   splits: Array<{ percent: number; userId: string }>,
-  database: IncentiveSplitDb = db as unknown as IncentiveSplitDb
+  database?: IncentiveSplitDb
 ): Promise<{ count: number }> {
-  if (database === (db as unknown as IncentiveSplitDb)) return withOrganization(user.organizationId, (tx) => updateIncentiveSplits(user, incentiveId, splits, tx as unknown as IncentiveSplitDb));
+  if (!database) return withOrganization(user.organizationId, (tx) => updateIncentiveSplits(user, incentiveId, splits, tx as unknown as IncentiveSplitDb));
   assertCanManageFinance(user);
 
   const incentive = await (database.incentive.findFirst ?? database.incentive.findUnique!)({ where: { id: incentiveId, organizationId: user.organizationId } });
@@ -417,9 +416,9 @@ export async function rejectIncentive(
   user: FinanceUser,
   incentiveId: string,
   reason: string,
-  database: IncentiveStatusDb = db as unknown as IncentiveStatusDb
+  database?: IncentiveStatusDb
 ): Promise<{ id: string; orderId?: string }> {
-  if (database === (db as unknown as IncentiveStatusDb)) return withOrganization(user.organizationId, (tx) => rejectIncentive(user, incentiveId, reason, tx as unknown as IncentiveStatusDb));
+  if (!database) return withOrganization(user.organizationId, (tx) => rejectIncentive(user, incentiveId, reason, tx as unknown as IncentiveStatusDb));
   assertCanManageFinance(user);
 
   const existing = await database.incentive.findFirst?.({ where: { id: incentiveId, organizationId: user.organizationId }, select: { id: true } }) ?? null;
@@ -440,9 +439,9 @@ export async function markIncentivePaid(
   user: FinanceUser,
   incentiveId: string,
   paymentReference: string,
-  database: IncentiveStatusDb = db as unknown as IncentiveStatusDb
+  database?: IncentiveStatusDb
 ): Promise<{ id: string; orderId?: string }> {
-  if (database === (db as unknown as IncentiveStatusDb)) return withOrganization(user.organizationId, (tx) => markIncentivePaid(user, incentiveId, paymentReference, tx as unknown as IncentiveStatusDb));
+  if (!database) return withOrganization(user.organizationId, (tx) => markIncentivePaid(user, incentiveId, paymentReference, tx as unknown as IncentiveStatusDb));
   assertCanManageFinance(user);
 
   const existing = await database.incentive.findFirst?.({ where: { id: incentiveId, organizationId: user.organizationId }, select: { id: true } }) ?? null;

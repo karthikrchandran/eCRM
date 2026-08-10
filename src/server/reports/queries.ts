@@ -1,5 +1,4 @@
 import { formatCurrencyPaisa, type ReportCurrency } from "@/components/reports/report-formatters";
-import { tenantBoundary as db } from "@/server/organizations/tenant-boundary";
 import { withOrganization } from "@/server/organizations/with-organization";
 import { listOrganizationUserOptions } from "@/server/organizations/member-options";
 import { calculateOrderPaymentSummary } from "@/server/finance/calculations";
@@ -479,12 +478,12 @@ async function loadFilterOptions(database: ReportsQueryDb, organizationId: strin
 
 export async function getReportsOverview(
   user: ReportsUser,
-  database: ReportsQueryDb = db as unknown as ReportsQueryDb,
+  database?: ReportsQueryDb,
   filters: ReportsFilters = {},
   now = new Date(),
   preloadedOwners?: ReportOption[]
 ): Promise<ReportsOverview> {
-  if (database === (db as unknown as ReportsQueryDb)) {
+  if (!database) {
     const owners = await listOrganizationUserOptions(user.organizationId, ["ADMIN", "SALES", "FINANCE", "PRODUCTION", "READ_ONLY", "OWNER"]);
     return withOrganization(user.organizationId, (tx) => getReportsOverview(user, tx as unknown as ReportsQueryDb, filters, now, owners));
   }

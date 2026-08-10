@@ -1,6 +1,5 @@
 import type { Prisma } from "@prisma/client";
 import { isSafeExternalUrl } from "@/lib/safe-external-url";
-import { tenantBoundary as db } from "@/server/organizations/tenant-boundary";
 import { withOrganization } from "@/server/organizations/with-organization";
 import type { SupportedCurrency } from "@/server/settings/settings";
 import { calculateProposalTotals } from "./calculations";
@@ -115,9 +114,9 @@ export async function createProposal(
   user: ProposalUser,
   input: ProposalInput,
   lines: ProposalLineInput[],
-  database: ProposalCreateDb = db as unknown as ProposalCreateDb
+  database?: ProposalCreateDb
 ): Promise<{ id: string }> {
-  if (database === (db as unknown as ProposalCreateDb)) return withOrganization(user.organizationId, (tx) => createProposal(user, input, lines, tx as unknown as ProposalCreateDb));
+  if (!database) return withOrganization(user.organizationId, (tx) => createProposal(user, input, lines, tx as unknown as ProposalCreateDb));
   assertCanWriteProposals(user);
 
   if (lines.length < 1) {
@@ -175,9 +174,9 @@ export async function addProposalPdfMetadata(
   user: ProposalUser,
   proposalId: string,
   input: ProposalPdfMetadataInput,
-  database: ProposalPdfDb = db as unknown as ProposalPdfDb
+  database?: ProposalPdfDb
 ): Promise<{ id: string }> {
-  if (database === (db as unknown as ProposalPdfDb)) return withOrganization(user.organizationId, (tx) => addProposalPdfMetadata(user, proposalId, input, tx as unknown as ProposalPdfDb));
+  if (!database) return withOrganization(user.organizationId, (tx) => addProposalPdfMetadata(user, proposalId, input, tx as unknown as ProposalPdfDb));
   assertCanWriteProposals(user);
   const proposal = await database.proposal.findFirst({
     where: { id: proposalId, organizationId: user.organizationId },
@@ -209,9 +208,9 @@ export async function changeProposalStatus(
   user: ProposalUser,
   proposalId: string,
   nextStatus: ProposalStatusValue,
-  database: ProposalStatusDb = db as unknown as ProposalStatusDb
+  database?: ProposalStatusDb
 ): Promise<{ id: string; status: ProposalStatusValue }> {
-  if (database === (db as unknown as ProposalStatusDb)) return withOrganization(user.organizationId, (tx) => changeProposalStatus(user, proposalId, nextStatus, tx as unknown as ProposalStatusDb));
+  if (!database) return withOrganization(user.organizationId, (tx) => changeProposalStatus(user, proposalId, nextStatus, tx as unknown as ProposalStatusDb));
   assertCanWriteProposals(user);
   const proposal = await database.proposal.findFirst({
     where: { id: proposalId, organizationId: user.organizationId },

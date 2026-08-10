@@ -32,6 +32,7 @@ function targetKey(target: DatabaseTarget) {
 export function validateDisposableDatabaseUrls(
   ownerValue: string | undefined,
   tenantValue: string | undefined,
+  controlValue: string | undefined,
   ordinaryApplicationUrls: Array<string | undefined> = [
     process.env.DATABASE_URL,
     process.env.CONTROL_PLANE_DATABASE_URL,
@@ -40,14 +41,15 @@ export function validateDisposableDatabaseUrls(
 ) {
   const owner = parseDatabaseUrl("TEST_DATABASE_URL", ownerValue);
   const tenant = parseDatabaseUrl("TEST_TENANT_DATABASE_URL", tenantValue);
-  if (targetKey(owner.target) !== targetKey(tenant.target)) {
+  const control = parseDatabaseUrl("TEST_CONTROL_DATABASE_URL", controlValue);
+  if (targetKey(owner.target) !== targetKey(tenant.target) || targetKey(owner.target) !== targetKey(control.target)) {
     throw new Error("Test database URLs must target the same canonical host, port, database, and schema.");
   }
   if (!/(?:test|wp4|disposable|rehearsal)/i.test(owner.target.database)) {
     throw new Error("Test database name must contain an explicit disposable marker.");
   }
-  if (owner.target.username === tenant.target.username) {
-    throw new Error("Owner and tenant test URLs must use different database logins.");
+  if (new Set([owner.target.username, tenant.target.username, control.target.username]).size !== 3) {
+    throw new Error("Owner, tenant, and control test URLs must use different database logins.");
   }
   for (const ordinaryValue of ordinaryApplicationUrls) {
     if (!ordinaryValue?.trim()) continue;
@@ -56,5 +58,5 @@ export function validateDisposableDatabaseUrls(
       throw new Error("Disposable tests must not target an ordinary application database.");
     }
   }
-  return { ownerUrl: owner.url, tenantUrl: tenant.url };
+  return { ownerUrl: owner.url, tenantUrl: tenant.url, controlUrl: control.url };
 }
