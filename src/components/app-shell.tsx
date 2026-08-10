@@ -36,6 +36,7 @@ const adminNavItems = [
 ];
 
 const adminSetupNavItems = [
+  { href: "/admin/team", label: "Team access" },
   { href: "/production", label: "Production" },
   { href: "/admin/products", label: "Products" },
   { href: "/admin/production-config", label: "Production config" },
