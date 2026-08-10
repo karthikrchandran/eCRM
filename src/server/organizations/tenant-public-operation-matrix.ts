@@ -107,15 +107,24 @@ export type TenantPublicOperationScenario = {
   disposition: ScenarioDraft["disposition"];
   equivalentCategory?: TenantIsolationCategory;
   exportName: string;
+  expectedOutcome: TenantPublicOperationOutcome;
   model: string;
   operation: PublicOperation;
   reason?: string;
-  run(context: TenantPublicOperationContext): Promise<void>;
+  run(context: TenantPublicOperationContext): Promise<TenantPublicOperationExecution>;
 };
 
-export type TenantPublicOperationContext = {
-  invoke(scenario: TenantPublicOperationScenario): Promise<void>;
+export type TenantPublicOperationOutcome = "success" | "denied" | "duplicate" | "na-equivalent";
+
+export type TenantPublicOperationExecution = {
+  category: TenantIsolationCategory;
+  exportName: string;
+  model: string;
+  outcome: TenantPublicOperationOutcome;
 };
+
+type TenantPublicOperationHandler = (scenario: TenantPublicOperationScenario) => Promise<TenantPublicOperationOutcome>;
+export type TenantPublicOperationContext = Record<TenantIsolationCategory, TenantPublicOperationHandler>;
 
 type ModelDraft = Record<TenantIsolationCategory, ScenarioDraft>;
 export type TenantPublicOperationModelMatrix = Record<TenantIsolationCategory, TenantPublicOperationScenario>;
@@ -134,9 +143,24 @@ function defineModel(model: string, draft: ModelDraft): TenantPublicOperationMod
       ...cell,
       category,
       exportName: cell.operation.name,
+      expectedOutcome: cell.disposition === "reviewed-na"
+        ? "na-equivalent"
+        : category === "direct-id" || category === "foreign-attachment"
+          ? "denied"
+          : category === "duplicate-identifier"
+            ? "duplicate"
+            : "success",
       model,
       async run(context) {
-        await context.invoke(scenario);
+        const handler = context[category];
+        if (typeof handler !== "function") {
+          throw new Error(`Missing ${category} tenant-isolation handler for ${model}.`);
+        }
+        const outcome = await handler(scenario);
+        if (outcome !== scenario.expectedOutcome) {
+          throw new Error(`${model}:${category} expected ${scenario.expectedOutcome} but observed ${outcome}.`);
+        }
+        return { category, exportName: scenario.exportName, model, outcome };
       }
     };
     return [category, scenario];
@@ -170,8 +194,8 @@ export const tenantPublicOperationMatrix = {
   }),
   SharedRecordExportSnapshot: defineModel("SharedRecordExportSnapshot", {
     list: parentManaged(listSharedRecords, "aggregate", "Export snapshots are internal resumable export state"),
-    "direct-id": executable(buildSharedRecordExportPage), search: parentManaged(buildSharedRecordExportPage, "aggregate", "Snapshots are addressed by signed cursor, not search"),
-    aggregate: executable(buildSharedRecordExportPage), create: executable(buildSharedRecordExportPage), update: executable(buildSharedRecordExportPage),
+    "direct-id": parentManaged(buildSharedRecordExportPage, "aggregate", "Snapshots are addressed by signed cursor and have no standalone public detail operation"), search: parentManaged(buildSharedRecordExportPage, "aggregate", "Snapshots are addressed by signed cursor, not search"),
+    aggregate: executable(buildSharedRecordExportPage), create: executable(buildSharedRecordExportPage), update: parentManaged(buildSharedRecordExportPage, "aggregate", "Snapshot lifecycle updates are internal to export materialization"),
     delete: parentManaged(buildSharedRecordExportPage, "aggregate", "Expired snapshots are internal lifecycle state"),
     "foreign-attachment": parentManaged(buildSharedRecordExportPage, "nested-include", "Snapshot ownership is derived from the export transaction"),
     "nested-include": executable(buildSharedRecordExportPage), "duplicate-identifier": noBusinessIdentifier(buildSharedRecordExportPage, "aggregate")
