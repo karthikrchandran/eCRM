@@ -13,6 +13,14 @@ const workflowEventSchema = z.object({
   summary: z.string().trim().min(1),
   payload: z.record(z.string(), z.unknown()).optional(),
   occurredAt: z.coerce.date().optional()
+}).superRefine((event, context) => {
+  if (Boolean(event.relatedRecordType) !== Boolean(event.relatedRecordId)) {
+    context.addIssue({
+      code: "custom",
+      message: "Related record type and identifier must be provided together.",
+      path: event.relatedRecordType ? ["relatedRecordId"] : ["relatedRecordType"]
+    });
+  }
 });
 
 export async function POST(request: Request) {

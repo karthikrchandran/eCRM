@@ -95,6 +95,9 @@ export async function ingestWorkflowEvent(
   input: WorkflowEventInput,
   database: WorkflowEventDb = db as unknown as WorkflowEventDb
 ): Promise<WorkflowEventRecord> {
+  if (Boolean(input.relatedRecordType) !== Boolean(input.relatedRecordId)) {
+    throw new Error("Workflow related record type and identifier must be provided together.");
+  }
   if (database === (db as unknown as WorkflowEventDb)) {
     return withOrganization(organizationId, (tx) => ingestWorkflowEvent(organizationId, input, tx as unknown as WorkflowEventDb));
   }

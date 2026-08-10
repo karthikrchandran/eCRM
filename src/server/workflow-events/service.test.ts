@@ -164,4 +164,27 @@ describe("workflow event service", () => {
     expect(createMock).not.toHaveBeenCalled();
     expect(salesTaskCreateMock).not.toHaveBeenCalled();
   });
+
+  it.each([
+    ["type without an identifier", { relatedRecordType: "LEAD" }],
+    ["a tenant-B identifier without a type", { relatedRecordId: "lead_B" }]
+  ])("rejects related record %s before idempotency lookup or persistence", async (_label, relatedRecord) => {
+    const database = {
+      workflowEvent: {
+        findFirst: vi.fn().mockResolvedValue({ id: "existing_event" }),
+        create: vi.fn()
+      }
+    };
+
+    await expect(ingestWorkflowEvent("org_A", {
+      sourceApp: "emailvoice",
+      sourceEventId: "existing-source-event",
+      sourceEventType: "sync",
+      entityType: "EXTERNAL",
+      summary: "Malformed related record",
+      ...relatedRecord
+    }, database as never)).rejects.toThrow("Workflow related record type and identifier must be provided together.");
+    expect(database.workflowEvent.findFirst).not.toHaveBeenCalled();
+    expect(database.workflowEvent.create).not.toHaveBeenCalled();
+  });
 });

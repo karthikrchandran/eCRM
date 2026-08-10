@@ -69,4 +69,26 @@ describe("workflow-events route", () => {
     expect(response.status).toBe(400);
     expect(ingestWorkflowEventMock).not.toHaveBeenCalled();
   });
+
+  it.each([
+    ["type without an identifier", { relatedRecordType: "LEAD" }],
+    ["a tenant-B identifier without a type", { relatedRecordId: "lead_B" }]
+  ])("rejects related record %s before calling the service", async (_label, relatedRecord) => {
+    const response = await POST(
+      new Request("http://localhost/api/workflow-events", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          sourceApp: "emailvoice",
+          sourceEventType: "sync",
+          entityType: "EXTERNAL",
+          summary: "Malformed related record",
+          ...relatedRecord
+        })
+      })
+    );
+
+    expect(response.status).toBe(400);
+    expect(ingestWorkflowEventMock).not.toHaveBeenCalled();
+  });
 });
