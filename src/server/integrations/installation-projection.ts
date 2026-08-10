@@ -1,4 +1,4 @@
-import { importSPKI, jwtVerify, type KeyLike } from "jose";
+import { importSPKI, jwtVerify } from "jose";
 import { z } from "zod";
 
 const claimsSchema = z.object({
@@ -12,6 +12,8 @@ const claimsSchema = z.object({
   iat: z.number().int(),
   exp: z.number().int()
 });
+
+type VerificationKey = Parameters<typeof jwtVerify>[1];
 
 export class InstallationProjectionError extends Error {
   constructor(message: string) {
@@ -35,7 +37,7 @@ export type InstallationProjection = InstallationProjectionClaims & {
 
 export async function verifyInstallationProjection(
   token: string,
-  publicKey: KeyLike | string,
+  publicKey: VerificationKey | string,
   expected: { tenantKey?: string; keyVersion?: number; minProjectionVersion?: number } = {}
 ): Promise<InstallationProjectionClaims> {
   try {
