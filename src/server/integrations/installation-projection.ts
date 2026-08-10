@@ -1,4 +1,5 @@
 import { importSPKI, jwtVerify } from "jose";
+import type { KeyObject } from "node:crypto";
 import { z } from "zod";
 
 const claimsSchema = z.object({
@@ -13,7 +14,7 @@ const claimsSchema = z.object({
   exp: z.number().int()
 });
 
-type VerificationKey = Parameters<typeof jwtVerify>[1];
+type VerificationKey = Uint8Array | CryptoKey | KeyObject | Record<string, unknown>;
 
 export class InstallationProjectionError extends Error {
   constructor(message: string) {
@@ -46,7 +47,7 @@ export async function verifyInstallationProjection(
     if (header.alg !== "EdDSA" || header.typ !== "JWT" || typeof header.kid !== "string") {
       throw new InstallationProjectionError("invalid projection assertion header");
     }
-    const { payload } = await jwtVerify(token, key, {
+    const { payload } = await jwtVerify(token, key as never, {
       algorithms: ["EdDSA"],
       issuer: "signalloop",
       audience: "commitarc",
