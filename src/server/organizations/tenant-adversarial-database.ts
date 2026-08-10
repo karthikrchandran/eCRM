@@ -15,6 +15,7 @@ export type TenantDomainProbe = {
   nestedTable?: string;
   nestedForeignKey?: string;
   createOverrides?: Record<string, string>;
+  businessIdentifier?: Record<string, string>;
 };
 
 type ControlDatabase = Pick<PrismaClient, "$queryRawUnsafe">;
@@ -208,13 +209,29 @@ function createProbeAdapter(
   }
 
   async function duplicateIdentifier() {
+    if (!probe.businessIdentifier || Object.keys(probe.businessIdentifier).length === 0) {
+      await directId();
+      return;
+    }
+    const identifierEntries = Object.entries(probe.businessIdentifier);
+    const identifierWhere = identifierEntries
+      .map(([column], index) => `${identifier(column)}::text = $${index + 1}`)
+      .join(" AND ");
+    const idParameter = identifierEntries.length + 1;
     const controlRows = await input.control.$queryRawUnsafe<Array<{ count: bigint }>>(
-      `SELECT count(*) AS "count" FROM ${table} WHERE ${label} = $1 AND "id" = ANY($2::text[])`,
-      input.marker,
+      `SELECT count(*) AS "count" FROM ${table} WHERE ${identifierWhere} AND "id" = ANY($${idParameter}::text[])`,
+      ...identifierEntries.map(([, value]) => value),
       [probe.rowA, probe.rowB]
     );
     assertCount(controlRows[0]?.count ?? -1, 2, `${domain}:duplicate-identifier control precondition`);
-    await search();
+    await inTenantA(async (transaction) => {
+      const rows = await transaction.$queryRawUnsafe<Array<{ count: bigint }>>(
+        `SELECT count(*) AS "count" FROM ${table} WHERE ${identifierWhere} AND "id" = ANY($${idParameter}::text[])`,
+        ...identifierEntries.map(([, value]) => value),
+        [probe.rowA, probe.rowB]
+      );
+      assertCount(rows[0]?.count ?? -1, 1, `${domain}:duplicate-identifier tenant visibility`);
+    });
   }
 
   return {

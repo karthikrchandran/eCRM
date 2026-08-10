@@ -99,9 +99,18 @@ function domainMatrix(domain: TenantIsolationDomain): TenantIsolationDomainMatri
 }
 
 export const tenantIsolationMatrix = {
-  crm: domainMatrix("crm"),
-  "sales-day": domainMatrix("sales-day"),
-  "pipeline-opportunities": domainMatrix("pipeline-opportunities"),
+  crm: {
+    ...domainMatrix("crm"),
+    "duplicate-identifier": reviewedNotApplicable("crm", "duplicate-identifier", "Lead customers have no tenant business identifier; direct-ID denial is the executable equivalent.", "direct-id")
+  },
+  "sales-day": {
+    ...domainMatrix("sales-day"),
+    "duplicate-identifier": reviewedNotApplicable("sales-day", "duplicate-identifier", "Sales tasks have no tenant business identifier; direct-ID denial is the executable equivalent.", "direct-id")
+  },
+  "pipeline-opportunities": {
+    ...domainMatrix("pipeline-opportunities"),
+    "duplicate-identifier": reviewedNotApplicable("pipeline-opportunities", "duplicate-identifier", "Opportunities have no tenant business identifier; direct-ID denial is the executable equivalent.", "direct-id")
+  },
   "products-proposals": domainMatrix("products-proposals"),
   "orders-production": domainMatrix("orders-production"),
   "finance-incentives": domainMatrix("finance-incentives"),
@@ -110,7 +119,8 @@ export const tenantIsolationMatrix = {
     create: reviewedNotApplicable("reports", "create", "Reports are read-only; aggregate isolation is the equivalent security boundary.", "aggregate"),
     update: reviewedNotApplicable("reports", "update", "Reports are read-only; aggregate isolation is the equivalent security boundary.", "aggregate"),
     delete: reviewedNotApplicable("reports", "delete", "Reports are read-only; aggregate isolation is the equivalent security boundary.", "aggregate"),
-    "foreign-attachment": reviewedNotApplicable("reports", "foreign-attachment", "Reports accept filters, not foreign-key attachments; direct-ID denial is equivalent.", "direct-id")
+    "foreign-attachment": reviewedNotApplicable("reports", "foreign-attachment", "Reports accept filters, not foreign-key attachments; direct-ID denial is equivalent.", "direct-id"),
+    "duplicate-identifier": reviewedNotApplicable("reports", "duplicate-identifier", "Reports do not own business identifiers; aggregate isolation is the executable equivalent.", "aggregate")
   },
   "shared-export": domainMatrix("shared-export"),
   workflow: {
