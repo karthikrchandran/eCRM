@@ -17,6 +17,7 @@ import {
   createContact,
   createLeadCustomer,
   reassignLeadOwner,
+  updateContact,
   updateLeadCustomer
 } from "./mutations";
 
@@ -25,6 +26,7 @@ type FieldErrorSource = {
 };
 
 type LeadCustomerParseResult = { ok: false; fieldErrors: Record<string, string[]> } | { ok: true; data: LeadCustomerInput };
+type ContactParseResult = { ok: false; fieldErrors: Record<string, string[]> } | { ok: true; data: import("./types").ContactInput };
 
 function fieldErrorState(error: FieldErrorSource): ActionState {
   const fieldErrors = Object.fromEntries(
@@ -126,6 +128,18 @@ export async function createContactAction(
   "use server";
 
   const user = await requireUser();
+  const result = parseContactFormForTest(leadCustomerId, formData);
+
+  if (!result.ok) {
+    return result;
+  }
+
+  await createContact(user, result.data);
+  revalidatePath(`/leads/${leadCustomerId}`);
+  redirect(`/leads/${leadCustomerId}`);
+}
+
+export function parseContactFormForTest(leadCustomerId: string, formData: FormData): ContactParseResult {
   const result = contactInputSchema.safeParse({
     leadCustomerId,
     branchId: formData.get("branchId"),
@@ -137,13 +151,26 @@ export async function createContactAction(
     notes: formData.get("notes")
   });
 
-  if (!result.success) {
-    return fieldErrorState(result.error);
-  }
+  return result.success ? { ok: true, data: result.data } : fieldErrorState(result.error) as ContactParseResult;
+}
 
-  await createContact(user, result.data);
+export async function updateContactAction(
+  contactId: string,
+  leadCustomerId: string,
+  _previousState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  "use server";
+
+  const user = await requireUser();
+  const result = parseContactFormForTest(leadCustomerId, formData);
+  if (!result.ok) {
+    return result;
+  }
+  await updateContact(user, contactId, result.data);
+  revalidatePath(`/contacts/${contactId}`);
   revalidatePath(`/leads/${leadCustomerId}`);
-  redirect(`/leads/${leadCustomerId}`);
+  redirect(`/contacts/${contactId}`);
 }
 
 export async function createActivityAction(

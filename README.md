@@ -62,6 +62,47 @@ Voice note audio is saved to `.local-storage/sales-voice-notes` locally. If `BLO
 - Admin: `admin@example.com` / `Admin@12345`
 - Sales: `sales@example.com` / `Sales@12345`
 
+## Git Workflow
+
+Use a short-lived branch for every change and keep commits focused.
+
+```powershell
+git switch -c feature/your-change
+# make changes
+
+git add .
+git commit -m "feat: describe the change"
+git push -u origin feature/your-change
+```
+
+Recommended conventions:
+
+- Branch names: `feature/...`, `fix/...`, or `chore/...`
+- Commit messages: use a concise prefix such as `feat:`, `fix:`, or `chore:`
+- Before opening a pull request, run the quality gate and browser smoke tests
+- Keep pull requests small and include a short summary of what changed and how it was verified
+
+## Testing Framework
+
+This project uses a layered testing setup so changes are validated at multiple levels.
+
+- Unit and component tests: Vitest + Testing Library
+- End-to-end browser tests: Playwright
+- Static validation: TypeScript and ESLint
+
+Common commands:
+
+```powershell
+npm run test
+npm run test:watch
+npm run test:e2e
+npm run lint
+npm run typecheck
+npm run gate
+```
+
+Use the fast local checks while developing, and run the full gate before handing off work or opening a pull request. Prefer testing user-visible behavior for UI changes and reserve Playwright for the most important user journeys.
+
 ## Shared Records API
 
 `/api/shared-records` is the first shared CRM data slice for eCRM and EmailVoice synchronization. It is protected by `SHARED_DATA_API_TOKEN` and uses simple `searchText contains` filtering for the first low-volume slice. The schema includes a normal index on `searchText`; full-text or trigram search is intentionally deferred until volume requires it.

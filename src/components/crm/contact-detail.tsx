@@ -28,6 +28,9 @@ export function ContactDetail({ contact }: { contact: ContactDetailRecord }) {
           <Link className="crm-button crm-button-secondary text-sm" href="/contacts">
             Back to contacts
           </Link>
+          <Link className="crm-button crm-button-secondary text-sm" href={`/contacts/${contact.id}/edit`}>
+            Edit contact
+          </Link>
           <Link className="crm-button crm-button-secondary text-sm" href={`/leads/${lead.id}`}>
             Open lead
           </Link>

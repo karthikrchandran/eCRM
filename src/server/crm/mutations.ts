@@ -46,6 +46,16 @@ type CreateContactDb = LeadLookupDb & {
   };
 };
 
+type UpdateContactDb = LeadLookupDb & {
+  branch?: {
+    findFirst: (args: Prisma.BranchFindFirstArgs) => Promise<IdResult | null>;
+  };
+  contact: {
+    findUnique: (args: Prisma.ContactFindUniqueArgs) => Promise<IdResult | null>;
+    update: (args: Prisma.ContactUpdateArgs) => Promise<IdResult>;
+  };
+};
+
 type CreateActivityDb = OwnerDb &
   LeadLookupDb & {
     branch?: {
@@ -108,7 +118,11 @@ async function assertLeadExists(database: LeadLookupDb, leadCustomerId: string) 
   }
 }
 
-async function assertBranchBelongsToLead(database: CreateContactDb | CreateActivityDb, leadCustomerId: string, branchId: string) {
+async function assertBranchBelongsToLead(
+  database: CreateContactDb | CreateActivityDb | UpdateContactDb,
+  leadCustomerId: string,
+  branchId: string
+) {
   const branch = await database.branch?.findFirst({
     where: { id: branchId, leadCustomerId },
     select: { id: true }
@@ -200,6 +214,36 @@ export async function createContact(
   }
 
   return database.contact.create({ data: input });
+}
+
+export async function updateContact(
+  user: CrmUser,
+  contactId: string,
+  input: ContactInput,
+  database: UpdateContactDb = db as unknown as UpdateContactDb
+) {
+  assertCanWriteCrmRecords(user);
+  const contact = await database.contact.findUnique({ where: { id: contactId }, select: { id: true } });
+  if (!contact) {
+    throw new Error("Contact was not found.");
+  }
+  await assertLeadExists(database, input.leadCustomerId);
+  if (input.branchId) {
+    await assertBranchBelongsToLead(database, input.leadCustomerId, input.branchId);
+  }
+
+  return database.contact.update({
+    where: { id: contactId },
+    data: {
+      branchId: input.branchId,
+      name: input.name,
+      designation: input.designation,
+      email: input.email,
+      phone: input.phone,
+      isPrimary: input.isPrimary,
+      notes: input.notes
+    }
+  });
 }
 
 export async function createActivity(
