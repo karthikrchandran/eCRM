@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { PrismaClient } from "../../generated/platform-client";
 import { PrismaPlatformRepository } from "./db";
@@ -19,6 +19,10 @@ const request: ProvisioningRequest = {
 };
 
 describe("PrismaPlatformRepository", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("returns the concurrent durable reservation without querying an aborted P2002 transaction", async () => {
     let transactionAborted = false;
     const durableCell = cellRecord();
@@ -62,16 +66,38 @@ describe("PrismaPlatformRepository", () => {
     const action = provisioningAction("database");
     const auditEvent = audit("database");
 
-    await expect(repository.recordProvisioningResult({ attemptId: "attempt_1", action, auditEvent })).rejects.toThrow(
+    await expect(repository.recordProvisioningResult({ attemptId: "attempt_1", leaseVersion: 1, action, auditEvent })).rejects.toThrow(
       "audit unavailable"
     );
     expect(database.state.actions).toEqual([]);
     expect(database.state.auditEvents).toEqual([]);
 
-    const attempt = await repository.recordProvisioningResult({ attemptId: "attempt_1", action, auditEvent });
+    const attempt = await repository.recordProvisioningResult({ attemptId: "attempt_1", leaseVersion: 1, action, auditEvent });
 
     expect(attempt.actions).toEqual([expect.objectContaining({ step: "database", result: "SUCCEEDED" })]);
     expect(database.state.auditEvents).toEqual([expect.objectContaining({ id: auditEvent.id })]);
+  });
+
+  it("renews the parent attempt lease when appending durable action progress", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-11T12:05:00Z"));
+    const database = actionDatabase({ leaseVersion: 3 });
+    const repository = new PrismaPlatformRepository(database.client);
+
+    await repository.appendProvisioningAction("attempt_1", 3, provisioningAction("storage"));
+
+    expect(database.state.updatedAt).toEqual(new Date("2026-08-11T12:05:00Z"));
+    expect(database.state.actions).toEqual([expect.objectContaining({ step: "storage", result: "SUCCEEDED" })]);
+  });
+
+  it("rejects durable action progress from a stale lease token", async () => {
+    const database = actionDatabase({ leaseVersion: 4 });
+    const repository = new PrismaPlatformRepository(database.client);
+
+    await expect(repository.appendProvisioningAction("attempt_1", 3, provisioningAction("storage"))).rejects.toThrow(
+      /lease/i
+    );
+    expect(database.state.actions).toEqual([]);
   });
 
   it("rolls back activation completion and safely retries after a cell update crash", async () => {
@@ -81,13 +107,14 @@ describe("PrismaPlatformRepository", () => {
     const auditEvent = audit("health-check");
 
     await expect(
-      repository.finalizeProvisioningSuccess({ cellId: request.cellId, attemptId: "attempt_1", action, auditEvent })
+      repository.finalizeProvisioningSuccess({ cellId: request.cellId, attemptId: "attempt_1", leaseVersion: 1, action, auditEvent })
     ).rejects.toThrow("cell update unavailable");
     expect(database.state).toMatchObject({ actions: [], auditEvents: [], attemptResult: "IN_PROGRESS", lifecycleStatus: "PROVISIONING" });
 
     const finalized = await repository.finalizeProvisioningSuccess({
       cellId: request.cellId,
       attemptId: "attempt_1",
+      leaseVersion: 1,
       action,
       auditEvent
     });
@@ -99,11 +126,51 @@ describe("PrismaPlatformRepository", () => {
   });
 });
 
+function actionDatabase(initial: { leaseVersion: number }) {
+  const state = {
+    actions: [] as Array<ReturnType<typeof actionRow>>,
+    leaseVersion: initial.leaseVersion,
+    updatedAt: new Date("2026-08-11T12:00:00Z")
+  };
+  const client = {
+    provisioningAction: {
+      create: async ({ data }: { data: ProvisioningAction & { attemptId: string } }) => {
+        state.actions.push(actionRow(data));
+      }
+    },
+    provisioningAttempt: {
+      findUnique: async () => ({
+        ...attemptRow("IN_PROGRESS", state.actions),
+        leaseVersion: state.leaseVersion,
+        updatedAt: state.updatedAt
+      }),
+      update: async ({
+        where,
+        data
+      }: {
+        where: { id_leaseVersion?: { id: string; leaseVersion: number } };
+        data: { updatedAt?: Date; actions?: { create: ProvisioningAction } };
+      }) => {
+        if (where.id_leaseVersion?.leaseVersion !== state.leaseVersion) throw new Error("Provisioning lease lost");
+        if (data.updatedAt) state.updatedAt = data.updatedAt;
+        if (data.actions?.create) state.actions.push(actionRow(data.actions.create));
+        return {
+          ...attemptRow("IN_PROGRESS", state.actions),
+          leaseVersion: state.leaseVersion,
+          updatedAt: state.updatedAt
+        };
+      }
+    }
+  } as unknown as PrismaClient;
+  return { client, state };
+}
+
 function transactionalDatabase(options: { failAuditOnce?: boolean; failCellUpdateOnce?: boolean }) {
   const state = {
     actions: [] as Array<ReturnType<typeof actionRow>>,
     auditEvents: [] as ControlPlaneAuditEventRecord[],
     attemptResult: "IN_PROGRESS",
+    leaseVersion: 1,
     lifecycleStatus: "PROVISIONING"
   };
   let failAudit = options.failAuditOnce ?? false;
@@ -115,6 +182,7 @@ function transactionalDatabase(options: { failAuditOnce?: boolean; failCellUpdat
         actions: [...state.actions],
         auditEvents: [...state.auditEvents],
         attemptResult: state.attemptResult,
+        leaseVersion: state.leaseVersion,
         lifecycleStatus: state.lifecycleStatus
       };
       const transactionClient = {
@@ -124,10 +192,33 @@ function transactionalDatabase(options: { failAuditOnce?: boolean; failCellUpdat
           }
         },
         provisioningAttempt: {
-          findUnique: async () => attemptRow(pending.attemptResult, pending.actions),
-          update: async ({ data }: { data: { result: string } }) => {
-            pending.attemptResult = data.result;
-            return attemptRow(pending.attemptResult, pending.actions);
+          findUnique: async () => ({ ...attemptRow(pending.attemptResult, pending.actions), leaseVersion: pending.leaseVersion }),
+          update: async ({
+            where,
+            data
+          }: {
+            where: { id_leaseVersion?: { leaseVersion: number } };
+            data: {
+              result?: string;
+              actions?: { create: ProvisioningAction };
+              cell?: { update: { lifecycleStatus: string } };
+            };
+          }) => {
+            if (where.id_leaseVersion?.leaseVersion !== pending.leaseVersion) throw { code: "P2025" };
+            if (data.actions?.create) pending.actions.push(actionRow(data.actions.create));
+            if (data.cell?.update) {
+              if (failCellUpdate) {
+                failCellUpdate = false;
+                throw new Error("cell update unavailable");
+              }
+              pending.lifecycleStatus = data.cell.update.lifecycleStatus;
+            }
+            if (data.result) pending.attemptResult = data.result;
+            return {
+              ...attemptRow(pending.attemptResult, pending.actions),
+              leaseVersion: pending.leaseVersion,
+              cell: cellRecord(pending.lifecycleStatus)
+            };
           }
         },
         controlPlaneAuditEvent: {
@@ -155,6 +246,7 @@ function transactionalDatabase(options: { failAuditOnce?: boolean; failCellUpdat
       state.actions = pending.actions;
       state.auditEvents = pending.auditEvents;
       state.attemptResult = pending.attemptResult;
+      state.leaseVersion = pending.leaseVersion;
       state.lifecycleStatus = pending.lifecycleStatus;
       return result;
     }
@@ -196,6 +288,7 @@ function attemptRow(result: string, actions: Array<ReturnType<typeof actionRow>>
     cellId: request.cellId,
     idempotencyKey: request.idempotencyKey,
     correlationId: request.correlationId,
+    leaseVersion: 1,
     result,
     createdAt: new Date("2026-08-11T11:00:00Z"),
     updatedAt: new Date("2026-08-11T12:00:00Z"),

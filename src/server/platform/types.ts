@@ -57,10 +57,18 @@ export interface ProvisioningAttemptRecord {
   cellId: string;
   idempotencyKey: string;
   correlationId: string;
+  leaseVersion: number;
   result: ProvisioningResult | "IN_PROGRESS";
   actions: ProvisioningAction[];
   createdAt: Date;
   updatedAt: Date;
+}
+
+export class ProvisioningLeaseLostError extends Error {
+  public constructor(attemptId: string) {
+    super(`Provisioning lease lost for attempt ${attemptId}`);
+    this.name = "ProvisioningLeaseLostError";
+  }
 }
 
 export interface ControlPlaneAuditEventRecord {

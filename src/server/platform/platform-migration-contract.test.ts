@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 const projectRoot = process.cwd();
 const migrationDirectory = join(projectRoot, "prisma", "platform", "migrations");
 const initialMigrationDirectory = join(migrationDirectory, "20260811000000_init_platform");
+const leaseFenceMigrationDirectory = join(migrationDirectory, "20260811190000_fence_provisioning_leases");
 
 describe("platform Prisma migration contract", () => {
   it("uses an isolated migration history when deploying the platform schema", () => {
@@ -51,5 +52,14 @@ describe("platform Prisma migration contract", () => {
     }
     expect(migrationSql).toContain('"error" TEXT');
     expect(migrationSql).toContain('"errorCode" TEXT');
+  });
+
+  it("adds a durable lease fence to provisioning attempts", () => {
+    const schema = readFileSync(join(projectRoot, "prisma", "platform.schema.prisma"), "utf8");
+    const migrationPath = join(leaseFenceMigrationDirectory, "migration.sql");
+
+    expect(schema).toContain("leaseVersion");
+    expect(existsSync(migrationPath)).toBe(true);
+    expect(readFileSync(migrationPath, "utf8")).toContain('ADD COLUMN "leaseVersion" INTEGER NOT NULL DEFAULT 1');
   });
 });

@@ -70,6 +70,7 @@ model ProvisioningAttempt {
   cellId          String
   idempotencyKey  String
   correlationId   String
+  leaseVersion    Int                @default(1)
   result          ProvisioningResult @default(IN_PROGRESS)
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
@@ -77,6 +78,7 @@ model ProvisioningAttempt {
   actions         ProvisioningAction[]
 
   @@unique([cellId, idempotencyKey])
+  @@unique([id, leaseVersion])
   @@index([correlationId])
 }
 

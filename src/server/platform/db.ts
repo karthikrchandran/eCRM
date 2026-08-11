@@ -8,6 +8,7 @@ import type {
   ProvisioningRequest,
   ProvisioningResult
 } from "./types";
+import { ProvisioningLeaseLostError } from "./types";
 import type { PlatformRepository, ProvisioningFinalization, ProvisioningResultEvidence } from "./provisioning";
 
 declare global {
@@ -98,65 +99,111 @@ export class PrismaPlatformRepository implements PlatformRepository {
           { result: "IN_PROGRESS", updatedAt: { lte: staleBefore } }
         ]
       },
-      data: { result: "IN_PROGRESS", updatedAt: new Date() }
+      data: { result: "IN_PROGRESS", leaseVersion: { increment: 1 }, updatedAt: new Date() }
     });
     return claimed.count === 1 ? this.findProvisioningAttempt(attemptId) : undefined;
   }
 
-  public async appendProvisioningAction(attemptId: string, action: ProvisioningAction): Promise<ProvisioningAttemptRecord> {
-    await this.client.provisioningAction.create({
-      data: {
-        attemptId,
-        step: action.step,
-        result: action.result,
-        reference: action.reference,
-        errorCode: action.errorCode,
-        occurredAt: action.occurredAt
-      }
-    });
-    const attempt = await this.findProvisioningAttempt(attemptId);
-    if (!attempt) throw new Error(`Unknown provisioning attempt ${attemptId}`);
-    return attempt;
+  public async appendProvisioningAction(
+    attemptId: string,
+    leaseVersion: number,
+    action: ProvisioningAction
+  ): Promise<ProvisioningAttemptRecord> {
+    try {
+      const attempt = await this.client.provisioningAttempt.update({
+        where: { id_leaseVersion: { id: attemptId, leaseVersion }, result: "IN_PROGRESS" },
+        data: {
+          updatedAt: new Date(),
+          actions: {
+            create: {
+              step: action.step,
+              result: action.result,
+              reference: action.reference,
+              errorCode: action.errorCode,
+              occurredAt: action.occurredAt
+            }
+          }
+        },
+        include: { actions: { orderBy: { occurredAt: "asc" } } }
+      });
+      return mapAttempt(attempt);
+    } catch (error) {
+      throw leaseLost(attemptId, error);
+    }
   }
 
-  public async recordProvisioningResult({ attemptId, action, auditEvent }: ProvisioningResultEvidence): Promise<ProvisioningAttemptRecord> {
+  public async recordProvisioningResult({ attemptId, leaseVersion, action, auditEvent }: ProvisioningResultEvidence): Promise<ProvisioningAttemptRecord> {
     return this.transaction(async (repository) => {
-      const attempt = await repository.appendProvisioningAction(attemptId, action);
+      const attempt = await repository.appendProvisioningAction(attemptId, leaseVersion, action);
       await repository.addAuditEvent(auditEvent);
       return attempt;
     });
   }
 
-  public async finalizeProvisioningSuccess({ cellId, attemptId, action, auditEvent }: ProvisioningFinalization): Promise<{
+  public async finalizeProvisioningSuccess({ cellId, attemptId, leaseVersion, action, auditEvent }: ProvisioningFinalization): Promise<{
     cell: CustomerCellRecord;
     attempt: ProvisioningAttemptRecord;
   }> {
     return this.transaction(async (repository) => {
-      await repository.appendProvisioningAction(attemptId, action);
+      await repository.appendProvisioningAction(attemptId, leaseVersion, action);
       await repository.addAuditEvent(auditEvent);
-      const attempt = await repository.setAttemptResult(attemptId, "SUCCEEDED");
-      const cell = await repository.updateCell(cellId, { lifecycleStatus: "ACTIVE" });
+      const cell = await repository.updateCell(cellId, attemptId, leaseVersion, { lifecycleStatus: "ACTIVE" });
+      const attempt = await repository.setAttemptResult(attemptId, leaseVersion, "SUCCEEDED");
       return { cell, attempt };
     });
   }
 
-  public async setAttemptResult(attemptId: string, result: ProvisioningResult): Promise<ProvisioningAttemptRecord> {
-    const attempt = await this.client.provisioningAttempt.update({
-      where: { id: attemptId },
-      data: { result },
-      include: { actions: { orderBy: { occurredAt: "asc" } } }
+  public async finalizeProvisioningFailure({ cellId, attemptId, leaseVersion, action, auditEvent }: ProvisioningFinalization): Promise<{
+    cell: CustomerCellRecord;
+    attempt: ProvisioningAttemptRecord;
+  }> {
+    return this.transaction(async (repository) => {
+      await repository.appendProvisioningAction(attemptId, leaseVersion, action);
+      await repository.addAuditEvent(auditEvent);
+      const cell = await repository.updateCell(cellId, attemptId, leaseVersion, { lifecycleStatus: "PROVISIONING_FAILED" });
+      const attempt = await repository.setAttemptResult(attemptId, leaseVersion, "FAILED");
+      return { cell, attempt };
     });
-    return mapAttempt(attempt);
   }
 
-  public async updateCell(cellId: string, update: Partial<CustomerCellRecord>): Promise<CustomerCellRecord> {
+  public async setAttemptResult(
+    attemptId: string,
+    leaseVersion: number,
+    result: ProvisioningResult
+  ): Promise<ProvisioningAttemptRecord> {
+    try {
+      const attempt = await this.client.provisioningAttempt.update({
+        where: { id_leaseVersion: { id: attemptId, leaseVersion }, result: "IN_PROGRESS" },
+        data: { result, updatedAt: new Date() },
+        include: { actions: { orderBy: { occurredAt: "asc" } } }
+      });
+      return mapAttempt(attempt);
+    } catch (error) {
+      throw leaseLost(attemptId, error);
+    }
+  }
+
+  public async updateCell(
+    cellId: string,
+    attemptId: string,
+    leaseVersion: number,
+    update: Partial<CustomerCellRecord>
+  ): Promise<CustomerCellRecord> {
     const data = { ...update };
     delete data.id;
     delete data.cellKey;
     delete data.createdAt;
     delete data.updatedAt;
-    const cell = await this.client.customerCell.update({ where: { id: cellId }, data });
-    return mapCell(cell);
+    try {
+      const attempt = await this.client.provisioningAttempt.update({
+        where: { id_leaseVersion: { id: attemptId, leaseVersion }, cellId, result: "IN_PROGRESS" },
+        data: { updatedAt: new Date(), cell: { update: data } },
+        include: { cell: true }
+      });
+      return mapCell(attempt.cell);
+    } catch (error) {
+      throw leaseLost(attemptId, error);
+    }
   }
 
   public async addAuditEvent(event: ControlPlaneAuditEventRecord): Promise<void> {
@@ -179,26 +226,51 @@ export class PrismaPlatformRepository implements PlatformRepository {
 
   public async upsertSignalLoopConnection(input: {
     cellId: string;
+    attemptId: string;
+    leaseVersion: number;
     workspaceReference: string;
     secretReference: string;
     correlationId: string;
     idempotencyKey: string;
   }): Promise<void> {
-    await this.client.installationConnection.upsert({
-      where: { cellId_connectionKey: { cellId: input.cellId, connectionKey: "signalloop" } },
-      create: {
-        cellId: input.cellId,
-        connectionKey: "signalloop",
-        provider: "SignalLoop",
-        workspaceReference: input.workspaceReference,
-        secretReference: input.secretReference,
-        capabilities: [],
-        status: "ACTIVE",
-        correlationId: input.correlationId,
-        idempotencyKey: input.idempotencyKey
-      },
-      update: { workspaceReference: input.workspaceReference, secretReference: input.secretReference, status: "ACTIVE" }
-    });
+    try {
+      await this.client.provisioningAttempt.update({
+        where: {
+          id_leaseVersion: { id: input.attemptId, leaseVersion: input.leaseVersion },
+          cellId: input.cellId,
+          result: "IN_PROGRESS"
+        },
+        data: {
+          updatedAt: new Date(),
+          cell: {
+            update: {
+              connections: {
+                upsert: {
+                  where: { cellId_connectionKey: { cellId: input.cellId, connectionKey: "signalloop" } },
+                  create: {
+                    connectionKey: "signalloop",
+                    provider: "SignalLoop",
+                    workspaceReference: input.workspaceReference,
+                    secretReference: input.secretReference,
+                    capabilities: [],
+                    status: "ACTIVE",
+                    correlationId: input.correlationId,
+                    idempotencyKey: input.idempotencyKey
+                  },
+                  update: {
+                    workspaceReference: input.workspaceReference,
+                    secretReference: input.secretReference,
+                    status: "ACTIVE"
+                  }
+                }
+              }
+            }
+          }
+        }
+      });
+    } catch (error) {
+      throw leaseLost(input.attemptId, error);
+    }
   }
 
   public async auditEventsForCell(cellId: string): Promise<ControlPlaneAuditEventRecord[]> {
@@ -255,6 +327,7 @@ function mapAttempt(attempt: {
   cellId: string;
   idempotencyKey: string;
   correlationId: string;
+  leaseVersion: number;
   result: string;
   createdAt: Date;
   updatedAt: Date;
@@ -265,6 +338,7 @@ function mapAttempt(attempt: {
     cellId: attempt.cellId,
     idempotencyKey: attempt.idempotencyKey,
     correlationId: attempt.correlationId,
+    leaseVersion: attempt.leaseVersion,
     result: attempt.result as ProvisioningAttemptRecord["result"],
     createdAt: attempt.createdAt,
     updatedAt: attempt.updatedAt,
@@ -276,4 +350,12 @@ function mapAttempt(attempt: {
       occurredAt: action.occurredAt
     }))
   };
+}
+
+function leaseLost(attemptId: string, error: unknown): Error {
+  if (error instanceof ProvisioningLeaseLostError) return error;
+  if (typeof error === "object" && error !== null && "code" in error && error.code === "P2025") {
+    return new ProvisioningLeaseLostError(attemptId);
+  }
+  return error instanceof Error ? error : new Error("Unknown platform persistence failure");
 }

@@ -7,6 +7,7 @@ import {
   CustomerCellProvisioner,
   type PlatformRepository
 } from "./provisioning";
+import type { ProvisioningAction } from "./types";
 
 const request = {
   cellId: "cell_ara_global",
@@ -61,12 +62,12 @@ describe("CustomerCellProvisioner", () => {
     const repository = createInMemoryPlatformRepository();
     const appendProvisioningAction = repository.appendProvisioningAction.bind(repository);
     let rejectedDatabaseResult = false;
-    repository.appendProvisioningAction = async (attemptId, action) => {
+    repository.appendProvisioningAction = async (attemptId, leaseVersion, action) => {
       if (action.step === "database" && action.result === "SUCCEEDED" && !rejectedDatabaseResult) {
         rejectedDatabaseResult = true;
         throw new Error("database result persistence unavailable");
       }
-      return appendProvisioningAction(attemptId, action);
+      return appendProvisioningAction(attemptId, leaseVersion, action);
     };
     const provider = new IdempotentCountingProvider();
     const provisioner = new CustomerCellProvisioner(repository, provider);
@@ -88,12 +89,12 @@ describe("CustomerCellProvisioner", () => {
     const repository = createInMemoryPlatformRepository();
     const updateCell = repository.updateCell.bind(repository);
     let rejectedApplicationUpdate = false;
-    repository.updateCell = async (cellId, update) => {
+    repository.updateCell = async (cellId, attemptId, leaseVersion, update) => {
       if (update.applicationReference && !rejectedApplicationUpdate) {
         rejectedApplicationUpdate = true;
         throw new Error("application cell update unavailable");
       }
-      return updateCell(cellId, update);
+      return updateCell(cellId, attemptId, leaseVersion, update);
     };
     const provider = new IdempotentCountingProvider();
     const provisioner = new CustomerCellProvisioner(repository, provider);
@@ -265,6 +266,49 @@ describe("CustomerCellProvisioner", () => {
     expect(provider.storageCalls).toBe(1);
   });
 
+  it("fences a stale worker before its next provider side effect after lease takeover", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-11T12:00:00Z"));
+    const repository = createInMemoryPlatformRepository();
+    const provider = new IdempotentCountingProvider();
+    const appendProvisioningAction = repository.appendProvisioningAction.bind(repository);
+    let storageClaims = 0;
+    let releaseStaleWorker!: () => void;
+    const staleWorkerPaused = new Promise<void>((resolve) => {
+      releaseStaleWorker = resolve;
+    });
+    let staleWorkerReachedStorage!: () => void;
+    const staleWorkerAtStorage = new Promise<void>((resolve) => {
+      staleWorkerReachedStorage = resolve;
+    });
+    repository.appendProvisioningAction = async (...args: Parameters<typeof appendProvisioningAction>) => {
+      const action = args.at(-1) as ProvisioningAction;
+      if (action.step === "storage" && action.result === "IN_PROGRESS" && ++storageClaims === 1) {
+        staleWorkerReachedStorage();
+        await staleWorkerPaused;
+      }
+      return appendProvisioningAction(...args);
+    };
+    const provisioner = new CustomerCellProvisioner(repository, provider);
+
+    const staleWorker = provisioner.provision(request);
+    await staleWorkerAtStorage;
+    vi.setSystemTime(new Date("2026-08-11T12:05:00Z"));
+    const takeoverWorker = await provisioner.provision(request);
+    releaseStaleWorker();
+    await staleWorker;
+
+    const attempt = await repository.findProvisioningAttempt(takeoverWorker.attempt.id);
+    expect(provider.storageCalls).toBe(1);
+    expect(attempt?.actions.filter((action) => action.step === "storage")).toEqual([
+      expect.objectContaining({ result: "IN_PROGRESS" }),
+      expect.objectContaining({ result: "SUCCEEDED" })
+    ]);
+    expect(takeoverWorker.auditEvents.filter((event) => event.action === "storage")).toHaveLength(1);
+    expect(attempt?.actions.some((action) => action.result === "FAILED")).toBe(false);
+    expect(takeoverWorker.cell.lifecycleStatus).toBe("ACTIVE");
+  });
+
   it("returns success when finalization committed but its acknowledgement was lost", async () => {
     const repository = createInMemoryPlatformRepository();
     const finalizeProvisioningSuccess = repository.finalizeProvisioningSuccess.bind(repository);
@@ -286,12 +330,12 @@ describe("CustomerCellProvisioner", () => {
     const repository = createInMemoryPlatformRepository();
     const updateCell = repository.updateCell.bind(repository);
     let rejectActivation = true;
-    repository.updateCell = async (cellId, update) => {
+    repository.updateCell = async (cellId, attemptId, leaseVersion, update) => {
       if (update.lifecycleStatus === "ACTIVE" && rejectActivation) {
         rejectActivation = false;
         throw new Error("activation write rolled back");
       }
-      return updateCell(cellId, update);
+      return updateCell(cellId, attemptId, leaseVersion, update);
     };
     const provisioner = new CustomerCellProvisioner(repository, new LocalCellProvider());
 
@@ -533,13 +577,13 @@ async function seedInterruptedAttempt(repository: PlatformRepository) {
     request.idempotencyKey,
     request.correlationId
   );
-  await repository.appendProvisioningAction(attempt.id, {
+  await repository.appendProvisioningAction(attempt.id, attempt.leaseVersion, {
     step: "database",
     result: "SUCCEEDED",
     reference: "local://postgres/ara-global",
     occurredAt: new Date()
   });
-  return repository.appendProvisioningAction(attempt.id, {
+  return repository.appendProvisioningAction(attempt.id, attempt.leaseVersion, {
     step: "storage",
     result: "IN_PROGRESS",
     occurredAt: new Date()

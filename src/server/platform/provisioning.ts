@@ -1,4 +1,5 @@
 import type { CellProvider, CellProviderContext, ProviderReference } from "./providers/types";
+import { ProvisioningLeaseLostError } from "./types";
 import type {
   ControlPlaneAuditEventRecord,
   CustomerCellRecord,
@@ -17,14 +18,17 @@ export interface PlatformRepository {
   reserveCustomerCell(request: ProvisioningRequest): Promise<{ cell: CustomerCellRecord; created: boolean }>;
   reserveProvisioningAttempt(cellId: string, idempotencyKey: string, correlationId: string): Promise<ProvisioningAttemptRecord>;
   claimProvisioningAttempt(attemptId: string, staleBefore: Date): Promise<ProvisioningAttemptRecord | undefined>;
-  appendProvisioningAction(attemptId: string, action: ProvisioningAction): Promise<ProvisioningAttemptRecord>;
+  appendProvisioningAction(attemptId: string, leaseVersion: number, action: ProvisioningAction): Promise<ProvisioningAttemptRecord>;
   recordProvisioningResult(input: ProvisioningResultEvidence): Promise<ProvisioningAttemptRecord>;
   finalizeProvisioningSuccess(input: ProvisioningFinalization): Promise<{ cell: CustomerCellRecord; attempt: ProvisioningAttemptRecord }>;
-  setAttemptResult(attemptId: string, result: ProvisioningResult): Promise<ProvisioningAttemptRecord>;
-  updateCell(cellId: string, update: Partial<CustomerCellRecord>): Promise<CustomerCellRecord>;
+  finalizeProvisioningFailure(input: ProvisioningFinalization): Promise<{ cell: CustomerCellRecord; attempt: ProvisioningAttemptRecord }>;
+  setAttemptResult(attemptId: string, leaseVersion: number, result: ProvisioningResult): Promise<ProvisioningAttemptRecord>;
+  updateCell(cellId: string, attemptId: string, leaseVersion: number, update: Partial<CustomerCellRecord>): Promise<CustomerCellRecord>;
   addAuditEvent(event: ControlPlaneAuditEventRecord): Promise<void>;
   upsertSignalLoopConnection(input: {
     cellId: string;
+    attemptId: string;
+    leaseVersion: number;
     workspaceReference: string;
     secretReference: string;
     correlationId: string;
@@ -108,6 +112,7 @@ export function createInMemoryPlatformRepository(): InMemoryPlatformRepository {
         cellId,
         idempotencyKey,
         correlationId,
+        leaseVersion: 1,
         result: "IN_PROGRESS",
         actions: [],
         createdAt: now,
@@ -121,48 +126,59 @@ export function createInMemoryPlatformRepository(): InMemoryPlatformRepository {
       const claimable = attempt.result === "FAILED"
         || (attempt.result === "IN_PROGRESS" && attempt.updatedAt.getTime() <= staleBefore.getTime());
       if (!claimable) return undefined;
-      attempt.result = "IN_PROGRESS";
-      attempt.updatedAt = new Date();
-      return attempt;
+      const claimedAttempt = {
+        ...attempt,
+        leaseVersion: attempt.leaseVersion + 1,
+        result: "IN_PROGRESS" as const,
+        actions: attempt.actions.map((action) => ({ ...action })),
+        updatedAt: new Date()
+      };
+      attempts.set(attemptId, claimedAttempt);
+      return claimedAttempt;
     },
-    appendProvisioningAction: async (attemptId, action) => {
-      const attempt = requiredAttempt(attempts, attemptId);
+    appendProvisioningAction: async (attemptId, leaseVersion, action) => {
+      const attempt = requiredLease(attempts, attemptId, leaseVersion);
       attempt.actions.push(action);
       attempt.updatedAt = new Date();
       return attempt;
     },
-    recordProvisioningResult: async ({ attemptId, action, auditEvent }) => repository.transaction(async (transactionRepository) => {
-      const attempt = await transactionRepository.appendProvisioningAction(attemptId, action);
+    recordProvisioningResult: async ({ attemptId, leaseVersion, action, auditEvent }) => repository.transaction(async (transactionRepository) => {
+      const attempt = await transactionRepository.appendProvisioningAction(attemptId, leaseVersion, action);
       await transactionRepository.addAuditEvent(auditEvent);
       return attempt;
     }),
-    finalizeProvisioningSuccess: async ({ cellId, attemptId, action, auditEvent }) => repository.transaction(async (transactionRepository) => {
-      await transactionRepository.appendProvisioningAction(attemptId, action);
+    finalizeProvisioningSuccess: async ({ cellId, attemptId, leaseVersion, action, auditEvent }) => repository.transaction(async (transactionRepository) => {
+      await transactionRepository.appendProvisioningAction(attemptId, leaseVersion, action);
       await transactionRepository.addAuditEvent(auditEvent);
-      const attempt = await transactionRepository.setAttemptResult(attemptId, "SUCCEEDED");
-      const cell = await transactionRepository.updateCell(cellId, { lifecycleStatus: "ACTIVE" });
+      const cell = await transactionRepository.updateCell(cellId, attemptId, leaseVersion, { lifecycleStatus: "ACTIVE" });
+      const attempt = await transactionRepository.setAttemptResult(attemptId, leaseVersion, "SUCCEEDED");
       return { cell, attempt };
     }),
-    setAttemptResult: async (attemptId, result) => {
-      const attempt = requiredAttempt(attempts, attemptId);
+    finalizeProvisioningFailure: async ({ cellId, attemptId, leaseVersion, action, auditEvent }) => repository.transaction(async (transactionRepository) => {
+      await transactionRepository.appendProvisioningAction(attemptId, leaseVersion, action);
+      await transactionRepository.addAuditEvent(auditEvent);
+      const cell = await transactionRepository.updateCell(cellId, attemptId, leaseVersion, { lifecycleStatus: "PROVISIONING_FAILED" });
+      const attempt = await transactionRepository.setAttemptResult(attemptId, leaseVersion, "FAILED");
+      return { cell, attempt };
+    }),
+    setAttemptResult: async (attemptId, leaseVersion, result) => {
+      const attempt = requiredLease(attempts, attemptId, leaseVersion);
       attempt.result = result;
       attempt.updatedAt = new Date();
       return attempt;
     },
-    updateCell: async (cellId, update) => {
-      const cell = requiredCell(cells, cellId);
-      const mutableUpdate = { ...update };
-      delete mutableUpdate.id;
-      delete mutableUpdate.cellKey;
-      delete mutableUpdate.createdAt;
-      delete mutableUpdate.updatedAt;
-      Object.assign(cell, mutableUpdate, { updatedAt: new Date() });
-      return cell;
+    updateCell: async (cellId, attemptId, leaseVersion, update) => {
+      const attempt = requiredLease(attempts, attemptId, leaseVersion);
+      attempt.updatedAt = new Date();
+      return updateCellRecord(cells, cellId, update);
     },
     addAuditEvent: async (event) => {
       auditEvents.push(event);
     },
-    upsertSignalLoopConnection: async () => undefined,
+    upsertSignalLoopConnection: async ({ attemptId, leaseVersion }) => {
+      const attempt = requiredLease(attempts, attemptId, leaseVersion);
+      attempt.updatedAt = new Date();
+    },
     auditEventsForCell: async (cellId) => auditEvents.filter((event) => event.cellId === cellId),
     cells: () => [...cells.values()]
   };
@@ -217,17 +233,37 @@ export class CustomerCellProvisioner {
     let secretReference: string | undefined;
     try {
       const database = await this.resourceFor(reservation, context, request, "database", (stepContext) => this.provider.createDatabase(stepContext));
-      await this.persist("database", () => this.repository.updateCell(reservation.cell.id, { databaseReference: database.reference }));
+      await this.persist("database", () => this.repository.updateCell(
+        reservation.cell.id,
+        reservation.attempt.id,
+        reservation.attempt.leaseVersion,
+        { databaseReference: database.reference }
+      ));
       currentStep = "storage";
       const storage = await this.resourceFor(reservation, context, request, "storage", (stepContext) => this.provider.createStoragePrefix(stepContext));
-      await this.persist("storage", () => this.repository.updateCell(reservation.cell.id, { storageReference: storage.reference }));
+      await this.persist("storage", () => this.repository.updateCell(
+        reservation.cell.id,
+        reservation.attempt.id,
+        reservation.attempt.leaseVersion,
+        { storageReference: storage.reference }
+      ));
       currentStep = "secret-reference";
       const secret = await this.resourceFor(reservation, context, request, "secret-reference", (stepContext) => this.provider.createSecretReference(stepContext));
       secretReference = secret.reference;
-      await this.persist("secret-reference", () => this.repository.updateCell(reservation.cell.id, { secretReference }));
+      await this.persist("secret-reference", () => this.repository.updateCell(
+        reservation.cell.id,
+        reservation.attempt.id,
+        reservation.attempt.leaseVersion,
+        { secretReference }
+      ));
       currentStep = "backup-policy";
       const backup = await this.resourceFor(reservation, context, request, "backup-policy", (stepContext) => this.provider.applyBackupPolicy(stepContext));
-      await this.persist("backup-policy", () => this.repository.updateCell(reservation.cell.id, { backupReference: backup.reference }));
+      await this.persist("backup-policy", () => this.repository.updateCell(
+        reservation.cell.id,
+        reservation.attempt.id,
+        reservation.attempt.leaseVersion,
+        { backupReference: backup.reference }
+      ));
       currentStep = "application";
       const applicationReference = successfulReference(reservation.attempt, "application");
       const application = applicationReference && reservation.cell.applicationUrl
@@ -236,15 +272,27 @@ export class CustomerCellProvisioner {
       if (!isApplicationUrl(application.applicationUrl)) {
         throw new ProvisioningFailure("application", "APPLICATION_VALIDATION_FAILED", "invalid-application-url");
       }
-      await this.persist("application", () => this.repository.updateCell(reservation.cell.id, {
+      await this.persist("application", () => this.repository.updateCell(
+        reservation.cell.id,
+        reservation.attempt.id,
+        reservation.attempt.leaseVersion,
+        {
         applicationReference: application.reference,
         applicationUrl: application.applicationUrl
-      }));
+        }
+      ));
       currentStep = "signalloop-binding";
       const signalLoop = await this.resourceFor(reservation, context, request, "signalloop-binding", (stepContext) => this.provider.bindSignalLoopInstallation(stepContext));
-      await this.persist("signalloop-binding", () => this.repository.updateCell(reservation.cell.id, { signalLoopWorkspaceReference: signalLoop.reference }));
+      await this.persist("signalloop-binding", () => this.repository.updateCell(
+        reservation.cell.id,
+        reservation.attempt.id,
+        reservation.attempt.leaseVersion,
+        { signalLoopWorkspaceReference: signalLoop.reference }
+      ));
       await this.persist("signalloop-binding", () => this.repository.upsertSignalLoopConnection({
         cellId: reservation.cell.id,
+        attemptId: reservation.attempt.id,
+        leaseVersion: reservation.attempt.leaseVersion,
         workspaceReference: signalLoop.reference,
         secretReference: secretReference ?? "",
         correlationId: request.correlationId,
@@ -260,6 +308,7 @@ export class CustomerCellProvisioner {
         finalization = await this.repository.finalizeProvisioningSuccess({
           cellId: reservation.cell.id,
           attemptId: reservation.attempt.id,
+          leaseVersion: reservation.attempt.leaseVersion,
           ...this.resultEvidence(reservation.cell.id, reservation.attempt.id, request, "health-check", "SUCCEEDED", undefined, undefined, undefined, secretReference)
         });
       } catch (error) {
@@ -270,24 +319,37 @@ export class CustomerCellProvisioner {
       reservation.attempt = finalization.attempt;
       return this.outcome(finalization.cell, reservation.attempt);
     } catch (error) {
+      if (error instanceof ProvisioningLeaseLostError) {
+        return this.outcome(reservation.cell, reservation.attempt);
+      }
       const failure = error instanceof ProvisioningFailure
         ? error
         : new ProvisioningFailure(currentStep, "REPOSITORY_PERSISTENCE_FAILED", errorMessage(error));
-      reservation.attempt = await this.record(
-        this.repository,
-        reservation.cell.id,
-        reservation.attempt.id,
-        request,
-        failure.step,
-        "FAILED",
-        undefined,
-        failure.errorCode,
-        failure.message,
-        secretReference
-      );
-      reservation.attempt = await this.repository.setAttemptResult(reservation.attempt.id, "FAILED");
-      const cell = await this.repository.updateCell(reservation.cell.id, { lifecycleStatus: "PROVISIONING_FAILED" });
-      return this.outcome(cell, reservation.attempt);
+      try {
+        const finalization = await this.repository.finalizeProvisioningFailure({
+          cellId: reservation.cell.id,
+          attemptId: reservation.attempt.id,
+          leaseVersion: reservation.attempt.leaseVersion,
+          ...this.resultEvidence(
+            reservation.cell.id,
+            reservation.attempt.id,
+            request,
+            failure.step,
+            "FAILED",
+            undefined,
+            failure.errorCode,
+            failure.message,
+            secretReference
+          )
+        });
+        reservation.attempt = finalization.attempt;
+        return this.outcome(finalization.cell, reservation.attempt);
+      } catch (finalizationError) {
+        if (finalizationError instanceof ProvisioningLeaseLostError) {
+          return this.outcome(reservation.cell, reservation.attempt);
+        }
+        throw finalizationError;
+      }
     }
   }
 
@@ -305,7 +367,16 @@ export class CustomerCellProvisioner {
     } catch (error) {
       throw new ProvisioningFailure(step, "PROVIDER_OPERATION_FAILED", errorMessage(error));
     }
-    reservation.attempt = await this.record(this.repository, reservation.cell.id, reservation.attempt.id, request, step, "SUCCEEDED", resource.reference);
+    reservation.attempt = await this.record(
+      this.repository,
+      reservation.cell.id,
+      reservation.attempt.id,
+      reservation.attempt.leaseVersion,
+      request,
+      step,
+      "SUCCEEDED",
+      resource.reference
+    );
     return resource;
   }
 
@@ -329,7 +400,7 @@ export class CustomerCellProvisioner {
   }
 
   private async claimStep(attempt: ProvisioningAttemptRecord, step: ProvisioningStep): Promise<ProvisioningAttemptRecord> {
-    return this.persist(step, () => this.repository.appendProvisioningAction(attempt.id, {
+    return this.persist(step, () => this.repository.appendProvisioningAction(attempt.id, attempt.leaseVersion, {
       step,
       result: "IN_PROGRESS",
       occurredAt: new Date()
@@ -351,6 +422,7 @@ export class CustomerCellProvisioner {
     try {
       return await operation();
     } catch (error) {
+      if (error instanceof ProvisioningLeaseLostError) throw error;
       throw new ProvisioningFailure(step, "REPOSITORY_PERSISTENCE_FAILED", errorMessage(error));
     }
   }
@@ -359,6 +431,7 @@ export class CustomerCellProvisioner {
     repository: PlatformRepository,
     cellId: string,
     attemptId: string,
+    leaseVersion: number,
     request: ProvisioningRequest,
     step: ProvisioningStep,
     result: ProvisioningResult,
@@ -369,8 +442,13 @@ export class CustomerCellProvisioner {
   ): Promise<ProvisioningAttemptRecord> {
     const evidence = this.resultEvidence(cellId, attemptId, request, step, result, reference, errorCode, errorReason, secretReference);
     try {
-      return await repository.recordProvisioningResult({ attemptId, ...evidence });
+      return await repository.recordProvisioningResult({
+        attemptId,
+        leaseVersion,
+        ...evidence
+      });
     } catch (error) {
+      if (error instanceof ProvisioningLeaseLostError) throw error;
       throw new ProvisioningFailure(step, "AUDIT_PERSISTENCE_FAILED", errorMessage(error));
     }
   }
@@ -449,6 +527,7 @@ interface ProvisioningReservation {
 
 export interface ProvisioningResultEvidence {
   attemptId: string;
+  leaseVersion: number;
   action: ProvisioningAction;
   auditEvent: ControlPlaneAuditEventRecord;
 }
@@ -481,9 +560,36 @@ function requiredAttempt(attempts: Map<string, ProvisioningAttemptRecord>, attem
   return attempt;
 }
 
+function requiredLease(
+  attempts: Map<string, ProvisioningAttemptRecord>,
+  attemptId: string,
+  leaseVersion: number
+): ProvisioningAttemptRecord {
+  const attempt = requiredAttempt(attempts, attemptId);
+  if (attempt.result !== "IN_PROGRESS" || attempt.leaseVersion !== leaseVersion) {
+    throw new ProvisioningLeaseLostError(attemptId);
+  }
+  return attempt;
+}
+
 function requiredCell(cells: Map<string, CustomerCellRecord>, cellId: string): CustomerCellRecord {
   const cell = cells.get(cellId);
   if (!cell) throw new Error(`Unknown customer cell ${cellId}`);
+  return cell;
+}
+
+function updateCellRecord(
+  cells: Map<string, CustomerCellRecord>,
+  cellId: string,
+  update: Partial<CustomerCellRecord>
+): CustomerCellRecord {
+  const cell = requiredCell(cells, cellId);
+  const mutableUpdate = { ...update };
+  delete mutableUpdate.id;
+  delete mutableUpdate.cellKey;
+  delete mutableUpdate.createdAt;
+  delete mutableUpdate.updatedAt;
+  Object.assign(cell, mutableUpdate, { updatedAt: new Date() });
   return cell;
 }
 
