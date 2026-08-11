@@ -89,10 +89,16 @@ export class PrismaPlatformRepository implements PlatformRepository {
     return mapAttempt(attempt);
   }
 
-  public async claimProvisioningAttempt(attemptId: string): Promise<ProvisioningAttemptRecord | undefined> {
+  public async claimProvisioningAttempt(attemptId: string, staleBefore: Date): Promise<ProvisioningAttemptRecord | undefined> {
     const claimed = await this.client.provisioningAttempt.updateMany({
-      where: { id: attemptId, result: "FAILED" },
-      data: { result: "IN_PROGRESS" }
+      where: {
+        id: attemptId,
+        OR: [
+          { result: "FAILED" },
+          { result: "IN_PROGRESS", updatedAt: { lte: staleBefore } }
+        ]
+      },
+      data: { result: "IN_PROGRESS", updatedAt: new Date() }
     });
     return claimed.count === 1 ? this.findProvisioningAttempt(attemptId) : undefined;
   }

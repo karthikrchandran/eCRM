@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { LocalCellProvider } from "./providers/local-driver";
 import { ProductionCellProvider } from "./providers/production-driver";
@@ -23,6 +23,10 @@ const request = {
 };
 
 describe("CustomerCellProvisioner", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("runs every provider operation once across a successful duplicate idempotency retry", async () => {
     const repository = createInMemoryPlatformRepository();
     const provider = new CountingLocalCellProvider();
@@ -209,6 +213,98 @@ describe("CustomerCellProvisioner", () => {
     expect(provider.operationCalls.health).toBe(2);
   });
 
+  it("does not claim an active in-progress provisioning lease", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-11T12:00:00Z"));
+    const repository = createInMemoryPlatformRepository();
+    const attempt = await seedInterruptedAttempt(repository);
+    const provider = new IdempotentCountingProvider();
+    const provisioner = new CustomerCellProvisioner(repository, provider);
+
+    vi.setSystemTime(new Date("2026-08-11T12:04:59Z"));
+    const result = await provisioner.provision(request);
+
+    expect(result.attempt.id).toBe(attempt.id);
+    expect(result.attempt.result).toBe("IN_PROGRESS");
+    expect(provider.databaseCalls).toBe(0);
+    expect(provider.storageCalls).toBe(0);
+  });
+
+  it("claims a stale in-progress attempt and resumes from its durable step evidence", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-11T12:00:00Z"));
+    const repository = createInMemoryPlatformRepository();
+    const attempt = await seedInterruptedAttempt(repository);
+    const provider = new IdempotentCountingProvider();
+    const provisioner = new CustomerCellProvisioner(repository, provider);
+
+    vi.setSystemTime(new Date("2026-08-11T12:05:00Z"));
+    const result = await provisioner.provision(request);
+
+    expect(result.cell.lifecycleStatus).toBe("ACTIVE");
+    expect(result.attempt.id).toBe(attempt.id);
+    expect(provider.databaseCalls).toBe(0);
+    expect(provider.storageCalls).toBe(1);
+    expect(provider.storageIdempotencyKeys).toEqual([
+      `cell/${request.cellId}/attempt/${attempt.id}/step/storage`
+    ]);
+  });
+
+  it("allows only one concurrent caller to claim a stale in-progress attempt", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-11T12:00:00Z"));
+    const repository = createInMemoryPlatformRepository();
+    await seedInterruptedAttempt(repository);
+    const provider = new IdempotentCountingProvider();
+    const provisioner = new CustomerCellProvisioner(repository, provider);
+
+    vi.setSystemTime(new Date("2026-08-11T12:05:00Z"));
+    const results = await Promise.all([provisioner.provision(request), provisioner.provision(request)]);
+
+    expect(results.some((result) => result.cell.lifecycleStatus === "ACTIVE")).toBe(true);
+    expect(provider.storageCalls).toBe(1);
+  });
+
+  it("returns success when finalization committed but its acknowledgement was lost", async () => {
+    const repository = createInMemoryPlatformRepository();
+    const finalizeProvisioningSuccess = repository.finalizeProvisioningSuccess.bind(repository);
+    repository.finalizeProvisioningSuccess = async (input) => {
+      await finalizeProvisioningSuccess(input);
+      throw new Error("finalization acknowledgement lost");
+    };
+    const provisioner = new CustomerCellProvisioner(repository, new LocalCellProvider());
+
+    const result = await provisioner.provision(request);
+
+    expect(result.cell.lifecycleStatus).toBe("ACTIVE");
+    expect(result.attempt.result).toBe("SUCCEEDED");
+    expect(result.attempt.actions).toContainEqual(expect.objectContaining({ step: "health-check", result: "SUCCEEDED" }));
+    expect(result.attempt.actions).not.toContainEqual(expect.objectContaining({ step: "health-check", result: "FAILED" }));
+  });
+
+  it("records retryable failure when finalization actually rolled back", async () => {
+    const repository = createInMemoryPlatformRepository();
+    const updateCell = repository.updateCell.bind(repository);
+    let rejectActivation = true;
+    repository.updateCell = async (cellId, update) => {
+      if (update.lifecycleStatus === "ACTIVE" && rejectActivation) {
+        rejectActivation = false;
+        throw new Error("activation write rolled back");
+      }
+      return updateCell(cellId, update);
+    };
+    const provisioner = new CustomerCellProvisioner(repository, new LocalCellProvider());
+
+    const result = await provisioner.provision(request);
+
+    expect(result.cell.lifecycleStatus).toBe("PROVISIONING_FAILED");
+    expect(result.attempt.result).toBe("FAILED");
+    expect(result.attempt.actions).toContainEqual(
+      expect.objectContaining({ step: "health-check", result: "FAILED", errorCode: "REPOSITORY_PERSISTENCE_FAILED" })
+    );
+    expect(result.attempt.actions).not.toContainEqual(expect.objectContaining({ step: "health-check", result: "SUCCEEDED" }));
+  });
+
   it("records repository persistence failure at the actual step and safely retries it", async () => {
     const repository = createInMemoryPlatformRepository();
     const upsertSignalLoopConnection = repository.upsertSignalLoopConnection.bind(repository);
@@ -393,6 +489,8 @@ class IdempotentCountingProvider extends LocalCellProvider {
   public databaseCalls = 0;
   public databaseCreations = 0;
   public databaseIdempotencyKeys: string[] = [];
+  public storageCalls = 0;
+  public storageIdempotencyKeys: string[] = [];
   public applicationCalls = 0;
   public applicationCreations = 0;
   public applicationIdempotencyKeys: string[] = [];
@@ -410,6 +508,12 @@ class IdempotentCountingProvider extends LocalCellProvider {
     return created;
   }
 
+  public override async createStoragePrefix(context: Parameters<LocalCellProvider["createStoragePrefix"]>[0]) {
+    this.storageCalls += 1;
+    this.storageIdempotencyKeys.push(context.idempotencyKey);
+    return super.createStoragePrefix(context);
+  }
+
   public override async deployApplication(context: Parameters<LocalCellProvider["deployApplication"]>[0]) {
     this.applicationCalls += 1;
     this.applicationIdempotencyKeys.push(context.idempotencyKey);
@@ -420,6 +524,26 @@ class IdempotentCountingProvider extends LocalCellProvider {
     this.applicationReferences.set(context.idempotencyKey, created);
     return created;
   }
+}
+
+async function seedInterruptedAttempt(repository: PlatformRepository) {
+  const reservation = await repository.reserveCustomerCell(request);
+  const attempt = await repository.reserveProvisioningAttempt(
+    reservation.cell.id,
+    request.idempotencyKey,
+    request.correlationId
+  );
+  await repository.appendProvisioningAction(attempt.id, {
+    step: "database",
+    result: "SUCCEEDED",
+    reference: "local://postgres/ara-global",
+    occurredAt: new Date()
+  });
+  return repository.appendProvisioningAction(attempt.id, {
+    step: "storage",
+    result: "IN_PROGRESS",
+    occurredAt: new Date()
+  });
 }
 
 function productionConfig() {

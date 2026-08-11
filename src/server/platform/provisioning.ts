@@ -16,7 +16,7 @@ export interface PlatformRepository {
   findProvisioningAttempt(attemptId: string): Promise<ProvisioningAttemptRecord | undefined>;
   reserveCustomerCell(request: ProvisioningRequest): Promise<{ cell: CustomerCellRecord; created: boolean }>;
   reserveProvisioningAttempt(cellId: string, idempotencyKey: string, correlationId: string): Promise<ProvisioningAttemptRecord>;
-  claimProvisioningAttempt(attemptId: string): Promise<ProvisioningAttemptRecord | undefined>;
+  claimProvisioningAttempt(attemptId: string, staleBefore: Date): Promise<ProvisioningAttemptRecord | undefined>;
   appendProvisioningAction(attemptId: string, action: ProvisioningAction): Promise<ProvisioningAttemptRecord>;
   recordProvisioningResult(input: ProvisioningResultEvidence): Promise<ProvisioningAttemptRecord>;
   finalizeProvisioningSuccess(input: ProvisioningFinalization): Promise<{ cell: CustomerCellRecord; attempt: ProvisioningAttemptRecord }>;
@@ -36,6 +36,8 @@ export interface PlatformRepository {
 export interface InMemoryPlatformRepository extends PlatformRepository {
   cells(): CustomerCellRecord[];
 }
+
+const PROVISIONING_CLAIM_LEASE_MS = 5 * 60 * 1000;
 
 export function createInMemoryPlatformRepository(): InMemoryPlatformRepository {
   const cells = new Map<string, CustomerCellRecord>();
@@ -114,9 +116,11 @@ export function createInMemoryPlatformRepository(): InMemoryPlatformRepository {
       attempts.set(attempt.id, attempt);
       return attempt;
     },
-    claimProvisioningAttempt: async (attemptId) => {
+    claimProvisioningAttempt: async (attemptId, staleBefore) => {
       const attempt = requiredAttempt(attempts, attemptId);
-      if (attempt.result !== "FAILED") return undefined;
+      const claimable = attempt.result === "FAILED"
+        || (attempt.result === "IN_PROGRESS" && attempt.updatedAt.getTime() <= staleBefore.getTime());
+      if (!claimable) return undefined;
       attempt.result = "IN_PROGRESS";
       attempt.updatedAt = new Date();
       return attempt;
@@ -181,8 +185,8 @@ export class CustomerCellProvisioner {
       if (existingCell) {
         const existingAttempt = await repository.findLatestAttemptForCell(existingCell.id);
         if (!existingAttempt) throw new Error(`Customer cell ${existingCell.id} has no provisioning attempt`);
-        const claimedAttempt = existingAttempt.result === "FAILED"
-          ? await repository.claimProvisioningAttempt(existingAttempt.id)
+        const claimedAttempt = existingAttempt.result === "FAILED" || existingAttempt.result === "IN_PROGRESS"
+          ? await repository.claimProvisioningAttempt(existingAttempt.id, this.staleClaimBoundary())
           : undefined;
         return { cell: existingCell, attempt: claimedAttempt ?? existingAttempt, shouldRun: Boolean(claimedAttempt) };
       }
@@ -191,8 +195,8 @@ export class CustomerCellProvisioner {
       if (!reservation.created) {
         const existingAttempt = await repository.findLatestAttemptForCell(reservation.cell.id);
         if (!existingAttempt) throw new Error(`Customer cell ${reservation.cell.id} has no provisioning attempt`);
-        const claimedAttempt = existingAttempt.result === "FAILED"
-          ? await repository.claimProvisioningAttempt(existingAttempt.id)
+        const claimedAttempt = existingAttempt.result === "FAILED" || existingAttempt.result === "IN_PROGRESS"
+          ? await repository.claimProvisioningAttempt(existingAttempt.id, this.staleClaimBoundary())
           : undefined;
         return { cell: reservation.cell, attempt: claimedAttempt ?? existingAttempt, shouldRun: Boolean(claimedAttempt) };
       }
@@ -251,11 +255,18 @@ export class CustomerCellProvisioner {
       reservation.attempt = await this.claimStep(reservation.attempt, "health-check");
       const health = await this.healthCheck(this.stepContext(context, reservation.attempt.id, "health-check"));
       if (!health.healthy) throw new ProvisioningFailure("health-check", "HEALTH_CHECK_FAILED", health.detail ?? "health-check-failed");
-      const finalization = await this.persist("health-check", () => this.repository.finalizeProvisioningSuccess({
-        cellId: reservation.cell.id,
-        attemptId: reservation.attempt.id,
-        ...this.resultEvidence(reservation.cell.id, reservation.attempt.id, request, "health-check", "SUCCEEDED", undefined, undefined, undefined, secretReference)
-      }));
+      let finalization: { cell: CustomerCellRecord; attempt: ProvisioningAttemptRecord };
+      try {
+        finalization = await this.repository.finalizeProvisioningSuccess({
+          cellId: reservation.cell.id,
+          attemptId: reservation.attempt.id,
+          ...this.resultEvidence(reservation.cell.id, reservation.attempt.id, request, "health-check", "SUCCEEDED", undefined, undefined, undefined, secretReference)
+        });
+      } catch (error) {
+        const committed = await this.committedFinalization(reservation.cell, reservation.attempt.id);
+        if (committed) return this.outcome(committed.cell, committed.attempt);
+        throw new ProvisioningFailure("health-check", "REPOSITORY_PERSISTENCE_FAILED", errorMessage(error));
+      }
       reservation.attempt = finalization.attempt;
       return this.outcome(finalization.cell, reservation.attempt);
     } catch (error) {
@@ -397,6 +408,30 @@ export class CustomerCellProvisioner {
   private async outcome(cell: CustomerCellRecord, attempt: ProvisioningAttemptRecord): Promise<ProvisioningOutcome> {
     const currentAttempt = await this.repository.findProvisioningAttempt(attempt.id);
     return { cell, attempt: currentAttempt ?? attempt, auditEvents: await this.repository.auditEventsForCell(cell.id) };
+  }
+
+  private staleClaimBoundary(): Date {
+    return new Date(Date.now() - PROVISIONING_CLAIM_LEASE_MS);
+  }
+
+  private async committedFinalization(
+    reservedCell: CustomerCellRecord,
+    attemptId: string
+  ): Promise<{ cell: CustomerCellRecord; attempt: ProvisioningAttemptRecord } | undefined> {
+    try {
+      const [cell, attempt] = await Promise.all([
+        this.repository.findCellByIdentity(reservedCell.id, reservedCell.cellKey),
+        this.repository.findProvisioningAttempt(attemptId)
+      ]);
+      const healthEvidenceCommitted = attempt?.actions.some(
+        (action) => action.step === "health-check" && action.result === "SUCCEEDED"
+      );
+      return cell?.lifecycleStatus === "ACTIVE" && attempt?.result === "SUCCEEDED" && healthEvidenceCommitted
+        ? { cell, attempt }
+        : undefined;
+    } catch {
+      return undefined;
+    }
   }
 }
 
