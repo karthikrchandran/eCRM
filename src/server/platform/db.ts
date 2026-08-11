@@ -36,8 +36,8 @@ export class PrismaPlatformRepository implements PlatformRepository {
     return this.client.$transaction((transactionClient) => operation(new PrismaPlatformRepository(transactionClient as PrismaClient)));
   }
 
-  public async findCellByCustomerKey(customerKey: string): Promise<CustomerCellRecord | undefined> {
-    const cell = await this.client.customerCell.findUnique({ where: { customerKey } });
+  public async findCellByIdentity(cellId: string, cellKey: string): Promise<CustomerCellRecord | undefined> {
+    const cell = await this.client.customerCell.findFirst({ where: { id: cellId, cellKey } });
     return cell ? mapCell(cell) : undefined;
   }
 
@@ -54,7 +54,8 @@ export class PrismaPlatformRepository implements PlatformRepository {
     try {
       const cell = await this.client.customerCell.create({
         data: {
-          customerKey: request.customerKey,
+          id: request.cellId,
+          cellKey: request.cellKey,
           legalName: request.legalName,
           displayName: request.displayName,
           region: request.region,
@@ -65,8 +66,8 @@ export class PrismaPlatformRepository implements PlatformRepository {
       return { cell: mapCell(cell), created: true };
     } catch (error) {
       if (!isUniqueConstraintError(error)) throw error;
-      const cell = await this.client.customerCell.findUnique({ where: { customerKey: request.customerKey } });
-      if (!cell) throw error;
+      const cell = await this.client.customerCell.findFirst({ where: { id: request.cellId, cellKey: request.cellKey } });
+      if (!cell) throw new Error("Customer cell identity mismatch");
       return { cell: mapCell(cell), created: false };
     }
   }
@@ -105,7 +106,7 @@ export class PrismaPlatformRepository implements PlatformRepository {
   public async updateCell(cellId: string, update: Partial<CustomerCellRecord>): Promise<CustomerCellRecord> {
     const {
       id: _ignoredId,
-      customerKey: _ignoredCustomerKey,
+      cellKey: _ignoredCellKey,
       createdAt: _ignoredCreatedAt,
       updatedAt: _ignoredUpdatedAt,
       ...data
@@ -167,7 +168,7 @@ export class PrismaPlatformRepository implements PlatformRepository {
 
 function mapCell(cell: {
   id: string;
-  customerKey: string;
+  cellKey: string;
   legalName: string;
   displayName: string;
   region: string;
@@ -178,6 +179,7 @@ function mapCell(cell: {
   secretReference: string | null;
   backupReference: string | null;
   applicationReference: string | null;
+  applicationUrl: string | null;
   signalLoopWorkspaceReference: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -190,6 +192,7 @@ function mapCell(cell: {
     secretReference: cell.secretReference ?? undefined,
     backupReference: cell.backupReference ?? undefined,
     applicationReference: cell.applicationReference ?? undefined,
+    applicationUrl: cell.applicationUrl ?? undefined,
     signalLoopWorkspaceReference: cell.signalLoopWorkspaceReference ?? undefined
   };
 }

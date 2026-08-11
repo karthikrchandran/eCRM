@@ -13,7 +13,7 @@ export type ProvisioningResult = "SUCCEEDED" | "FAILED";
 
 export interface CustomerCellRecord {
   id: string;
-  customerKey: string;
+  cellKey: string;
   legalName: string;
   displayName: string;
   region: string;
@@ -24,13 +24,15 @@ export interface CustomerCellRecord {
   secretReference?: string;
   backupReference?: string;
   applicationReference?: string;
+  applicationUrl?: string;
   signalLoopWorkspaceReference?: string;
   createdAt: Date;
   updatedAt: Date;
 }
 
 export interface ProvisioningRequest {
-  customerKey: string;
+  cellId: string;
+  cellKey: string;
   legalName: string;
   displayName: string;
   region: string;

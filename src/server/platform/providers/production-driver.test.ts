@@ -15,7 +15,7 @@ describe("ProductionCellProvider", () => {
       }
     });
 
-    await expect(provider.createDatabase({ cellId: "cell_ara", customerKey: "ara-global", correlationId: "corr-1" })).rejects.toThrow(
+    await expect(provider.createDatabase({ cellId: "cell_ara", cellKey: "ara-global", correlationId: "corr-1" })).rejects.toThrow(
       /database.*storage.*secret.*backup/i
     );
     expect(invocations).toBe(0);

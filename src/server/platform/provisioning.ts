@@ -11,7 +11,7 @@ import type {
 
 export interface PlatformRepository {
   transaction<T>(operation: (repository: PlatformRepository) => Promise<T>): Promise<T>;
-  findCellByCustomerKey(customerKey: string): Promise<CustomerCellRecord | undefined>;
+  findCellByIdentity(cellId: string, cellKey: string): Promise<CustomerCellRecord | undefined>;
   findLatestAttemptForCell(cellId: string): Promise<ProvisioningAttemptRecord | undefined>;
   reserveCustomerCell(request: ProvisioningRequest): Promise<{ cell: CustomerCellRecord; created: boolean }>;
   reserveProvisioningAttempt(cellId: string, idempotencyKey: string, correlationId: string): Promise<ProvisioningAttemptRecord>;
@@ -41,16 +41,24 @@ export function createInMemoryPlatformRepository(): InMemoryPlatformRepository {
 
   const repository: InMemoryPlatformRepository = {
     transaction: async <T>(operation: (repository: PlatformRepository) => Promise<T>) => operation(repository),
-    findCellByCustomerKey: async (customerKey) => [...cells.values()].find((cell) => cell.customerKey === customerKey),
+    findCellByIdentity: async (cellId, cellKey) => {
+      const cell = cells.get(cellId);
+      return cell?.cellKey === cellKey ? cell : undefined;
+    },
     findLatestAttemptForCell: async (cellId) =>
       [...attempts.values()].filter((attempt) => attempt.cellId === cellId).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0],
     reserveCustomerCell: async (request) => {
-      const existing = [...cells.values()].find((cell) => cell.customerKey === request.customerKey);
-      if (existing) return { cell: existing, created: false };
+      const existingById = cells.get(request.cellId);
+      if (existingById) {
+        if (existingById.cellKey !== request.cellKey) throw new Error("Customer cell identity mismatch");
+        return { cell: existingById, created: false };
+      }
+      const existingByKey = [...cells.values()].find((cell) => cell.cellKey === request.cellKey);
+      if (existingByKey) throw new Error("Customer cell identity mismatch");
       const now = new Date();
       const record: CustomerCellRecord = {
-        id: `cell_${nextId++}`,
-        customerKey: request.customerKey,
+        id: request.cellId,
+        cellKey: request.cellKey,
         legalName: request.legalName,
         displayName: request.displayName,
         region: request.region,
@@ -93,7 +101,7 @@ export function createInMemoryPlatformRepository(): InMemoryPlatformRepository {
     },
     updateCell: async (cellId, update) => {
       const cell = requiredCell(cells, cellId);
-      const { id: _ignoredId, customerKey: _ignoredKey, ...mutableUpdate } = update;
+      const { id: _ignoredId, cellKey: _ignoredKey, ...mutableUpdate } = update;
       Object.assign(cell, mutableUpdate, { updatedAt: new Date() });
       return cell;
     },
@@ -119,7 +127,7 @@ export class CustomerCellProvisioner {
     }
 
     const reservation = await this.repository.transaction(async (repository) => {
-      const existingCell = await repository.findCellByCustomerKey(request.customerKey);
+      const existingCell = await repository.findCellByIdentity(request.cellId, request.cellKey);
       if (existingCell) {
         const existingAttempt = await repository.findLatestAttemptForCell(existingCell.id);
         if (!existingAttempt) throw new Error(`Customer cell ${existingCell.id} has no provisioning attempt`);
@@ -141,7 +149,7 @@ export class CustomerCellProvisioner {
 
     const context: CellProviderContext = {
       cellId: reservation.cell.id,
-      customerKey: reservation.cell.customerKey,
+      cellKey: reservation.cell.cellKey,
       correlationId: request.correlationId
     };
 
@@ -155,7 +163,13 @@ export class CustomerCellProvisioner {
       const backup = await this.runStep(reservation, context, "backup-policy", () => this.provider.applyBackupPolicy(context));
       await this.repository.updateCell(reservation.cell.id, { backupReference: backup.reference });
       const application = await this.runStep(reservation, context, "application", () => this.provider.deployApplication(context));
-      await this.repository.updateCell(reservation.cell.id, { applicationReference: application.reference });
+      if (!isApplicationUrl(application.applicationUrl)) {
+        throw new ProvisioningStepError("application", "invalid-application-url");
+      }
+      await this.repository.updateCell(reservation.cell.id, {
+        applicationReference: application.reference,
+        applicationUrl: application.applicationUrl
+      });
       const signalLoop = await this.runStep(reservation, context, "signalloop-binding", () => this.provider.bindSignalLoopInstallation(context));
       await this.repository.updateCell(reservation.cell.id, { signalLoopWorkspaceReference: signalLoop.reference });
       await this.repository.upsertSignalLoopConnection({
@@ -181,12 +195,12 @@ export class CustomerCellProvisioner {
     }
   }
 
-  private async runStep(
+  private async runStep<T extends ProviderReference>(
     reservation: ProvisioningReservation,
     context: CellProviderContext,
     step: Exclude<ProvisioningStep, "health-check">,
-    operation: () => Promise<ProviderReference>
-  ): Promise<ProviderReference> {
+    operation: () => Promise<T>
+  ): Promise<T> {
     try {
       const resource = await operation();
       await this.record(this.repository, reservation.cell.id, reservation.attempt.id, context.correlationId, step, "SUCCEEDED", resource.reference);
@@ -251,4 +265,13 @@ function requiredCell(cells: Map<string, CustomerCellRecord>, cellId: string): C
   const cell = cells.get(cellId);
   if (!cell) throw new Error(`Unknown customer cell ${cellId}`);
   return cell;
+}
+
+function isApplicationUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return (url.protocol === "http:" || url.protocol === "https:") && Boolean(url.hostname);
+  } catch {
+    return false;
+  }
 }

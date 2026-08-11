@@ -2,12 +2,16 @@ import type { ProvisioningStep } from "../types";
 
 export interface CellProviderContext {
   cellId: string;
-  customerKey: string;
+  cellKey: string;
   correlationId: string;
 }
 
 export interface ProviderReference {
   reference: string;
+}
+
+export interface ApplicationProviderResult extends ProviderReference {
+  applicationUrl: string;
 }
 
 export interface CellHealth {
@@ -20,7 +24,7 @@ export interface CellProvider {
   createStoragePrefix(context: CellProviderContext): Promise<ProviderReference>;
   createSecretReference(context: CellProviderContext): Promise<ProviderReference>;
   applyBackupPolicy(context: CellProviderContext): Promise<ProviderReference>;
-  deployApplication(context: CellProviderContext): Promise<ProviderReference>;
+  deployApplication(context: CellProviderContext): Promise<ApplicationProviderResult>;
   bindSignalLoopInstallation(context: CellProviderContext): Promise<ProviderReference>;
   healthCheck(context: CellProviderContext): Promise<CellHealth>;
   destroy(context: CellProviderContext): Promise<void>;

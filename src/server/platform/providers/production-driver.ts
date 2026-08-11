@@ -1,4 +1,4 @@
-import type { CellHealth, CellProvider, CellProviderContext, ProviderReference } from "./types";
+import type { ApplicationProviderResult, CellHealth, CellProvider, CellProviderContext, ProviderReference } from "./types";
 
 export interface ProductionProviderConfig {
   databaseEndpoint?: string;
@@ -20,7 +20,7 @@ export interface ProductionProviderAdapters {
   createStoragePrefix?: (context: CellProviderContext) => Promise<ProviderReference>;
   createSecretReference?: (context: CellProviderContext) => Promise<ProviderReference>;
   applyBackupPolicy?: (context: CellProviderContext) => Promise<ProviderReference>;
-  deployApplication?: (context: CellProviderContext) => Promise<ProviderReference>;
+  deployApplication?: (context: CellProviderContext) => Promise<ApplicationProviderResult>;
   bindSignalLoopInstallation?: (context: CellProviderContext) => Promise<ProviderReference>;
   healthCheck?: (context: CellProviderContext) => Promise<CellHealth>;
   destroy?: (context: CellProviderContext) => Promise<void>;
@@ -52,8 +52,13 @@ export class ProductionCellProvider implements CellProvider {
     return this.call("applyBackupPolicy", context);
   }
 
-  public async deployApplication(context: CellProviderContext): Promise<ProviderReference> {
-    return this.call("deployApplication", context);
+  public async deployApplication(context: CellProviderContext): Promise<ApplicationProviderResult> {
+    this.assertConfigured();
+    const operation = this.adapters.deployApplication;
+    if (!operation) {
+      throw new Error("Production provider adapter deployApplication is not configured");
+    }
+    return operation(context);
   }
 
   public async bindSignalLoopInstallation(context: CellProviderContext): Promise<ProviderReference> {
@@ -107,7 +112,6 @@ export class ProductionCellProvider implements CellProvider {
       | "createStoragePrefix"
       | "createSecretReference"
       | "applyBackupPolicy"
-      | "deployApplication"
       | "bindSignalLoopInstallation",
     context: CellProviderContext
   ): Promise<ProviderReference> {

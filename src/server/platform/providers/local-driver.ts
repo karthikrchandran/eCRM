@@ -1,4 +1,4 @@
-import type { CellHealth, CellProvider, CellProviderContext, ProviderReference } from "./types";
+import type { ApplicationProviderResult, CellHealth, CellProvider, CellProviderContext, ProviderReference } from "./types";
 
 export class LocalCellProvider implements CellProvider {
   private readonly health: "healthy" | "unhealthy";
@@ -23,8 +23,11 @@ export class LocalCellProvider implements CellProvider {
     return this.reference("backup", context);
   }
 
-  public async deployApplication(context: CellProviderContext): Promise<ProviderReference> {
-    return this.reference("application", context);
+  public async deployApplication(context: CellProviderContext): Promise<ApplicationProviderResult> {
+    return {
+      ...this.reference("application", context),
+      applicationUrl: `http://${context.cellKey}.localhost`
+    };
   }
 
   public async bindSignalLoopInstallation(context: CellProviderContext): Promise<ProviderReference> {
@@ -44,6 +47,6 @@ export class LocalCellProvider implements CellProvider {
   }
 
   private reference(resource: string, context: CellProviderContext): ProviderReference {
-    return { reference: `local://${resource}/${context.customerKey}` };
+    return { reference: `local://${resource}/${context.cellKey}` };
   }
 }
