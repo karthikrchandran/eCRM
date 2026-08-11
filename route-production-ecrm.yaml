@@ -1,0 +1,419 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - complementary [ref=e3]:
+      - link "eCRM" [ref=e4] [cursor=pointer]:
+        - /url: /dashboard
+      - paragraph [ref=e5]: Admin Console
+      - navigation "Admin navigation" [ref=e6]:
+        - link "Dashboard" [ref=e7] [cursor=pointer]:
+          - /url: /dashboard
+        - link "Customer 360" [ref=e8] [cursor=pointer]:
+          - /url: /customer-360
+        - link "Pipeline" [ref=e9] [cursor=pointer]:
+          - /url: /opportunities
+        - link "Orders" [ref=e10] [cursor=pointer]:
+          - /url: /orders
+        - link "Incentives" [ref=e11] [cursor=pointer]:
+          - /url: /incentives
+        - link "Team performance" [ref=e12] [cursor=pointer]:
+          - /url: /admin/performance
+        - link "Reports" [ref=e13] [cursor=pointer]:
+          - /url: /reports
+        - paragraph [ref=e15]: Setup
+        - link "Production" [ref=e16] [cursor=pointer]:
+          - /url: /production
+        - link "Products" [ref=e17] [cursor=pointer]:
+          - /url: /admin/products
+        - link "Production config" [ref=e18] [cursor=pointer]:
+          - /url: /admin/production-config
+        - link "Settings" [ref=e19] [cursor=pointer]:
+          - /url: /admin/settings
+    - generic [ref=e20]:
+      - banner [ref=e21]:
+        - generic [ref=e22]:
+          - generic [ref=e23]:
+            - paragraph [ref=e24]: Admin Console
+            - paragraph [ref=e25]: Company controls, reporting, configuration, and operations.
+          - generic [ref=e26]:
+            - generic [ref=e27]:
+              - generic [ref=e28]:
+                - paragraph [ref=e29]: Kavya Iyer
+                - generic [ref=e30]: Admin
+              - paragraph [ref=e31]: admin@example.com
+            - button "Sign out" [ref=e33]
+      - main [ref=e34]:
+        - generic [ref=e35]:
+          - generic [ref=e36]:
+            - generic [ref=e37]:
+              - heading "Production" [level=1] [ref=e38]
+              - paragraph [ref=e39]: Work items created from booked order line items.
+            - link "Production config" [ref=e40] [cursor=pointer]:
+              - /url: /admin/production-config
+          - table [ref=e42]:
+            - rowgroup [ref=e43]:
+              - row "Product / service Customer / order Overall status Stage progress Inline stage edits" [ref=e44]:
+                - columnheader "Product / service" [ref=e45]
+                - columnheader "Customer / order" [ref=e46]
+                - columnheader "Overall status" [ref=e47]
+                - columnheader "Stage progress" [ref=e48]
+                - columnheader "Inline stage edits" [ref=e49]
+            - rowgroup [ref=e50]:
+              - 'row "eLearning production eLearning eLearning production Northstar Learning Pvt Ltd ORD-2026-SEED-0001 Jul 2, 2026 In Progress 1/6 complete Script: Done Storyboard: In Progress Development: Not Started Voiceover: Not Started Review and edits: Not Started Final delivery: Not Started" [ref=e51]':
+                - cell "eLearning production eLearning eLearning production" [ref=e52]:
+                  - link "eLearning production" [ref=e53] [cursor=pointer]:
+                    - /url: /production/seed_work_elearning
+                  - paragraph [ref=e54]: eLearning
+                  - paragraph [ref=e55]: eLearning production
+                - cell "Northstar Learning Pvt Ltd ORD-2026-SEED-0001 Jul 2, 2026" [ref=e56]:
+                  - paragraph [ref=e57]: Northstar Learning Pvt Ltd
+                  - paragraph [ref=e58]: ORD-2026-SEED-0001
+                  - paragraph [ref=e59]: Jul 2, 2026
+                - cell "In Progress 1/6 complete" [ref=e60]:
+                  - generic [ref=e61]: In Progress
+                  - paragraph [ref=e62]: 1/6 complete
+                - 'cell "Script: Done Storyboard: In Progress Development: Not Started Voiceover: Not Started Review and edits: Not Started Final delivery: Not Started" [ref=e63]':
+                  - generic [ref=e64]:
+                    - generic [ref=e65]: "Script: Done"
+                    - generic [ref=e66]: "Storyboard: In Progress"
+                    - generic [ref=e67]: "Development: Not Started"
+                    - generic [ref=e68]: "Voiceover: Not Started"
+                    - generic [ref=e69]: "Review and edits: Not Started"
+                    - generic [ref=e70]: "Final delivery: Not Started"
+                - cell [ref=e71]:
+                  - generic [ref=e72]:
+                    - group [ref=e73]:
+                      - generic "Script" [ref=e74] [cursor=pointer]
+                      - option "Not started"
+                      - option "In progress"
+                      - option "Blocked"
+                      - option "Done" [selected]
+                      - option "Skipped"
+                      - option "Unassigned" [selected]
+                      - option "Arjun Srinivasan - sales2@example.com"
+                      - option "Kavya Iyer - admin@example.com"
+                      - option "Priya Menon - sales@example.com"
+                    - group [ref=e75]:
+                      - generic "Storyboard" [ref=e76] [cursor=pointer]
+                      - option "Not started"
+                      - option "In progress" [selected]
+                      - option "Blocked"
+                      - option "Done"
+                      - option "Skipped"
+                      - option "Unassigned" [selected]
+                      - option "Arjun Srinivasan - sales2@example.com"
+                      - option "Kavya Iyer - admin@example.com"
+                      - option "Priya Menon - sales@example.com"
+                    - group [ref=e77]:
+                      - generic "Development" [ref=e78] [cursor=pointer]
+                      - option "Not started" [selected]
+                      - option "In progress"
+                      - option "Blocked"
+                      - option "Done"
+                      - option "Skipped"
+                      - option "Unassigned" [selected]
+                      - option "Arjun Srinivasan - sales2@example.com"
+                      - option "Kavya Iyer - admin@example.com"
+                      - option "Priya Menon - sales@example.com"
+                    - group [ref=e79]:
+                      - generic "Voiceover" [ref=e80] [cursor=pointer]
+                      - option "Not started" [selected]
+                      - option "In progress"
+                      - option "Blocked"
+                      - option "Done"
+                      - option "Skipped"
+                      - option "Unassigned" [selected]
+                      - option "Arjun Srinivasan - sales2@example.com"
+                      - option "Kavya Iyer - admin@example.com"
+                      - option "Priya Menon - sales@example.com"
+                    - group [ref=e81]:
+                      - generic "Review and edits" [ref=e82] [cursor=pointer]
+                      - option "Not started" [selected]
+                      - option "In progress"
+                      - option "Blocked"
+                      - option "Done"
+                      - option "Skipped"
+                      - option "Unassigned" [selected]
+                      - option "Arjun Srinivasan - sales2@example.com"
+                      - option "Kavya Iyer - admin@example.com"
+                      - option "Priya Menon - sales@example.com"
+                    - group [ref=e83]:
+                      - generic "Final delivery" [ref=e84] [cursor=pointer]
+                      - option "Not started" [selected]
+                      - option "In progress"
+                      - option "Blocked"
+                      - option "Done"
+                      - option "Skipped"
+                      - option "Unassigned" [selected]
+                      - option "Arjun Srinivasan - sales2@example.com"
+                      - option "Kavya Iyer - admin@example.com"
+                      - option "Priya Menon - sales@example.com"
+              - 'row "Video shoot production Video shoot Video shoot production Northstar Learning Pvt Ltd ORD-2026-SEED-0001 Jul 7, 2026 In Progress 1/6 complete Script: Done Pre-production: In Progress Shoot: Not Started Edit: Not Started Review and edits: Not Started Final delivery: Not Started" [ref=e85]':
+                - cell "Video shoot production Video shoot Video shoot production" [ref=e86]:
+                  - link "Video shoot production" [ref=e87] [cursor=pointer]:
+                    - /url: /production/seed_work_video_shoot
+                  - paragraph [ref=e88]: Video shoot
+                  - paragraph [ref=e89]: Video shoot production
+                - cell "Northstar Learning Pvt Ltd ORD-2026-SEED-0001 Jul 7, 2026" [ref=e90]:
+                  - paragraph [ref=e91]: Northstar Learning Pvt Ltd
+                  - paragraph [ref=e92]: ORD-2026-SEED-0001
+                  - paragraph [ref=e93]: Jul 7, 2026
+                - cell "In Progress 1/6 complete" [ref=e94]:
+                  - generic [ref=e95]: In Progress
+                  - paragraph [ref=e96]: 1/6 complete
+                - 'cell "Script: Done Pre-production: In Progress Shoot: Not Started Edit: Not Started Review and edits: Not Started Final delivery: Not Started" [ref=e97]':
+                  - generic [ref=e98]:
+                    - generic [ref=e99]: "Script: Done"
+                    - generic [ref=e100]: "Pre-production: In Progress"
+                    - generic [ref=e101]: "Shoot: Not Started"
+                    - generic [ref=e102]: "Edit: Not Started"
+                    - generic [ref=e103]: "Review and edits: Not Started"
+                    - generic [ref=e104]: "Final delivery: Not Started"
+                - cell [ref=e105]:
+                  - generic [ref=e106]:
+                    - group [ref=e107]:
+                      - generic "Script" [ref=e108] [cursor=pointer]
+                      - option "Not started"
+                      - option "In progress"
+                      - option "Blocked"
+                      - option "Done" [selected]
+                      - option "Skipped"
+                      - option "Unassigned" [selected]
+                      - option "Arjun Srinivasan - sales2@example.com"
+                      - option "Kavya Iyer - admin@example.com"
+                      - option "Priya Menon - sales@example.com"
+                    - group [ref=e109]:
+                      - generic "Pre-production" [ref=e110] [cursor=pointer]
+                      - option "Not started"
+                      - option "In progress" [selected]
+                      - option "Blocked"
+                      - option "Done"
+                      - option "Skipped"
+                      - option "Unassigned" [selected]
+                      - option "Arjun Srinivasan - sales2@example.com"
+                      - option "Kavya Iyer - admin@example.com"
+                      - option "Priya Menon - sales@example.com"
+                    - group [ref=e111]:
+                      - generic "Shoot" [ref=e112] [cursor=pointer]
+                      - option "Not started" [selected]
+                      - option "In progress"
+                      - option "Blocked"
+                      - option "Done"
+                      - option "Skipped"
+                      - option "Unassigned" [selected]
+                      - option "Arjun Srinivasan - sales2@example.com"
+                      - option "Kavya Iyer - admin@example.com"
+                      - option "Priya Menon - sales@example.com"
+                    - group [ref=e113]:
+                      - generic "Edit" [ref=e114] [cursor=pointer]
+                      - option "Not started" [selected]
+                      - option "In progress"
+                      - option "Blocked"
+                      - option "Done"
+                      - option "Skipped"
+                      - option "Unassigned" [selected]
+                      - option "Arjun Srinivasan - sales2@example.com"
+                      - option "Kavya Iyer - admin@example.com"
+                      - option "Priya Menon - sales@example.com"
+                    - group [ref=e115]:
+                      - generic "Review and edits" [ref=e116] [cursor=pointer]
+                      - option "Not started" [selected]
+                      - option "In progress"
+                      - option "Blocked"
+                      - option "Done"
+                      - option "Skipped"
+                      - option "Unassigned" [selected]
+                      - option "Arjun Srinivasan - sales2@example.com"
+                      - option "Kavya Iyer - admin@example.com"
+                      - option "Priya Menon - sales@example.com"
+                    - group [ref=e117]:
+                      - generic "Final delivery" [ref=e118] [cursor=pointer]
+                      - option "Not started" [selected]
+                      - option "In progress"
+                      - option "Blocked"
+                      - option "Done"
+                      - option "Skipped"
+                      - option "Unassigned" [selected]
+                      - option "Arjun Srinivasan - sales2@example.com"
+                      - option "Kavya Iyer - admin@example.com"
+                      - option "Priya Menon - sales@example.com"
+              - 'row "VR/AR production VR/AR VR/AR production Northstar Learning Pvt Ltd ORD-2026-SEED-0001 Jul 11, 2026 Done 6/6 complete Discovery: Done Experience design: Done Development: Done Testing: Done Review and edits: Done Final delivery: Done" [ref=e119]':
+                - cell "VR/AR production VR/AR VR/AR production" [ref=e120]:
+                  - link "VR/AR production" [ref=e121] [cursor=pointer]:
+                    - /url: /production/seed_work_vr_ar
+                  - paragraph [ref=e122]: VR/AR
+                  - paragraph [ref=e123]: VR/AR production
+                - cell "Northstar Learning Pvt Ltd ORD-2026-SEED-0001 Jul 11, 2026" [ref=e124]:
+                  - paragraph [ref=e125]: Northstar Learning Pvt Ltd
+                  - paragraph [ref=e126]: ORD-2026-SEED-0001
+                  - paragraph [ref=e127]: Jul 11, 2026
+                - cell "Done 6/6 complete" [ref=e128]:
+                  - generic [ref=e129]: Done
+                  - paragraph [ref=e130]: 6/6 complete
+                - 'cell "Discovery: Done Experience design: Done Development: Done Testing: Done Review and edits: Done Final delivery: Done" [ref=e131]':
+                  - generic [ref=e132]:
+                    - generic [ref=e133]: "Discovery: Done"
+                    - generic [ref=e134]: "Experience design: Done"
+                    - generic [ref=e135]: "Development: Done"
+                    - generic [ref=e136]: "Testing: Done"
+                    - generic [ref=e137]: "Review and edits: Done"
+                    - generic [ref=e138]: "Final delivery: Done"
+                - cell [ref=e139]:
+                  - generic [ref=e140]:
+                    - group [ref=e141]:
+                      - generic "Discovery" [ref=e142] [cursor=pointer]
+                      - option "Not started"
+                      - option "In progress"
+                      - option "Blocked"
+                      - option "Done" [selected]
+                      - option "Skipped"
+                      - option "Unassigned" [selected]
+                      - option "Arjun Srinivasan - sales2@example.com"
+                      - option "Kavya Iyer - admin@example.com"
+                      - option "Priya Menon - sales@example.com"
+                    - group [ref=e143]:
+                      - generic "Experience design" [ref=e144] [cursor=pointer]
+                      - option "Not started"
+                      - option "In progress"
+                      - option "Blocked"
+                      - option "Done" [selected]
+                      - option "Skipped"
+                      - option "Unassigned" [selected]
+                      - option "Arjun Srinivasan - sales2@example.com"
+                      - option "Kavya Iyer - admin@example.com"
+                      - option "Priya Menon - sales@example.com"
+                    - group [ref=e145]:
+                      - generic "Development" [ref=e146] [cursor=pointer]
+                      - option "Not started"
+                      - option "In progress"
+                      - option "Blocked"
+                      - option "Done" [selected]
+                      - option "Skipped"
+                      - option "Unassigned" [selected]
+                      - option "Arjun Srinivasan - sales2@example.com"
+                      - option "Kavya Iyer - admin@example.com"
+                      - option "Priya Menon - sales@example.com"
+                    - group [ref=e147]:
+                      - generic "Testing" [ref=e148] [cursor=pointer]
+                      - option "Not started"
+                      - option "In progress"
+                      - option "Blocked"
+                      - option "Done" [selected]
+                      - option "Skipped"
+                      - option "Unassigned" [selected]
+                      - option "Arjun Srinivasan - sales2@example.com"
+                      - option "Kavya Iyer - admin@example.com"
+                      - option "Priya Menon - sales@example.com"
+                    - group [ref=e149]:
+                      - generic "Review and edits" [ref=e150] [cursor=pointer]
+                      - option "Not started"
+                      - option "In progress"
+                      - option "Blocked"
+                      - option "Done" [selected]
+                      - option "Skipped"
+                      - option "Unassigned" [selected]
+                      - option "Arjun Srinivasan - sales2@example.com"
+                      - option "Kavya Iyer - admin@example.com"
+                      - option "Priya Menon - sales@example.com"
+                    - group [ref=e151]:
+                      - generic "Final delivery" [ref=e152] [cursor=pointer]
+                      - option "Not started"
+                      - option "In progress"
+                      - option "Blocked"
+                      - option "Done" [selected]
+                      - option "Skipped"
+                      - option "Unassigned" [selected]
+                      - option "Arjun Srinivasan - sales2@example.com"
+                      - option "Kavya Iyer - admin@example.com"
+                      - option "Priya Menon - sales@example.com"
+              - 'row "Animation production Animation Animation production Northstar Learning Pvt Ltd ORD-2026-SEED-0001 Jul 14, 2026 Not Started 0/6 complete Script: Not Started Storyboard: Not Started Modeling and animation: Not Started Voiceover: Not Started Review and edits: Not Started Final delivery: Not Started" [ref=e153]':
+                - cell "Animation production Animation Animation production" [ref=e154]:
+                  - link "Animation production" [ref=e155] [cursor=pointer]:
+                    - /url: /production/seed_work_animation
+                  - paragraph [ref=e156]: Animation
+                  - paragraph [ref=e157]: Animation production
+                - cell "Northstar Learning Pvt Ltd ORD-2026-SEED-0001 Jul 14, 2026" [ref=e158]:
+                  - paragraph [ref=e159]: Northstar Learning Pvt Ltd
+                  - paragraph [ref=e160]: ORD-2026-SEED-0001
+                  - paragraph [ref=e161]: Jul 14, 2026
+                - cell "Not Started 0/6 complete" [ref=e162]:
+                  - generic [ref=e163]: Not Started
+                  - paragraph [ref=e164]: 0/6 complete
+                - 'cell "Script: Not Started Storyboard: Not Started Modeling and animation: Not Started Voiceover: Not Started Review and edits: Not Started Final delivery: Not Started" [ref=e165]':
+                  - generic [ref=e166]:
+                    - generic [ref=e167]: "Script: Not Started"
+                    - generic [ref=e168]: "Storyboard: Not Started"
+                    - generic [ref=e169]: "Modeling and animation: Not Started"
+                    - generic [ref=e170]: "Voiceover: Not Started"
+                    - generic [ref=e171]: "Review and edits: Not Started"
+                    - generic [ref=e172]: "Final delivery: Not Started"
+                - cell [ref=e173]:
+                  - generic [ref=e174]:
+                    - group [ref=e175]:
+                      - generic "Script" [ref=e176] [cursor=pointer]
+                      - option "Not started" [selected]
+                      - option "In progress"
+                      - option "Blocked"
+                      - option "Done"
+                      - option "Skipped"
+                      - option "Unassigned" [selected]
+                      - option "Arjun Srinivasan - sales2@example.com"
+                      - option "Kavya Iyer - admin@example.com"
+                      - option "Priya Menon - sales@example.com"
+                    - group [ref=e177]:
+                      - generic "Storyboard" [ref=e178] [cursor=pointer]
+                      - option "Not started" [selected]
+                      - option "In progress"
+                      - option "Blocked"
+                      - option "Done"
+                      - option "Skipped"
+                      - option "Unassigned" [selected]
+                      - option "Arjun Srinivasan - sales2@example.com"
+                      - option "Kavya Iyer - admin@example.com"
+                      - option "Priya Menon - sales@example.com"
+                    - group [ref=e179]:
+                      - generic "Modeling and animation" [ref=e180] [cursor=pointer]
+                      - option "Not started" [selected]
+                      - option "In progress"
+                      - option "Blocked"
+                      - option "Done"
+                      - option "Skipped"
+                      - option "Unassigned" [selected]
+                      - option "Arjun Srinivasan - sales2@example.com"
+                      - option "Kavya Iyer - admin@example.com"
+                      - option "Priya Menon - sales@example.com"
+                    - group [ref=e181]:
+                      - generic "Voiceover" [ref=e182] [cursor=pointer]
+                      - option "Not started" [selected]
+                      - option "In progress"
+                      - option "Blocked"
+                      - option "Done"
+                      - option "Skipped"
+                      - option "Unassigned" [selected]
+                      - option "Arjun Srinivasan - sales2@example.com"
+                      - option "Kavya Iyer - admin@example.com"
+                      - option "Priya Menon - sales@example.com"
+                    - group [ref=e183]:
+                      - generic "Review and edits" [ref=e184] [cursor=pointer]
+                      - option "Not started" [selected]
+                      - option "In progress"
+                      - option "Blocked"
+                      - option "Done"
+                      - option "Skipped"
+                      - option "Unassigned" [selected]
+                      - option "Arjun Srinivasan - sales2@example.com"
+                      - option "Kavya Iyer - admin@example.com"
+                      - option "Priya Menon - sales@example.com"
+                    - group [ref=e185]:
+                      - generic "Final delivery" [ref=e186] [cursor=pointer]
+                      - option "Not started" [selected]
+                      - option "In progress"
+                      - option "Blocked"
+                      - option "Done"
+                      - option "Skipped"
+                      - option "Unassigned" [selected]
+                      - option "Arjun Srinivasan - sales2@example.com"
+                      - option "Kavya Iyer - admin@example.com"
+                      - option "Priya Menon - sales@example.com"
+  - button "Open Next.js Dev Tools" [ref=e192] [cursor=pointer]:
+    - img [ref=e193]
+  - alert [ref=e196]

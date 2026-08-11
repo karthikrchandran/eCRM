@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
+import { useFormDraft } from "@/components/forms/use-form-draft";
 import type { ActionState } from "@/server/opportunities/types";
 
 type Owner = {
@@ -89,16 +90,30 @@ export function OpportunityForm({
   submitLabel
 }: OpportunityFormProps) {
   const [state, formAction, pending] = useActionState(action, initialState);
+  const formRef = useRef<HTMLFormElement>(null);
+  const draft = useFormDraft(`opportunity:${initialValues?.leadCustomerId ?? "new"}`);
+  const [leadCustomerId, setLeadCustomerId] = useState((draft.values.leadCustomerId as string | undefined) ?? initialValues?.leadCustomerId ?? "");
+  const [branchId, setBranchId] = useState((draft.values.branchId as string | undefined) ?? initialValues?.branchId ?? "");
   const splitRows = initialSplits?.length ? initialSplits : [{ userId: "", percent: 100 }];
+  const availableBranches = branches.filter((branch) => branch.leadCustomerId === leadCustomerId);
+  useEffect(() => { if (draft.hasDraft && formRef.current) draft.restoreForm(formRef.current); }, [draft]);
 
   return (
-    <form action={formAction} className="surface grid max-w-5xl gap-4 p-6">
+    <form action={formAction} className="surface grid max-w-5xl gap-4 p-6" onChange={(event) => draft.saveForm(event.currentTarget)} ref={formRef}>
+      {draft.hasDraft ? <div className="flex items-center justify-between gap-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950" role="status">Unsaved opportunity draft restored. <button className="font-semibold underline" onClick={draft.clear} type="button">Discard draft</button></div> : null}
       <div className="grid gap-4 md:grid-cols-2">
         <label className="flex flex-col gap-1 text-sm font-medium">
           Lead/customer
           <select
             className="rounded-md border border-[var(--border)] px-3 py-2"
-            defaultValue={initialValues?.leadCustomerId ?? ""}
+            onChange={(event) => {
+              const nextLeadCustomerId = event.target.value;
+              setLeadCustomerId(nextLeadCustomerId);
+              if (!branches.some((branch) => branch.id === branchId && branch.leadCustomerId === nextLeadCustomerId)) {
+                setBranchId("");
+              }
+            }}
+            value={leadCustomerId}
             name="leadCustomerId"
             required
           >
@@ -113,18 +128,9 @@ export function OpportunityForm({
 
         <label className="flex flex-col gap-1 text-sm font-medium">
           Branch
-          <select className="rounded-md border border-[var(--border)] px-3 py-2" defaultValue={initialValues?.branchId ?? ""} name="branchId">
+          <select className="rounded-md border border-[var(--border)] px-3 py-2" name="branchId" onChange={(event) => setBranchId(event.target.value)} value={branchId}>
             <option value="">Company level</option>
-            {branches.map((branch) => {
-              const lead = leads.find((candidate) => candidate.id === branch.leadCustomerId);
-
-              return (
-                <option key={branch.id} value={branch.id}>
-                  {branch.name}
-                  {lead ? ` - ${lead.name}` : ""}
-                </option>
-              );
-            })}
+            {availableBranches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
           </select>
         </label>
       </div>

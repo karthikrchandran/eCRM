@@ -5,7 +5,8 @@ import {
   createBranch,
   createContact,
   createLeadCustomer,
-  reassignLeadOwner
+  reassignLeadOwner,
+  updateContact
 } from "./mutations";
 
 const actor = { id: "user_sales", role: "SALES" as const };
@@ -79,6 +80,43 @@ describe("crm mutations", () => {
     expect(contactCreate).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ branchId: "branch_1" }) })
     );
+  });
+
+  it("updates a contact only when its branch belongs to the contact customer", async () => {
+    const update = vi.fn().mockResolvedValue({ id: "contact_1" });
+
+    await updateContact(
+      actor,
+      "contact_1",
+      {
+        leadCustomerId: "lead_1",
+        branchId: "branch_1",
+        name: "Anita Rao",
+        designation: "Procurement Lead",
+        email: "anita.rao@example.com",
+        phone: "+91 99000 00000",
+        isPrimary: true,
+        notes: "Updated after customer call"
+      },
+      {
+        leadCustomer: { findUnique: vi.fn().mockResolvedValue({ id: "lead_1" }) },
+        branch: { findFirst: vi.fn().mockResolvedValue({ id: "branch_1" }) },
+        contact: { findUnique: vi.fn().mockResolvedValue({ id: "contact_1" }), update }
+      }
+    );
+
+    expect(update).toHaveBeenCalledWith({
+      where: { id: "contact_1" },
+      data: {
+        branchId: "branch_1",
+        name: "Anita Rao",
+        designation: "Procurement Lead",
+        email: "anita.rao@example.com",
+        phone: "+91 99000 00000",
+        isPrimary: true,
+        notes: "Updated after customer call"
+      }
+    });
   });
 
   it("creates an open follow-up activity owned by the selected salesperson", async () => {

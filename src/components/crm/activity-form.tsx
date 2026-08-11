@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect, useRef } from "react";
+import { useFormDraft } from "@/components/forms/use-form-draft";
 import type { ActionState } from "@/server/crm/types";
 
 type ActivityFormProps = {
@@ -8,6 +9,7 @@ type ActivityFormProps = {
   owners: Array<{ id: string; name: string; email: string }>;
   branches: Array<{ id: string; name: string }>;
   contacts: Array<{ id: string; name: string }>;
+  draftKey?: string;
 };
 
 const initialState: ActionState = { ok: false };
@@ -20,11 +22,16 @@ function FieldError({ errors }: { errors?: string[] }) {
   ) : null;
 }
 
-export function ActivityForm({ action, owners, branches, contacts }: ActivityFormProps) {
+export function ActivityForm({ action, owners, branches, contacts, draftKey = "activity" }: ActivityFormProps) {
   const [state, formAction, pending] = useActionState(action, initialState);
+  const formRef = useRef<HTMLFormElement>(null);
+  const draft = useFormDraft(draftKey);
+  useEffect(() => { if (draft.hasDraft && formRef.current) draft.restoreForm(formRef.current); }, [draft]);
+  useEffect(() => { if (state.ok) draft.clear(); }, [state.ok, draft]);
 
   return (
-    <form action={formAction} className="surface grid w-full max-w-3xl gap-4 p-4 sm:p-6">
+    <form action={formAction} className="surface grid w-full max-w-3xl gap-4 p-4 sm:p-6" onChange={(event) => draft.saveForm(event.currentTarget)} ref={formRef}>
+      {draft.hasDraft ? <div className="flex items-center justify-between gap-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950" role="status">Unsaved draft restored for this activity. <button className="font-semibold underline" onClick={draft.clear} type="button">Discard draft</button></div> : null}
       <div className="grid gap-4 sm:grid-cols-3">
         <label className="min-w-0 flex flex-col gap-1 text-sm font-medium">
           Type

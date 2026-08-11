@@ -4,6 +4,7 @@
 .playwright-cli/
 after-login-ecrm.yaml
 browser-baseline-ecrm.yaml
+graphify-out/
 .local-storage/
 node_modules/
 *.tsbuildinfo
