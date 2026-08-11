@@ -15,16 +15,20 @@ export interface ProductionProviderConfig {
   signalLoopCredentialReference?: string;
 }
 
+export interface ProductionProviderAdapterContext extends CellProviderContext {
+  providerScope: Readonly<ProductionProviderConfig>;
+}
+
 export interface ProductionProviderAdapters {
-  createDatabase?: (context: CellProviderContext) => Promise<ProviderReference>;
-  createStoragePrefix?: (context: CellProviderContext) => Promise<ProviderReference>;
-  createSecretReference?: (context: CellProviderContext) => Promise<ProviderReference>;
-  applyBackupPolicy?: (context: CellProviderContext) => Promise<ProviderReference>;
-  deployApplication?: (context: CellProviderContext) => Promise<ApplicationProviderResult>;
-  bindSignalLoopInstallation?: (context: CellProviderContext) => Promise<ProviderReference>;
-  healthCheck?: (context: CellProviderContext) => Promise<CellHealth>;
-  destroy?: (context: CellProviderContext) => Promise<void>;
-  validateRestore?: (context: CellProviderContext, restoreReference: string) => Promise<CellHealth>;
+  createDatabase?: (context: ProductionProviderAdapterContext) => Promise<ProviderReference>;
+  createStoragePrefix?: (context: ProductionProviderAdapterContext) => Promise<ProviderReference>;
+  createSecretReference?: (context: ProductionProviderAdapterContext) => Promise<ProviderReference>;
+  applyBackupPolicy?: (context: ProductionProviderAdapterContext) => Promise<ProviderReference>;
+  deployApplication?: (context: ProductionProviderAdapterContext) => Promise<ApplicationProviderResult>;
+  bindSignalLoopInstallation?: (context: ProductionProviderAdapterContext) => Promise<ProviderReference>;
+  healthCheck?: (context: ProductionProviderAdapterContext) => Promise<CellHealth>;
+  destroy?: (context: ProductionProviderAdapterContext) => Promise<void>;
+  validateRestore?: (context: ProductionProviderAdapterContext, restoreReference: string) => Promise<CellHealth>;
 }
 
 export class ProductionCellProvider implements CellProvider {
@@ -58,7 +62,7 @@ export class ProductionCellProvider implements CellProvider {
     if (!operation) {
       throw new Error("Production provider adapter deployApplication is not configured");
     }
-    return operation(context);
+    return operation(this.withScope(context));
   }
 
   public async bindSignalLoopInstallation(context: CellProviderContext): Promise<ProviderReference> {
@@ -76,7 +80,7 @@ export class ProductionCellProvider implements CellProvider {
     if (!operation) {
       throw new Error("Production provider adapter destroy is not configured");
     }
-    await operation(context);
+    await operation(this.withScope(context));
   }
 
   public async validateRestore(context: CellProviderContext, restoreReference: string): Promise<CellHealth> {
@@ -85,7 +89,7 @@ export class ProductionCellProvider implements CellProvider {
     if (!operation) {
       throw new Error("Production provider adapter validateRestore is not configured");
     }
-    return operation(context, restoreReference);
+    return operation(this.withScope(context), restoreReference);
   }
 
   private assertConfigured(): void {
@@ -120,7 +124,7 @@ export class ProductionCellProvider implements CellProvider {
     if (!operation) {
       throw new Error(`Production provider adapter ${name} is not configured`);
     }
-    return operation(context);
+    return operation(this.withScope(context));
   }
 
   private async callHealth(name: "healthCheck", context: CellProviderContext): Promise<CellHealth> {
@@ -128,6 +132,10 @@ export class ProductionCellProvider implements CellProvider {
     if (!operation) {
       throw new Error(`Production provider adapter ${name} is not configured`);
     }
-    return operation(context);
+    return operation(this.withScope(context));
+  }
+
+  private withScope(context: CellProviderContext): ProductionProviderAdapterContext {
+    return { ...context, providerScope: this.config };
   }
 }

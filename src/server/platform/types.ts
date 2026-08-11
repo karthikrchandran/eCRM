@@ -40,6 +40,8 @@ export interface ProvisioningRequest {
   initialAdminEmail: string;
   idempotencyKey: string;
   correlationId: string;
+  actor: string;
+  reason?: string;
 }
 
 export interface ProvisioningAction {
@@ -67,5 +69,8 @@ export interface ControlPlaneAuditEventRecord {
   correlationId: string;
   action: ProvisioningStep;
   result: ProvisioningResult;
+  actor: string;
+  reason?: string;
+  secretReference?: string;
   occurredAt: Date;
 }

@@ -11,7 +11,6 @@ import type {
 import type { PlatformRepository } from "./provisioning";
 
 declare global {
-  // eslint-disable-next-line no-var
   var platformDatabase: PrismaClient | undefined;
 }
 
@@ -104,13 +103,11 @@ export class PrismaPlatformRepository implements PlatformRepository {
   }
 
   public async updateCell(cellId: string, update: Partial<CustomerCellRecord>): Promise<CustomerCellRecord> {
-    const {
-      id: _ignoredId,
-      cellKey: _ignoredCellKey,
-      createdAt: _ignoredCreatedAt,
-      updatedAt: _ignoredUpdatedAt,
-      ...data
-    } = update;
+    const data = { ...update };
+    delete data.id;
+    delete data.cellKey;
+    delete data.createdAt;
+    delete data.updatedAt;
     const cell = await this.client.customerCell.update({ where: { id: cellId }, data });
     return mapCell(cell);
   }
@@ -120,10 +117,12 @@ export class PrismaPlatformRepository implements PlatformRepository {
       data: {
         id: event.id,
         cellId: event.cellId,
-        actor: "system:provisioner",
+        actor: event.actor,
         action: event.action,
         result: event.result,
         correlationId: event.correlationId,
+        reason: event.reason,
+        secretReference: event.secretReference,
         occurredAt: event.occurredAt
       }
     });
@@ -161,6 +160,9 @@ export class PrismaPlatformRepository implements PlatformRepository {
       correlationId: event.correlationId,
       action: event.action as ControlPlaneAuditEventRecord["action"],
       result: event.result as ProvisioningResult,
+      actor: event.actor,
+      reason: event.reason ?? undefined,
+      secretReference: event.secretReference ?? undefined,
       occurredAt: event.occurredAt
     }));
   }

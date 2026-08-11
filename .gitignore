@@ -6,6 +6,7 @@ after-login-ecrm.yaml
 browser-baseline-ecrm.yaml
 .local-storage/
 node_modules/
+src/generated/
 *.tsbuildinfo
 next-env.d.ts
 .next/

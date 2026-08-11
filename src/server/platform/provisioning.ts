@@ -101,7 +101,11 @@ export function createInMemoryPlatformRepository(): InMemoryPlatformRepository {
     },
     updateCell: async (cellId, update) => {
       const cell = requiredCell(cells, cellId);
-      const { id: _ignoredId, cellKey: _ignoredKey, ...mutableUpdate } = update;
+      const mutableUpdate = { ...update };
+      delete mutableUpdate.id;
+      delete mutableUpdate.cellKey;
+      delete mutableUpdate.createdAt;
+      delete mutableUpdate.updatedAt;
       Object.assign(cell, mutableUpdate, { updatedAt: new Date() });
       return cell;
     },
@@ -131,14 +135,14 @@ export class CustomerCellProvisioner {
       if (existingCell) {
         const existingAttempt = await repository.findLatestAttemptForCell(existingCell.id);
         if (!existingAttempt) throw new Error(`Customer cell ${existingCell.id} has no provisioning attempt`);
-        return { cell: existingCell, attempt: existingAttempt, shouldRun: false };
+        return { cell: existingCell, attempt: existingAttempt, shouldRun: existingAttempt.result === "FAILED" };
       }
 
       const reservation = await repository.reserveCustomerCell(request);
       if (!reservation.created) {
         const existingAttempt = await repository.findLatestAttemptForCell(reservation.cell.id);
         if (!existingAttempt) throw new Error(`Customer cell ${reservation.cell.id} has no provisioning attempt`);
-        return { cell: reservation.cell, attempt: existingAttempt, shouldRun: false };
+        return { cell: reservation.cell, attempt: existingAttempt, shouldRun: existingAttempt.result === "FAILED" };
       }
       const cell = reservation.cell;
       const attempt = await repository.reserveProvisioningAttempt(cell.id, request.idempotencyKey, request.correlationId);
@@ -153,42 +157,67 @@ export class CustomerCellProvisioner {
       correlationId: request.correlationId
     };
 
+    let currentStep: ProvisioningStep = "database";
+    let secretReference: string | undefined;
     try {
-      const database = await this.runStep(reservation, context, "database", () => this.provider.createDatabase(context));
-      await this.repository.updateCell(reservation.cell.id, { databaseReference: database.reference });
-      const storage = await this.runStep(reservation, context, "storage", () => this.provider.createStoragePrefix(context));
-      await this.repository.updateCell(reservation.cell.id, { storageReference: storage.reference });
-      const secret = await this.runStep(reservation, context, "secret-reference", () => this.provider.createSecretReference(context));
-      await this.repository.updateCell(reservation.cell.id, { secretReference: secret.reference });
-      const backup = await this.runStep(reservation, context, "backup-policy", () => this.provider.applyBackupPolicy(context));
-      await this.repository.updateCell(reservation.cell.id, { backupReference: backup.reference });
-      const application = await this.runStep(reservation, context, "application", () => this.provider.deployApplication(context));
+      const database = await this.resourceFor(reservation, context, request, "database", () => this.provider.createDatabase(context));
+      await this.persist("database", () => this.repository.updateCell(reservation.cell.id, { databaseReference: database.reference }));
+      currentStep = "storage";
+      const storage = await this.resourceFor(reservation, context, request, "storage", () => this.provider.createStoragePrefix(context));
+      await this.persist("storage", () => this.repository.updateCell(reservation.cell.id, { storageReference: storage.reference }));
+      currentStep = "secret-reference";
+      const secret = await this.resourceFor(reservation, context, request, "secret-reference", () => this.provider.createSecretReference(context));
+      secretReference = secret.reference;
+      await this.persist("secret-reference", () => this.repository.updateCell(reservation.cell.id, { secretReference }));
+      currentStep = "backup-policy";
+      const backup = await this.resourceFor(reservation, context, request, "backup-policy", () => this.provider.applyBackupPolicy(context));
+      await this.persist("backup-policy", () => this.repository.updateCell(reservation.cell.id, { backupReference: backup.reference }));
+      currentStep = "application";
+      const applicationReference = successfulReference(reservation.attempt, "application");
+      const application = applicationReference && reservation.cell.applicationUrl
+        ? { reference: applicationReference, applicationUrl: reservation.cell.applicationUrl }
+        : await this.runStep(reservation, context, request, "application", () => this.provider.deployApplication(context));
       if (!isApplicationUrl(application.applicationUrl)) {
-        throw new ProvisioningStepError("application", "invalid-application-url");
+        throw new ProvisioningFailure("application", "APPLICATION_VALIDATION_FAILED", "invalid-application-url");
       }
-      await this.repository.updateCell(reservation.cell.id, {
+      await this.persist("application", () => this.repository.updateCell(reservation.cell.id, {
         applicationReference: application.reference,
         applicationUrl: application.applicationUrl
-      });
-      const signalLoop = await this.runStep(reservation, context, "signalloop-binding", () => this.provider.bindSignalLoopInstallation(context));
-      await this.repository.updateCell(reservation.cell.id, { signalLoopWorkspaceReference: signalLoop.reference });
-      await this.repository.upsertSignalLoopConnection({
+      }));
+      currentStep = "signalloop-binding";
+      const signalLoop = await this.resourceFor(reservation, context, request, "signalloop-binding", () => this.provider.bindSignalLoopInstallation(context));
+      await this.persist("signalloop-binding", () => this.repository.updateCell(reservation.cell.id, { signalLoopWorkspaceReference: signalLoop.reference }));
+      await this.persist("signalloop-binding", () => this.repository.upsertSignalLoopConnection({
         cellId: reservation.cell.id,
         workspaceReference: signalLoop.reference,
-        secretReference: secret.reference,
+        secretReference: secretReference ?? "",
         correlationId: request.correlationId,
         idempotencyKey: request.idempotencyKey
-      });
+      }));
 
-      const health = await this.provider.healthCheck(context);
-      if (!health.healthy) throw new ProvisioningStepError("health-check", health.detail ?? "health-check-failed");
-      await this.record(this.repository, reservation.cell.id, reservation.attempt.id, request.correlationId, "health-check", "SUCCEEDED");
+      currentStep = "health-check";
+      const health = await this.healthCheck(context);
+      if (!health.healthy) throw new ProvisioningFailure("health-check", "HEALTH_CHECK_FAILED", health.detail ?? "health-check-failed");
+      await this.record(this.repository, reservation.cell.id, reservation.attempt.id, request, "health-check", "SUCCEEDED", undefined, undefined, undefined, secretReference);
       await this.repository.setAttemptResult(reservation.attempt.id, "SUCCEEDED");
       const cell = await this.repository.updateCell(reservation.cell.id, { lifecycleStatus: "ACTIVE" });
       return this.outcome(cell, reservation.attempt);
     } catch (error) {
-      const failedStep = error instanceof ProvisioningStepError ? error.step : "health-check";
-      await this.record(this.repository, reservation.cell.id, reservation.attempt.id, request.correlationId, failedStep, "FAILED", undefined, "PROVISIONING_STEP_FAILED");
+      const failure = error instanceof ProvisioningFailure
+        ? error
+        : new ProvisioningFailure(currentStep, "REPOSITORY_PERSISTENCE_FAILED", errorMessage(error));
+      await this.record(
+        this.repository,
+        reservation.cell.id,
+        reservation.attempt.id,
+        request,
+        failure.step,
+        "FAILED",
+        undefined,
+        failure.errorCode,
+        failure.message,
+        secretReference
+      );
       await this.repository.setAttemptResult(reservation.attempt.id, "FAILED");
       const cell = await this.repository.updateCell(reservation.cell.id, { lifecycleStatus: "PROVISIONING_FAILED" });
       return this.outcome(cell, reservation.attempt);
@@ -198,15 +227,44 @@ export class CustomerCellProvisioner {
   private async runStep<T extends ProviderReference>(
     reservation: ProvisioningReservation,
     context: CellProviderContext,
+    request: ProvisioningRequest,
     step: Exclude<ProvisioningStep, "health-check">,
     operation: () => Promise<T>
   ): Promise<T> {
+    let resource: T;
     try {
-      const resource = await operation();
-      await this.record(this.repository, reservation.cell.id, reservation.attempt.id, context.correlationId, step, "SUCCEEDED", resource.reference);
-      return resource;
+      resource = await operation();
     } catch (error) {
-      throw new ProvisioningStepError(step, error instanceof Error ? error.message : "provider-step-failed");
+      throw new ProvisioningFailure(step, "PROVIDER_OPERATION_FAILED", errorMessage(error));
+    }
+    await this.record(this.repository, reservation.cell.id, reservation.attempt.id, request, step, "SUCCEEDED", resource.reference);
+    return resource;
+  }
+
+  private async resourceFor<T extends ProviderReference>(
+    reservation: ProvisioningReservation,
+    context: CellProviderContext,
+    request: ProvisioningRequest,
+    step: Exclude<ProvisioningStep, "health-check">,
+    operation: () => Promise<T>
+  ): Promise<T> {
+    const reference = successfulReference(reservation.attempt, step);
+    return reference ? ({ reference } as T) : this.runStep(reservation, context, request, step, operation);
+  }
+
+  private async healthCheck(context: CellProviderContext) {
+    try {
+      return await this.provider.healthCheck(context);
+    } catch (error) {
+      throw new ProvisioningFailure("health-check", "HEALTH_CHECK_FAILED", errorMessage(error));
+    }
+  }
+
+  private async persist<T>(step: ProvisioningStep, operation: () => Promise<T>): Promise<T> {
+    try {
+      return await operation();
+    } catch (error) {
+      throw new ProvisioningFailure(step, "REPOSITORY_PERSISTENCE_FAILED", errorMessage(error));
     }
   }
 
@@ -214,22 +272,35 @@ export class CustomerCellProvisioner {
     repository: PlatformRepository,
     cellId: string,
     attemptId: string,
-    correlationId: string,
+    request: ProvisioningRequest,
     step: ProvisioningStep,
     result: ProvisioningResult,
     reference?: string,
-    errorCode?: string
+    errorCode?: string,
+    errorReason?: string,
+    secretReference?: string
   ): Promise<void> {
     const occurredAt = new Date();
-    await repository.appendProvisioningAction(attemptId, { step, result, reference, errorCode, occurredAt });
-    await repository.addAuditEvent({
+    try {
+      await repository.appendProvisioningAction(attemptId, { step, result, reference, errorCode, occurredAt });
+    } catch (error) {
+      throw new ProvisioningFailure(step, "REPOSITORY_PERSISTENCE_FAILED", errorMessage(error));
+    }
+    try {
+      await repository.addAuditEvent({
       id: `audit_${cellId}_${attemptId}_${step}_${occurredAt.getTime()}`,
       cellId,
-      correlationId,
+      correlationId: request.correlationId,
       action: step,
       result,
+      actor: request.actor,
+      reason: errorReason ?? request.reason,
+      secretReference: secretReference ?? (step === "secret-reference" ? reference : undefined),
       occurredAt
-    });
+      });
+    } catch (error) {
+      throw new ProvisioningFailure(step, "AUDIT_PERSISTENCE_FAILED", errorMessage(error));
+    }
   }
 
   private async outcome(cell: CustomerCellRecord, attempt: ProvisioningAttemptRecord): Promise<ProvisioningOutcome> {
@@ -249,10 +320,22 @@ interface ProvisioningReservation {
   shouldRun: boolean;
 }
 
-class ProvisioningStepError extends Error {
-  public constructor(public readonly step: ProvisioningStep, message: string) {
+class ProvisioningFailure extends Error {
+  public constructor(
+    public readonly step: ProvisioningStep,
+    public readonly errorCode: "PROVIDER_OPERATION_FAILED" | "HEALTH_CHECK_FAILED" | "APPLICATION_VALIDATION_FAILED" | "REPOSITORY_PERSISTENCE_FAILED" | "AUDIT_PERSISTENCE_FAILED",
+    message: string
+  ) {
     super(message);
   }
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : "unknown-provisioning-error";
+}
+
+function successfulReference(attempt: ProvisioningAttemptRecord, step: Exclude<ProvisioningStep, "health-check">): string | undefined {
+  return [...attempt.actions].reverse().find((action) => action.step === step && action.result === "SUCCEEDED")?.reference;
 }
 
 function requiredAttempt(attempts: Map<string, ProvisioningAttemptRecord>, attemptId: string): ProvisioningAttemptRecord {

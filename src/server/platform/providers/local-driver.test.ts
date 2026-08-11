@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { LocalCellProvider } from "./local-driver";
 
@@ -16,5 +16,16 @@ describe("LocalCellProvider", () => {
       applicationUrl: "http://ara-global.localhost"
     });
     await expect(provider.healthCheck(context)).resolves.toEqual({ healthy: true });
+  });
+
+  it("refuses to construct outside the test runtime so platform deployments cannot emit local references", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("APP_MODE", "platform");
+
+    try {
+      expect(() => new LocalCellProvider()).toThrow(/test-only/i);
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 });

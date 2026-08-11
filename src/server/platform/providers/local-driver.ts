@@ -4,6 +4,9 @@ export class LocalCellProvider implements CellProvider {
   private readonly health: "healthy" | "unhealthy";
 
   public constructor(options: { health?: "healthy" | "unhealthy" } = {}) {
+    if (process.env.NODE_ENV !== "test") {
+      throw new Error("LocalCellProvider is test-only and cannot emit local:// references outside tests");
+    }
     this.health = options.health ?? "healthy";
   }
 
@@ -34,16 +37,19 @@ export class LocalCellProvider implements CellProvider {
     return this.reference("signalloop", context);
   }
 
-  public async healthCheck(_context: CellProviderContext): Promise<CellHealth> {
+  public async healthCheck(context: CellProviderContext): Promise<CellHealth> {
+    void context;
     return this.health === "healthy" ? { healthy: true } : { healthy: false, detail: "configured-local-health-failure" };
   }
 
-  public async destroy(_context: CellProviderContext): Promise<void> {
+  public async destroy(context: CellProviderContext): Promise<void> {
+    void context;
     // Local provisioning is deterministic metadata generation and makes no vendor calls.
   }
 
-  public async validateRestore(_context: CellProviderContext, _restoreReference: string): Promise<CellHealth> {
-    return this.healthCheck(_context);
+  public async validateRestore(context: CellProviderContext, restoreReference: string): Promise<CellHealth> {
+    void restoreReference;
+    return this.healthCheck(context);
   }
 
   private reference(resource: string, context: CellProviderContext): ProviderReference {

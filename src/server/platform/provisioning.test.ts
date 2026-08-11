@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { LocalCellProvider } from "./providers/local-driver";
+import { ProductionCellProvider } from "./providers/production-driver";
 import {
   createInMemoryPlatformRepository,
   CustomerCellProvisioner,
@@ -16,7 +17,9 @@ const request = {
   desiredSubdomain: "ara-global",
   initialAdminEmail: "admin@ara.example",
   idempotencyKey: "onboard-ara-global-1",
-  correlationId: "corr-ara-1"
+  correlationId: "corr-ara-1",
+  actor: "operator:karthik",
+  reason: "initial customer-cell onboarding"
 };
 
 describe("CustomerCellProvisioner", () => {
@@ -40,6 +43,37 @@ describe("CustomerCellProvisioner", () => {
       application: 1,
       signalLoop: 1,
       health: 1
+    });
+  });
+
+  it("persists references returned by configured production adapters", async () => {
+    const repository = createInMemoryPlatformRepository();
+    const provisioner = new CustomerCellProvisioner(
+      repository,
+      new ProductionCellProvider({
+        config: productionConfig(),
+        adapters: {
+          createDatabase: async () => ({ reference: "database://ara" }),
+          createStoragePrefix: async () => ({ reference: "storage://ara" }),
+          createSecretReference: async () => ({ reference: "vault://ara/credential" }),
+          applyBackupPolicy: async () => ({ reference: "backup://ara" }),
+          deployApplication: async () => ({ reference: "application://ara", applicationUrl: "https://ara.example.test" }),
+          bindSignalLoopInstallation: async () => ({ reference: "signalloop://ara" }),
+          healthCheck: async () => ({ healthy: true })
+        }
+      })
+    );
+
+    const result = await provisioner.provision({ ...request, cellId: "cell_production_ara", idempotencyKey: "onboard-production-ara" });
+
+    expect(result.cell).toMatchObject({
+      databaseReference: "database://ara",
+      storageReference: "storage://ara",
+      secretReference: "vault://ara/credential",
+      backupReference: "backup://ara",
+      applicationReference: "application://ara",
+      applicationUrl: "https://ara.example.test",
+      signalLoopWorkspaceReference: "signalloop://ara"
     });
   });
 
@@ -77,20 +111,76 @@ describe("CustomerCellProvisioner", () => {
     expect(result.attempt.actions.some((action) => action.step === "health-check" && action.result === "FAILED")).toBe(true);
   });
 
-  it("returns the durable health failure on retry without creating a second cell or rerunning providers", async () => {
+  it("retries a failed health check with the same durable cell identity", async () => {
     const repository = createInMemoryPlatformRepository();
-    const provider = new CountingLocalCellProvider({ health: "unhealthy" });
+    const provider = new RecoveringHealthProvider();
     const provisioner = new CustomerCellProvisioner(repository, provider);
 
     const first = await provisioner.provision(request);
-    const operationCallsAfterFailure = { ...provider.operationCalls };
+    expect(first.cell.lifecycleStatus).toBe("PROVISIONING_FAILED");
     const second = await provisioner.provision(request);
 
-    expect(first.cell.lifecycleStatus).toBe("PROVISIONING_FAILED");
-    expect(second.cell.lifecycleStatus).toBe("PROVISIONING_FAILED");
+    expect(second.cell.lifecycleStatus).toBe("ACTIVE");
     expect(second.attempt.id).toBe(first.attempt.id);
     expect(repository.cells()).toHaveLength(1);
-    expect(provider.operationCalls).toEqual(operationCallsAfterFailure);
+    expect(provider.operationCalls).toEqual({
+      database: 1,
+      storage: 1,
+      secretReference: 1,
+      backup: 1,
+      application: 1,
+      signalLoop: 1,
+      health: 2
+    });
+  });
+
+  it("records repository persistence failure at the actual step and safely retries it", async () => {
+    const repository = createInMemoryPlatformRepository();
+    const upsertSignalLoopConnection = repository.upsertSignalLoopConnection.bind(repository);
+    let connectionWrites = 0;
+    repository.upsertSignalLoopConnection = async (input) => {
+      connectionWrites += 1;
+      if (connectionWrites === 1) throw new Error("connection persistence unavailable");
+      await upsertSignalLoopConnection(input);
+    };
+    const provisioner = new CustomerCellProvisioner(repository, new LocalCellProvider());
+
+    const first = await provisioner.provision(request);
+    const second = await provisioner.provision(request);
+
+    expect(first.attempt.actions).toContainEqual(
+      expect.objectContaining({ step: "signalloop-binding", result: "FAILED", errorCode: "REPOSITORY_PERSISTENCE_FAILED" })
+    );
+    expect(first.auditEvents).toContainEqual(
+      expect.objectContaining({ action: "signalloop-binding", result: "FAILED", reason: "connection persistence unavailable" })
+    );
+    expect(second.cell.lifecycleStatus).toBe("ACTIVE");
+    expect(repository.cells()).toHaveLength(1);
+    expect(connectionWrites).toBe(2);
+  });
+
+  it("persists the audit actor, request reason, failure details, and secret reference", async () => {
+    const repository = createInMemoryPlatformRepository();
+    const provisioner = new CustomerCellProvisioner(repository, new LocalCellProvider({ health: "unhealthy" }));
+
+    const result = await provisioner.provision(request);
+
+    expect(result.auditEvents).toContainEqual(
+      expect.objectContaining({
+        action: "secret-reference",
+        actor: request.actor,
+        reason: request.reason,
+        secretReference: "local://secret/ara-global"
+      })
+    );
+    expect(result.auditEvents).toContainEqual(
+      expect.objectContaining({
+        action: "health-check",
+        result: "FAILED",
+        actor: request.actor,
+        reason: "configured-local-health-failure"
+      })
+    );
   });
 
   it("rejects cell-mode provisioning before any repository or provider call", async () => {
@@ -178,4 +268,31 @@ class InvalidApplicationUrlProvider extends LocalCellProvider {
     const application = await super.deployApplication(context);
     return { ...application, applicationUrl: "not-a-valid-url" };
   }
+}
+
+class RecoveringHealthProvider extends CountingLocalCellProvider {
+  public override async healthCheck(context: Parameters<LocalCellProvider["healthCheck"]>[0]) {
+    void context;
+    this.operationCalls.health += 1;
+    return this.operationCalls.health === 1
+      ? { healthy: false, detail: "transient-health-failure" }
+      : { healthy: true };
+  }
+}
+
+function productionConfig() {
+  return {
+    databaseEndpoint: "https://database.example.test",
+    databaseCredentialReference: "vault://platform/database",
+    storageEndpoint: "https://storage.example.test",
+    storageCredentialReference: "vault://platform/storage",
+    secretEndpoint: "https://secrets.example.test",
+    secretCredentialReference: "vault://platform/secrets",
+    backupEndpoint: "https://backup.example.test",
+    backupCredentialReference: "vault://platform/backup",
+    applicationEndpoint: "https://application.example.test",
+    applicationCredentialReference: "vault://platform/application",
+    signalLoopEndpoint: "https://signalloop.example.test",
+    signalLoopCredentialReference: "vault://platform/signalloop"
+  };
 }
