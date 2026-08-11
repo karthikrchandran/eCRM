@@ -4,6 +4,7 @@ export interface CellProviderContext {
   cellId: string;
   cellKey: string;
   correlationId: string;
+  idempotencyKey: string;
 }
 
 export interface ProviderReference {

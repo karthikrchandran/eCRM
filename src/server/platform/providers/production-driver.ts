@@ -16,7 +16,10 @@ export interface ProductionProviderConfig {
 }
 
 export interface ProductionProviderAdapterContext extends CellProviderContext {
-  providerScope: Readonly<ProductionProviderConfig>;
+  providerScope: Readonly<{
+    endpoint: string;
+    credentialReference: string;
+  }>;
 }
 
 export interface ProductionProviderAdapters {
@@ -41,19 +44,19 @@ export class ProductionCellProvider implements CellProvider {
   }
 
   public async createDatabase(context: CellProviderContext): Promise<ProviderReference> {
-    return this.call("createDatabase", context);
+    return this.call("createDatabase", "database", context);
   }
 
   public async createStoragePrefix(context: CellProviderContext): Promise<ProviderReference> {
-    return this.call("createStoragePrefix", context);
+    return this.call("createStoragePrefix", "storage", context);
   }
 
   public async createSecretReference(context: CellProviderContext): Promise<ProviderReference> {
-    return this.call("createSecretReference", context);
+    return this.call("createSecretReference", "secret", context);
   }
 
   public async applyBackupPolicy(context: CellProviderContext): Promise<ProviderReference> {
-    return this.call("applyBackupPolicy", context);
+    return this.call("applyBackupPolicy", "backup", context);
   }
 
   public async deployApplication(context: CellProviderContext): Promise<ApplicationProviderResult> {
@@ -62,16 +65,16 @@ export class ProductionCellProvider implements CellProvider {
     if (!operation) {
       throw new Error("Production provider adapter deployApplication is not configured");
     }
-    return operation(this.withScope(context));
+    return operation(this.withScope(context, "application"));
   }
 
   public async bindSignalLoopInstallation(context: CellProviderContext): Promise<ProviderReference> {
-    return this.call("bindSignalLoopInstallation", context);
+    return this.call("bindSignalLoopInstallation", "signalLoop", context);
   }
 
   public async healthCheck(context: CellProviderContext): Promise<CellHealth> {
     this.assertConfigured();
-    return this.callHealth("healthCheck", context);
+    return this.callHealth("healthCheck", "application", context);
   }
 
   public async destroy(context: CellProviderContext): Promise<void> {
@@ -80,7 +83,7 @@ export class ProductionCellProvider implements CellProvider {
     if (!operation) {
       throw new Error("Production provider adapter destroy is not configured");
     }
-    await operation(this.withScope(context));
+    await operation(this.withScope(context, "application"));
   }
 
   public async validateRestore(context: CellProviderContext, restoreReference: string): Promise<CellHealth> {
@@ -89,7 +92,7 @@ export class ProductionCellProvider implements CellProvider {
     if (!operation) {
       throw new Error("Production provider adapter validateRestore is not configured");
     }
-    return operation(this.withScope(context), restoreReference);
+    return operation(this.withScope(context, "backup"), restoreReference);
   }
 
   private assertConfigured(): void {
@@ -117,6 +120,7 @@ export class ProductionCellProvider implements CellProvider {
       | "createSecretReference"
       | "applyBackupPolicy"
       | "bindSignalLoopInstallation",
+    service: ProviderService,
     context: CellProviderContext
   ): Promise<ProviderReference> {
     this.assertConfigured();
@@ -124,18 +128,25 @@ export class ProductionCellProvider implements CellProvider {
     if (!operation) {
       throw new Error(`Production provider adapter ${name} is not configured`);
     }
-    return operation(this.withScope(context));
+    return operation(this.withScope(context, service));
   }
 
-  private async callHealth(name: "healthCheck", context: CellProviderContext): Promise<CellHealth> {
+  private async callHealth(name: "healthCheck", service: ProviderService, context: CellProviderContext): Promise<CellHealth> {
     const operation = this.adapters[name];
     if (!operation) {
       throw new Error(`Production provider adapter ${name} is not configured`);
     }
-    return operation(this.withScope(context));
+    return operation(this.withScope(context, service));
   }
 
-  private withScope(context: CellProviderContext): ProductionProviderAdapterContext {
-    return { ...context, providerScope: this.config };
+  private withScope(context: CellProviderContext, service: ProviderService): ProductionProviderAdapterContext {
+    const endpoint = this.config[`${service}Endpoint`];
+    const credentialReference = this.config[`${service}CredentialReference`];
+    if (!endpoint || !credentialReference) {
+      throw new Error(`Production provider is missing configuration for: ${service}`);
+    }
+    return { ...context, providerScope: { endpoint, credentialReference } };
   }
 }
+
+type ProviderService = "database" | "storage" | "secret" | "backup" | "application" | "signalLoop";

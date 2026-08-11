@@ -49,6 +49,14 @@ export class PrismaPlatformRepository implements PlatformRepository {
     return attempt ? mapAttempt(attempt) : undefined;
   }
 
+  public async findProvisioningAttempt(attemptId: string): Promise<ProvisioningAttemptRecord | undefined> {
+    const attempt = await this.client.provisioningAttempt.findUnique({
+      where: { id: attemptId },
+      include: { actions: { orderBy: { occurredAt: "asc" } } }
+    });
+    return attempt ? mapAttempt(attempt) : undefined;
+  }
+
   public async reserveCustomerCell(request: ProvisioningRequest): Promise<{ cell: CustomerCellRecord; created: boolean }> {
     try {
       const cell = await this.client.customerCell.create({
@@ -85,7 +93,15 @@ export class PrismaPlatformRepository implements PlatformRepository {
     return mapAttempt(attempt);
   }
 
-  public async appendProvisioningAction(attemptId: string, action: ProvisioningAction): Promise<void> {
+  public async claimProvisioningAttempt(attemptId: string): Promise<ProvisioningAttemptRecord | undefined> {
+    const claimed = await this.client.provisioningAttempt.updateMany({
+      where: { id: attemptId, result: "FAILED" },
+      data: { result: "IN_PROGRESS" }
+    });
+    return claimed.count === 1 ? this.findProvisioningAttempt(attemptId) : undefined;
+  }
+
+  public async appendProvisioningAction(attemptId: string, action: ProvisioningAction): Promise<ProvisioningAttemptRecord> {
     await this.client.provisioningAction.create({
       data: {
         attemptId,
@@ -96,10 +112,18 @@ export class PrismaPlatformRepository implements PlatformRepository {
         occurredAt: action.occurredAt
       }
     });
+    const attempt = await this.findProvisioningAttempt(attemptId);
+    if (!attempt) throw new Error(`Unknown provisioning attempt ${attemptId}`);
+    return attempt;
   }
 
-  public async setAttemptResult(attemptId: string, result: ProvisioningResult): Promise<void> {
-    await this.client.provisioningAttempt.update({ where: { id: attemptId }, data: { result } });
+  public async setAttemptResult(attemptId: string, result: ProvisioningResult): Promise<ProvisioningAttemptRecord> {
+    const attempt = await this.client.provisioningAttempt.update({
+      where: { id: attemptId },
+      data: { result },
+      include: { actions: { orderBy: { occurredAt: "asc" } } }
+    });
+    return mapAttempt(attempt);
   }
 
   public async updateCell(cellId: string, update: Partial<CustomerCellRecord>): Promise<CustomerCellRecord> {
@@ -122,6 +146,8 @@ export class PrismaPlatformRepository implements PlatformRepository {
         result: event.result,
         correlationId: event.correlationId,
         reason: event.reason,
+        error: event.error,
+        errorCode: event.errorCode,
         secretReference: event.secretReference,
         occurredAt: event.occurredAt
       }
@@ -162,6 +188,8 @@ export class PrismaPlatformRepository implements PlatformRepository {
       result: event.result as ProvisioningResult,
       actor: event.actor,
       reason: event.reason ?? undefined,
+      error: event.error ?? undefined,
+      errorCode: event.errorCode ?? undefined,
       secretReference: event.secretReference ?? undefined,
       occurredAt: event.occurredAt
     }));

@@ -101,6 +101,8 @@ model ControlPlaneAuditEvent {
   result         ProvisioningResult
   correlationId  String
   reason         String?
+  error          String?
+  errorCode      String?
   secretReference String?
   occurredAt    DateTime     @default(now())
   cell          CustomerCell @relation(fields: [cellId], references: [id], onDelete: Restrict)

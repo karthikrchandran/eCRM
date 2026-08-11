@@ -5,7 +5,7 @@ import { LocalCellProvider } from "./local-driver";
 describe("LocalCellProvider", () => {
   it("produces deterministic opaque references without invoking a vendor", async () => {
     const provider = new LocalCellProvider();
-    const context = { cellId: "cell_ara", cellKey: "ara-global", correlationId: "corr-1" };
+    const context = { cellId: "cell_ara", cellKey: "ara-global", correlationId: "corr-1", idempotencyKey: "idem-1" };
 
     await expect(provider.createDatabase(context)).resolves.toEqual({ reference: "local://database/ara-global" });
     await expect(provider.createStoragePrefix(context)).resolves.toEqual({ reference: "local://storage/ara-global" });

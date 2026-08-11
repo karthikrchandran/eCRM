@@ -34,6 +34,13 @@ describe("CustomerCellProvisioner", () => {
     expect(second.cell.id).toBe(first.cell.id);
     expect(first.cell).toMatchObject({ id: request.cellId, cellKey: request.cellKey });
     expect(second.cell.lifecycleStatus).toBe("ACTIVE");
+    expect(second.attempt.result).toBe("SUCCEEDED");
+    expect(second.attempt.actions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ step: "database", result: "SUCCEEDED" }),
+        expect.objectContaining({ step: "health-check", result: "SUCCEEDED" })
+      ])
+    );
     expect(repository.cells()).toHaveLength(1);
     expect(provider.operationCalls).toEqual({
       database: 1,
@@ -44,6 +51,60 @@ describe("CustomerCellProvisioner", () => {
       signalLoop: 1,
       health: 1
     });
+  });
+
+  it("reuses the same provider resource when recording its result fails", async () => {
+    const repository = createInMemoryPlatformRepository();
+    const appendProvisioningAction = repository.appendProvisioningAction.bind(repository);
+    let rejectedDatabaseResult = false;
+    repository.appendProvisioningAction = async (attemptId, action) => {
+      if (action.step === "database" && action.result === "SUCCEEDED" && !rejectedDatabaseResult) {
+        rejectedDatabaseResult = true;
+        throw new Error("database result persistence unavailable");
+      }
+      return appendProvisioningAction(attemptId, action);
+    };
+    const provider = new IdempotentCountingProvider();
+    const provisioner = new CustomerCellProvisioner(repository, provider);
+
+    const first = await provisioner.provision(request);
+    expect(first.cell.lifecycleStatus).toBe("PROVISIONING_FAILED");
+    const second = await provisioner.provision(request);
+
+    expect(second.cell.lifecycleStatus).toBe("ACTIVE");
+    expect(provider.databaseCalls).toBe(2);
+    expect(provider.databaseCreations).toBe(1);
+    expect(provider.databaseIdempotencyKeys).toEqual([
+      `cell/${request.cellId}/attempt/${first.attempt.id}/step/database`,
+      `cell/${request.cellId}/attempt/${first.attempt.id}/step/database`
+    ]);
+  });
+
+  it("reuses the application resource when updating the cell fails after deployment", async () => {
+    const repository = createInMemoryPlatformRepository();
+    const updateCell = repository.updateCell.bind(repository);
+    let rejectedApplicationUpdate = false;
+    repository.updateCell = async (cellId, update) => {
+      if (update.applicationReference && !rejectedApplicationUpdate) {
+        rejectedApplicationUpdate = true;
+        throw new Error("application cell update unavailable");
+      }
+      return updateCell(cellId, update);
+    };
+    const provider = new IdempotentCountingProvider();
+    const provisioner = new CustomerCellProvisioner(repository, provider);
+
+    const first = await provisioner.provision(request);
+    expect(first.cell.lifecycleStatus).toBe("PROVISIONING_FAILED");
+    const second = await provisioner.provision(request);
+
+    expect(second.cell.lifecycleStatus).toBe("ACTIVE");
+    expect(provider.applicationCalls).toBe(2);
+    expect(provider.applicationCreations).toBe(1);
+    expect(provider.applicationIdempotencyKeys).toEqual([
+      `cell/${request.cellId}/attempt/${first.attempt.id}/step/application`,
+      `cell/${request.cellId}/attempt/${first.attempt.id}/step/application`
+    ]);
   });
 
   it("persists references returned by configured production adapters", async () => {
@@ -134,6 +195,20 @@ describe("CustomerCellProvisioner", () => {
     });
   });
 
+  it("atomically claims a failed attempt so concurrent callers cannot both retry it", async () => {
+    const repository = createInMemoryPlatformRepository();
+    const provider = new RecoveringHealthProvider();
+    const provisioner = new CustomerCellProvisioner(repository, provider);
+
+    const first = await provisioner.provision(request);
+    expect(first.cell.lifecycleStatus).toBe("PROVISIONING_FAILED");
+
+    const retries = await Promise.all([provisioner.provision(request), provisioner.provision(request)]);
+
+    expect(retries.some((outcome) => outcome.cell.lifecycleStatus === "ACTIVE")).toBe(true);
+    expect(provider.operationCalls.health).toBe(2);
+  });
+
   it("records repository persistence failure at the actual step and safely retries it", async () => {
     const repository = createInMemoryPlatformRepository();
     const upsertSignalLoopConnection = repository.upsertSignalLoopConnection.bind(repository);
@@ -152,8 +227,15 @@ describe("CustomerCellProvisioner", () => {
       expect.objectContaining({ step: "signalloop-binding", result: "FAILED", errorCode: "REPOSITORY_PERSISTENCE_FAILED" })
     );
     expect(first.auditEvents).toContainEqual(
-      expect.objectContaining({ action: "signalloop-binding", result: "FAILED", reason: "connection persistence unavailable" })
+      expect.objectContaining({
+        action: "signalloop-binding",
+        result: "FAILED",
+        reason: request.reason,
+        error: "connection persistence unavailable",
+        errorCode: "REPOSITORY_PERSISTENCE_FAILED"
+      })
     );
+    expect(new Set(first.auditEvents.map((event) => event.id)).size).toBe(first.auditEvents.length);
     expect(second.cell.lifecycleStatus).toBe("ACTIVE");
     expect(repository.cells()).toHaveLength(1);
     expect(connectionWrites).toBe(2);
@@ -178,7 +260,34 @@ describe("CustomerCellProvisioner", () => {
         action: "health-check",
         result: "FAILED",
         actor: request.actor,
-        reason: "configured-local-health-failure"
+        reason: request.reason,
+        error: "configured-local-health-failure",
+        errorCode: "HEALTH_CHECK_FAILED"
+      })
+    );
+  });
+
+  it("records an audit persistence failure without replacing the request reason", async () => {
+    const repository = createInMemoryPlatformRepository();
+    const addAuditEvent = repository.addAuditEvent.bind(repository);
+    let auditWrites = 0;
+    repository.addAuditEvent = async (event) => {
+      auditWrites += 1;
+      if (auditWrites === 1) throw new Error("audit store unavailable");
+      await addAuditEvent(event);
+    };
+    const provisioner = new CustomerCellProvisioner(repository, new LocalCellProvider());
+
+    const result = await provisioner.provision(request);
+
+    expect(result.cell.lifecycleStatus).toBe("PROVISIONING_FAILED");
+    expect(result.auditEvents).toContainEqual(
+      expect.objectContaining({
+        action: "database",
+        result: "FAILED",
+        reason: request.reason,
+        error: "audit store unavailable",
+        errorCode: "AUDIT_PERSISTENCE_FAILED"
       })
     );
   });
@@ -277,6 +386,39 @@ class RecoveringHealthProvider extends CountingLocalCellProvider {
     return this.operationCalls.health === 1
       ? { healthy: false, detail: "transient-health-failure" }
       : { healthy: true };
+  }
+}
+
+class IdempotentCountingProvider extends LocalCellProvider {
+  public databaseCalls = 0;
+  public databaseCreations = 0;
+  public databaseIdempotencyKeys: string[] = [];
+  public applicationCalls = 0;
+  public applicationCreations = 0;
+  public applicationIdempotencyKeys: string[] = [];
+  private readonly databaseReferences = new Map<string, { reference: string }>();
+  private readonly applicationReferences = new Map<string, { reference: string; applicationUrl: string }>();
+
+  public override async createDatabase(context: Parameters<LocalCellProvider["createDatabase"]>[0]) {
+    this.databaseCalls += 1;
+    this.databaseIdempotencyKeys.push(context.idempotencyKey);
+    const existing = this.databaseReferences.get(context.idempotencyKey);
+    if (existing) return existing;
+    this.databaseCreations += 1;
+    const created = await super.createDatabase(context);
+    this.databaseReferences.set(context.idempotencyKey, created);
+    return created;
+  }
+
+  public override async deployApplication(context: Parameters<LocalCellProvider["deployApplication"]>[0]) {
+    this.applicationCalls += 1;
+    this.applicationIdempotencyKeys.push(context.idempotencyKey);
+    const existing = this.applicationReferences.get(context.idempotencyKey);
+    if (existing) return existing;
+    this.applicationCreations += 1;
+    const created = await super.deployApplication(context);
+    this.applicationReferences.set(context.idempotencyKey, created);
+    return created;
   }
 }
 

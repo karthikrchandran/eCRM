@@ -82,6 +82,8 @@ CREATE TABLE "ControlPlaneAuditEvent" (
     "result" "ProvisioningResult" NOT NULL,
     "correlationId" TEXT NOT NULL,
     "reason" TEXT,
+    "error" TEXT,
+    "errorCode" TEXT,
     "secretReference" TEXT,
     "occurredAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 

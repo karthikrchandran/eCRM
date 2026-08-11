@@ -49,5 +49,7 @@ describe("platform Prisma migration contract", () => {
     ]) {
       expect(migrationSql).toContain(statement);
     }
+    expect(migrationSql).toContain('"error" TEXT');
+    expect(migrationSql).toContain('"errorCode" TEXT');
   });
 });

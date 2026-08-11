@@ -46,7 +46,7 @@ export interface ProvisioningRequest {
 
 export interface ProvisioningAction {
   step: ProvisioningStep;
-  result: ProvisioningResult;
+  result: ProvisioningResult | "IN_PROGRESS";
   reference?: string;
   errorCode?: string;
   occurredAt: Date;
@@ -71,6 +71,8 @@ export interface ControlPlaneAuditEventRecord {
   result: ProvisioningResult;
   actor: string;
   reason?: string;
+  error?: string;
+  errorCode?: string;
   secretReference?: string;
   occurredAt: Date;
 }

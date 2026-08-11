@@ -19,7 +19,7 @@ describe("ProductionCellProvider", () => {
       config: { databaseEndpoint: "https://database.example.test" },
       adapters
     });
-    const context = { cellId: "cell_ara", cellKey: "ara-global", correlationId: "corr-1" };
+    const context = { cellId: "cell_ara", cellKey: "ara-global", correlationId: "corr-1", idempotencyKey: "idem-1" };
 
     await expect(provider.createDatabase(context)).rejects.toThrow(
       /database.*storage.*secret.*backup/i
@@ -51,7 +51,7 @@ describe("ProductionCellProvider", () => {
       validateRestore: vi.fn(async () => ({ healthy: true }))
     };
     const provider = new ProductionCellProvider({ config: completeConfig(), adapters });
-    const context = { cellId: "cell_ara", cellKey: "ara-global", correlationId: "corr-1" };
+    const context = { cellId: "cell_ara", cellKey: "ara-global", correlationId: "corr-1", idempotencyKey: "idem-1" };
 
     await provider.createDatabase(context);
     await provider.createStoragePrefix(context);
@@ -63,16 +63,25 @@ describe("ProductionCellProvider", () => {
     await provider.destroy(context);
     await provider.validateRestore(context, "restore_ara");
 
-    expect(adapters.createDatabase).toHaveBeenCalledWith(expect.objectContaining({ providerScope: completeConfig() }));
-    const receivedContexts = Object.values(adapters).map(
-      (adapter) => (adapter as unknown as { mock: { calls: Array<[unknown, ...unknown[]]> } }).mock.calls[0]?.[0]
-    );
-    for (let index = 0; index < receivedContexts.length; index += 1) {
-      expect(Object.values(adapters)[index]).toHaveBeenCalledTimes(1);
-      const receivedContext = receivedContexts[index];
-      expect(receivedContext).toEqual(expect.objectContaining({ providerScope: completeConfig() }));
-    }
+    const expectedScopes = [
+      serviceScope("database"),
+      serviceScope("storage"),
+      serviceScope("secret"),
+      serviceScope("backup"),
+      serviceScope("application"),
+      serviceScope("signalLoop"),
+      serviceScope("application"),
+      serviceScope("application"),
+      serviceScope("backup")
+    ];
+    const receivedContexts = Object.values(adapters).map((adapter, index) => {
+      expect(adapter).toHaveBeenCalledTimes(1);
+      const received = (adapter as unknown as { mock: { calls: Array<[Record<string, unknown>, ...unknown[]]> } }).mock.calls[0]?.[0];
+      expect(received).toEqual({ ...context, providerScope: expectedScopes[index] });
+      return received;
+    });
     expect(receivedContexts[0]).not.toHaveProperty("databaseCredentialValue");
+    expect(receivedContexts[0]).not.toHaveProperty("storageEndpoint");
   });
 });
 
@@ -90,5 +99,13 @@ function completeConfig() {
     applicationCredentialReference: "vault://platform/application",
     signalLoopEndpoint: "https://signalloop.example.test",
     signalLoopCredentialReference: "vault://platform/signalloop"
+  };
+}
+
+function serviceScope(service: "database" | "storage" | "secret" | "backup" | "application" | "signalLoop") {
+  const config = completeConfig();
+  return {
+    endpoint: config[`${service}Endpoint`],
+    credentialReference: config[`${service}CredentialReference`]
   };
 }
