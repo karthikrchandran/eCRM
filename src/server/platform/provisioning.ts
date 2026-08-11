@@ -18,6 +18,8 @@ export interface PlatformRepository {
   reserveProvisioningAttempt(cellId: string, idempotencyKey: string, correlationId: string): Promise<ProvisioningAttemptRecord>;
   claimProvisioningAttempt(attemptId: string): Promise<ProvisioningAttemptRecord | undefined>;
   appendProvisioningAction(attemptId: string, action: ProvisioningAction): Promise<ProvisioningAttemptRecord>;
+  recordProvisioningResult(input: ProvisioningResultEvidence): Promise<ProvisioningAttemptRecord>;
+  finalizeProvisioningSuccess(input: ProvisioningFinalization): Promise<{ cell: CustomerCellRecord; attempt: ProvisioningAttemptRecord }>;
   setAttemptResult(attemptId: string, result: ProvisioningResult): Promise<ProvisioningAttemptRecord>;
   updateCell(cellId: string, update: Partial<CustomerCellRecord>): Promise<CustomerCellRecord>;
   addAuditEvent(event: ControlPlaneAuditEventRecord): Promise<void>;
@@ -40,9 +42,29 @@ export function createInMemoryPlatformRepository(): InMemoryPlatformRepository {
   const attempts = new Map<string, ProvisioningAttemptRecord>();
   const auditEvents: ControlPlaneAuditEventRecord[] = [];
   let nextId = 1;
+  let transactionQueue = Promise.resolve();
 
   const repository: InMemoryPlatformRepository = {
-    transaction: async <T>(operation: (repository: PlatformRepository) => Promise<T>) => operation(repository),
+    transaction: async <T>(operation: (repository: PlatformRepository) => Promise<T>) => {
+      const execute = async () => {
+        const cellSnapshot = [...cells.entries()].map(([id, cell]) => [id, { ...cell }] as const);
+        const attemptSnapshot = [...attempts.entries()].map(([id, attempt]) => [id, { ...attempt, actions: attempt.actions.map((action) => ({ ...action })) }] as const);
+        const auditSnapshot = auditEvents.map((event) => ({ ...event }));
+        try {
+          return await operation(repository);
+        } catch (error) {
+          cells.clear();
+          cellSnapshot.forEach(([id, cell]) => cells.set(id, cell));
+          attempts.clear();
+          attemptSnapshot.forEach(([id, attempt]) => attempts.set(id, attempt));
+          auditEvents.splice(0, auditEvents.length, ...auditSnapshot);
+          throw error;
+        }
+      };
+      const result = transactionQueue.then(execute, execute);
+      transactionQueue = result.then(() => undefined, () => undefined);
+      return result;
+    },
     findCellByIdentity: async (cellId, cellKey) => {
       const cell = cells.get(cellId);
       return cell?.cellKey === cellKey ? cell : undefined;
@@ -105,6 +127,18 @@ export function createInMemoryPlatformRepository(): InMemoryPlatformRepository {
       attempt.updatedAt = new Date();
       return attempt;
     },
+    recordProvisioningResult: async ({ attemptId, action, auditEvent }) => repository.transaction(async (transactionRepository) => {
+      const attempt = await transactionRepository.appendProvisioningAction(attemptId, action);
+      await transactionRepository.addAuditEvent(auditEvent);
+      return attempt;
+    }),
+    finalizeProvisioningSuccess: async ({ cellId, attemptId, action, auditEvent }) => repository.transaction(async (transactionRepository) => {
+      await transactionRepository.appendProvisioningAction(attemptId, action);
+      await transactionRepository.addAuditEvent(auditEvent);
+      const attempt = await transactionRepository.setAttemptResult(attemptId, "SUCCEEDED");
+      const cell = await transactionRepository.updateCell(cellId, { lifecycleStatus: "ACTIVE" });
+      return { cell, attempt };
+    }),
     setAttemptResult: async (attemptId, result) => {
       const attempt = requiredAttempt(attempts, attemptId);
       attempt.result = result;
@@ -217,10 +251,13 @@ export class CustomerCellProvisioner {
       reservation.attempt = await this.claimStep(reservation.attempt, "health-check");
       const health = await this.healthCheck(this.stepContext(context, reservation.attempt.id, "health-check"));
       if (!health.healthy) throw new ProvisioningFailure("health-check", "HEALTH_CHECK_FAILED", health.detail ?? "health-check-failed");
-      reservation.attempt = await this.record(this.repository, reservation.cell.id, reservation.attempt.id, request, "health-check", "SUCCEEDED", undefined, undefined, undefined, secretReference);
-      reservation.attempt = await this.repository.setAttemptResult(reservation.attempt.id, "SUCCEEDED");
-      const cell = await this.repository.updateCell(reservation.cell.id, { lifecycleStatus: "ACTIVE" });
-      return this.outcome(cell, reservation.attempt);
+      const finalization = await this.persist("health-check", () => this.repository.finalizeProvisioningSuccess({
+        cellId: reservation.cell.id,
+        attemptId: reservation.attempt.id,
+        ...this.resultEvidence(reservation.cell.id, reservation.attempt.id, request, "health-check", "SUCCEEDED", undefined, undefined, undefined, secretReference)
+      }));
+      reservation.attempt = finalization.attempt;
+      return this.outcome(finalization.cell, reservation.attempt);
     } catch (error) {
       const failure = error instanceof ProvisioningFailure
         ? error
@@ -319,10 +356,29 @@ export class CustomerCellProvisioner {
     errorReason?: string,
     secretReference?: string
   ): Promise<ProvisioningAttemptRecord> {
-    const occurredAt = new Date();
+    const evidence = this.resultEvidence(cellId, attemptId, request, step, result, reference, errorCode, errorReason, secretReference);
     try {
-      const attempt = await repository.appendProvisioningAction(attemptId, { step, result, reference, errorCode, occurredAt });
-      await repository.addAuditEvent({
+      return await repository.recordProvisioningResult({ attemptId, ...evidence });
+    } catch (error) {
+      throw new ProvisioningFailure(step, "AUDIT_PERSISTENCE_FAILED", errorMessage(error));
+    }
+  }
+
+  private resultEvidence(
+    cellId: string,
+    attemptId: string,
+    request: ProvisioningRequest,
+    step: ProvisioningStep,
+    result: ProvisioningResult,
+    reference?: string,
+    errorCode?: string,
+    errorReason?: string,
+    secretReference?: string
+  ): Pick<ProvisioningResultEvidence, "action" | "auditEvent"> {
+    const occurredAt = new Date();
+    return {
+      action: { step, result, reference, errorCode, occurredAt },
+      auditEvent: {
         id: `audit_${cellId}_${attemptId}_${step}_${result}_${occurredAt.getTime()}`,
         cellId,
         correlationId: request.correlationId,
@@ -334,19 +390,8 @@ export class CustomerCellProvisioner {
         errorCode,
         secretReference: secretReference ?? (step === "secret-reference" ? reference : undefined),
         occurredAt
-      });
-      return attempt;
-    } catch (error) {
-      const currentAttempt = await repository.findProvisioningAttempt(attemptId);
-      const actionWasPersisted = currentAttempt?.actions.some((action) =>
-        action.step === step && action.result === result && action.occurredAt.getTime() === occurredAt.getTime()
-      );
-      throw new ProvisioningFailure(
-        step,
-        actionWasPersisted ? "AUDIT_PERSISTENCE_FAILED" : "REPOSITORY_PERSISTENCE_FAILED",
-        errorMessage(error)
-      );
-    }
+      }
+    };
   }
 
   private async outcome(cell: CustomerCellRecord, attempt: ProvisioningAttemptRecord): Promise<ProvisioningOutcome> {
@@ -365,6 +410,16 @@ interface ProvisioningReservation {
   cell: CustomerCellRecord;
   attempt: ProvisioningAttemptRecord;
   shouldRun: boolean;
+}
+
+export interface ProvisioningResultEvidence {
+  attemptId: string;
+  action: ProvisioningAction;
+  auditEvent: ControlPlaneAuditEventRecord;
+}
+
+export interface ProvisioningFinalization extends ProvisioningResultEvidence {
+  cellId: string;
 }
 
 class ProvisioningFailure extends Error {

@@ -8,7 +8,7 @@ import type {
   ProvisioningRequest,
   ProvisioningResult
 } from "./types";
-import type { PlatformRepository } from "./provisioning";
+import type { PlatformRepository, ProvisioningFinalization, ProvisioningResultEvidence } from "./provisioning";
 
 declare global {
   var platformDatabase: PrismaClient | undefined;
@@ -58,25 +58,21 @@ export class PrismaPlatformRepository implements PlatformRepository {
   }
 
   public async reserveCustomerCell(request: ProvisioningRequest): Promise<{ cell: CustomerCellRecord; created: boolean }> {
-    try {
-      const cell = await this.client.customerCell.create({
-        data: {
-          id: request.cellId,
-          cellKey: request.cellKey,
-          legalName: request.legalName,
-          displayName: request.displayName,
-          region: request.region,
-          desiredSubdomain: request.desiredSubdomain,
-          lifecycleStatus: "PROVISIONING"
-        }
-      });
-      return { cell: mapCell(cell), created: true };
-    } catch (error) {
-      if (!isUniqueConstraintError(error)) throw error;
-      const cell = await this.client.customerCell.findFirst({ where: { id: request.cellId, cellKey: request.cellKey } });
-      if (!cell) throw new Error("Customer cell identity mismatch");
-      return { cell: mapCell(cell), created: false };
-    }
+    const reservation = await this.client.customerCell.createMany({
+      data: {
+        id: request.cellId,
+        cellKey: request.cellKey,
+        legalName: request.legalName,
+        displayName: request.displayName,
+        region: request.region,
+        desiredSubdomain: request.desiredSubdomain,
+        lifecycleStatus: "PROVISIONING"
+      },
+      skipDuplicates: true
+    });
+    const cell = await this.client.customerCell.findFirst({ where: { id: request.cellId, cellKey: request.cellKey } });
+    if (!cell) throw new Error("Customer cell identity mismatch");
+    return { cell: mapCell(cell), created: reservation.count === 1 };
   }
 
   public async reserveProvisioningAttempt(
@@ -115,6 +111,27 @@ export class PrismaPlatformRepository implements PlatformRepository {
     const attempt = await this.findProvisioningAttempt(attemptId);
     if (!attempt) throw new Error(`Unknown provisioning attempt ${attemptId}`);
     return attempt;
+  }
+
+  public async recordProvisioningResult({ attemptId, action, auditEvent }: ProvisioningResultEvidence): Promise<ProvisioningAttemptRecord> {
+    return this.transaction(async (repository) => {
+      const attempt = await repository.appendProvisioningAction(attemptId, action);
+      await repository.addAuditEvent(auditEvent);
+      return attempt;
+    });
+  }
+
+  public async finalizeProvisioningSuccess({ cellId, attemptId, action, auditEvent }: ProvisioningFinalization): Promise<{
+    cell: CustomerCellRecord;
+    attempt: ProvisioningAttemptRecord;
+  }> {
+    return this.transaction(async (repository) => {
+      await repository.appendProvisioningAction(attemptId, action);
+      await repository.addAuditEvent(auditEvent);
+      const attempt = await repository.setAttemptResult(attemptId, "SUCCEEDED");
+      const cell = await repository.updateCell(cellId, { lifecycleStatus: "ACTIVE" });
+      return { cell, attempt };
+    });
   }
 
   public async setAttemptResult(attemptId: string, result: ProvisioningResult): Promise<ProvisioningAttemptRecord> {
@@ -253,8 +270,4 @@ function mapAttempt(attempt: {
       occurredAt: action.occurredAt
     }))
   };
-}
-
-function isUniqueConstraintError(error: unknown): boolean {
-  return typeof error === "object" && error !== null && "code" in error && error.code === "P2002";
 }
