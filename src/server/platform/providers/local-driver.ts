@@ -1,3 +1,4 @@
+import { assertProviderContextActive } from "./types";
 import type { ApplicationProviderResult, CellHealth, CellProvider, CellProviderContext, ProviderReference } from "./types";
 
 export class LocalCellProvider implements CellProvider {
@@ -27,6 +28,7 @@ export class LocalCellProvider implements CellProvider {
   }
 
   public async deployApplication(context: CellProviderContext): Promise<ApplicationProviderResult> {
+    assertProviderContextActive(context);
     return {
       ...this.reference("application", context),
       applicationUrl: `http://${context.cellKey}.localhost`
@@ -38,12 +40,12 @@ export class LocalCellProvider implements CellProvider {
   }
 
   public async healthCheck(context: CellProviderContext): Promise<CellHealth> {
-    void context;
+    assertProviderContextActive(context);
     return this.health === "healthy" ? { healthy: true } : { healthy: false, detail: "configured-local-health-failure" };
   }
 
   public async destroy(context: CellProviderContext): Promise<void> {
-    void context;
+    assertProviderContextActive(context);
     // Local provisioning is deterministic metadata generation and makes no vendor calls.
   }
 
@@ -53,6 +55,7 @@ export class LocalCellProvider implements CellProvider {
   }
 
   private reference(resource: string, context: CellProviderContext): ProviderReference {
+    assertProviderContextActive(context);
     return { reference: `local://${resource}/${context.cellKey}` };
   }
 }

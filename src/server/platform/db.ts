@@ -104,6 +104,19 @@ export class PrismaPlatformRepository implements PlatformRepository {
     return claimed.count === 1 ? this.findProvisioningAttempt(attemptId) : undefined;
   }
 
+  public async heartbeatProvisioningAttempt(attemptId: string, leaseVersion: number): Promise<ProvisioningAttemptRecord> {
+    try {
+      const attempt = await this.client.provisioningAttempt.update({
+        where: { id_leaseVersion: { id: attemptId, leaseVersion }, result: "IN_PROGRESS" },
+        data: { updatedAt: new Date() },
+        include: { actions: { orderBy: { occurredAt: "asc" } } }
+      });
+      return mapAttempt(attempt);
+    } catch (error) {
+      throw leaseLost(attemptId, error);
+    }
+  }
+
   public async appendProvisioningAction(
     attemptId: string,
     leaseVersion: number,

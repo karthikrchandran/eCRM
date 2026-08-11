@@ -5,6 +5,10 @@ export interface CellProviderContext {
   cellKey: string;
   correlationId: string;
   idempotencyKey: string;
+  leaseVersion: number;
+  fencingToken: string;
+  deadline: Date;
+  signal: AbortSignal;
 }
 
 export interface ProviderReference {
@@ -33,3 +37,18 @@ export interface CellProvider {
 }
 
 export type ProviderOperation = Exclude<ProvisioningStep, "health-check"> | "destroy" | "restore-validation";
+
+export function assertProviderContextActive(context: CellProviderContext): void {
+  if (!context.idempotencyKey.trim()) throw new Error("Provider idempotency key is required");
+  if (!Number.isSafeInteger(context.leaseVersion) || context.leaseVersion < 1) {
+    throw new Error("Provider lease version must be a positive integer");
+  }
+  if (!context.fencingToken.trim()) throw new Error("Provider fencing token is required");
+  if (!(context.deadline instanceof Date) || !Number.isFinite(context.deadline.getTime())) {
+    throw new Error("Provider deadline is invalid");
+  }
+  if (context.signal.aborted) {
+    throw context.signal.reason instanceof Error ? context.signal.reason : new Error("Provider operation aborted");
+  }
+  if (context.deadline.getTime() <= Date.now()) throw new Error("Provider operation deadline exceeded");
+}

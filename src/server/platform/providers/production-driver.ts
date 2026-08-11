@@ -1,3 +1,4 @@
+import { assertProviderContextActive } from "./types";
 import type { ApplicationProviderResult, CellHealth, CellProvider, CellProviderContext, ProviderReference } from "./types";
 
 export interface ProductionProviderConfig {
@@ -22,6 +23,16 @@ export interface ProductionProviderAdapterContext extends CellProviderContext {
   }>;
 }
 
+export interface ProductionProviderSafetyContract {
+  idempotency: "provider-enforced";
+  fencing: "provider-enforced";
+  cancellation: "abort-signal";
+}
+
+/**
+ * Every adapter must deduplicate by idempotencyKey, reject stale fencingToken/leaseVersion
+ * values at the provider boundary, and stop work when signal is aborted or deadline passes.
+ */
 export interface ProductionProviderAdapters {
   createDatabase?: (context: ProductionProviderAdapterContext) => Promise<ProviderReference>;
   createStoragePrefix?: (context: ProductionProviderAdapterContext) => Promise<ProviderReference>;
@@ -37,10 +48,16 @@ export interface ProductionProviderAdapters {
 export class ProductionCellProvider implements CellProvider {
   private readonly config: ProductionProviderConfig;
   private readonly adapters: ProductionProviderAdapters;
+  private readonly safety: ProductionProviderSafetyContract;
 
-  public constructor(options: { config: ProductionProviderConfig; adapters: ProductionProviderAdapters }) {
+  public constructor(options: {
+    config: ProductionProviderConfig;
+    adapters: ProductionProviderAdapters;
+    safety: ProductionProviderSafetyContract;
+  }) {
     this.config = options.config;
     this.adapters = options.adapters;
+    this.safety = options.safety;
   }
 
   public async createDatabase(context: CellProviderContext): Promise<ProviderReference> {
@@ -96,6 +113,11 @@ export class ProductionCellProvider implements CellProvider {
   }
 
   private assertConfigured(): void {
+    if (this.safety?.idempotency !== "provider-enforced"
+      || this.safety?.fencing !== "provider-enforced"
+      || this.safety?.cancellation !== "abort-signal") {
+      throw new Error("Production provider adapters must declare the provider-side safety contract");
+    }
     const required: Array<[string, keyof ProductionProviderConfig, keyof ProductionProviderConfig]> = [
       ["database", "databaseEndpoint", "databaseCredentialReference"],
       ["storage", "storageEndpoint", "storageCredentialReference"],
@@ -140,6 +162,7 @@ export class ProductionCellProvider implements CellProvider {
   }
 
   private withScope(context: CellProviderContext, service: ProviderService): ProductionProviderAdapterContext {
+    assertProviderContextActive(context);
     const endpoint = this.config[`${service}Endpoint`];
     const credentialReference = this.config[`${service}CredentialReference`];
     if (!endpoint || !credentialReference) {

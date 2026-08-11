@@ -3,6 +3,17 @@ import { describe, expect, it, vi } from "vitest";
 import { ProductionCellProvider } from "./production-driver";
 
 describe("ProductionCellProvider", () => {
+  it("fails closed when adapters do not declare provider-side deduplication and fencing", async () => {
+    const createDatabase = vi.fn(async () => ({ reference: "database-ref" }));
+    const provider = new ProductionCellProvider({
+      config: completeConfig(),
+      adapters: { createDatabase }
+    } as unknown as ConstructorParameters<typeof ProductionCellProvider>[0]);
+
+    await expect(provider.createDatabase(providerContext())).rejects.toThrow(/provider-side safety contract/i);
+    expect(createDatabase).not.toHaveBeenCalled();
+  });
+
   it("rejects incomplete production configuration before any adapter operation", async () => {
     const adapters = {
       createDatabase: vi.fn(async () => ({ reference: "database" })),
@@ -17,9 +28,10 @@ describe("ProductionCellProvider", () => {
     };
     const provider = new ProductionCellProvider({
       config: { databaseEndpoint: "https://database.example.test" },
-      adapters
+      adapters,
+      safety: providerSafetyContract()
     });
-    const context = { cellId: "cell_ara", cellKey: "ara-global", correlationId: "corr-1", idempotencyKey: "idem-1" };
+    const context = providerContext();
 
     await expect(provider.createDatabase(context)).rejects.toThrow(
       /database.*storage.*secret.*backup/i
@@ -50,8 +62,8 @@ describe("ProductionCellProvider", () => {
       destroy: vi.fn(async () => undefined),
       validateRestore: vi.fn(async () => ({ healthy: true }))
     };
-    const provider = new ProductionCellProvider({ config: completeConfig(), adapters });
-    const context = { cellId: "cell_ara", cellKey: "ara-global", correlationId: "corr-1", idempotencyKey: "idem-1" };
+    const provider = new ProductionCellProvider({ config: completeConfig(), adapters, safety: providerSafetyContract() });
+    const context = providerContext();
 
     await provider.createDatabase(context);
     await provider.createStoragePrefix(context);
@@ -99,6 +111,27 @@ function completeConfig() {
     applicationCredentialReference: "vault://platform/application",
     signalLoopEndpoint: "https://signalloop.example.test",
     signalLoopCredentialReference: "vault://platform/signalloop"
+  };
+}
+
+function providerContext() {
+  return {
+    cellId: "cell_ara",
+    cellKey: "ara-global",
+    correlationId: "corr-1",
+    idempotencyKey: "idem-1",
+    leaseVersion: 7,
+    fencingToken: "attempt/attempt_1/lease/7",
+    deadline: new Date(Date.now() + 60_000),
+    signal: new AbortController().signal
+  };
+}
+
+function providerSafetyContract() {
+  return {
+    idempotency: "provider-enforced" as const,
+    fencing: "provider-enforced" as const,
+    cancellation: "abort-signal" as const
   };
 }
 

@@ -18,6 +18,7 @@ export interface PlatformRepository {
   reserveCustomerCell(request: ProvisioningRequest): Promise<{ cell: CustomerCellRecord; created: boolean }>;
   reserveProvisioningAttempt(cellId: string, idempotencyKey: string, correlationId: string): Promise<ProvisioningAttemptRecord>;
   claimProvisioningAttempt(attemptId: string, staleBefore: Date): Promise<ProvisioningAttemptRecord | undefined>;
+  heartbeatProvisioningAttempt(attemptId: string, leaseVersion: number): Promise<ProvisioningAttemptRecord>;
   appendProvisioningAction(attemptId: string, leaseVersion: number, action: ProvisioningAction): Promise<ProvisioningAttemptRecord>;
   recordProvisioningResult(input: ProvisioningResultEvidence): Promise<ProvisioningAttemptRecord>;
   finalizeProvisioningSuccess(input: ProvisioningFinalization): Promise<{ cell: CustomerCellRecord; attempt: ProvisioningAttemptRecord }>;
@@ -42,6 +43,8 @@ export interface InMemoryPlatformRepository extends PlatformRepository {
 }
 
 const PROVISIONING_CLAIM_LEASE_MS = 5 * 60 * 1000;
+const PROVISIONING_HEARTBEAT_MS = 60 * 1000;
+const PROVIDER_OPERATION_TIMEOUT_MS = 15 * 60 * 1000;
 
 export function createInMemoryPlatformRepository(): InMemoryPlatformRepository {
   const cells = new Map<string, CustomerCellRecord>();
@@ -136,6 +139,11 @@ export function createInMemoryPlatformRepository(): InMemoryPlatformRepository {
       attempts.set(attemptId, claimedAttempt);
       return claimedAttempt;
     },
+    heartbeatProvisioningAttempt: async (attemptId, leaseVersion) => {
+      const attempt = requiredLease(attempts, attemptId, leaseVersion);
+      attempt.updatedAt = new Date();
+      return attempt;
+    },
     appendProvisioningAction: async (attemptId, leaseVersion, action) => {
       const attempt = requiredLease(attempts, attemptId, leaseVersion);
       attempt.actions.push(action);
@@ -223,7 +231,7 @@ export class CustomerCellProvisioner {
 
     if (!reservation.shouldRun) return this.outcome(reservation.cell, reservation.attempt);
 
-    const context: Omit<CellProviderContext, "idempotencyKey"> = {
+    const context: ProviderContextBase = {
       cellId: reservation.cell.id,
       cellKey: reservation.cell.cellKey,
       correlationId: request.correlationId
@@ -301,7 +309,7 @@ export class CustomerCellProvisioner {
 
       currentStep = "health-check";
       reservation.attempt = await this.claimStep(reservation.attempt, "health-check");
-      const health = await this.healthCheck(this.stepContext(context, reservation.attempt.id, "health-check"));
+      const health = await this.healthCheck(reservation.attempt, context);
       if (!health.healthy) throw new ProvisioningFailure("health-check", "HEALTH_CHECK_FAILED", health.detail ?? "health-check-failed");
       let finalization: { cell: CustomerCellRecord; attempt: ProvisioningAttemptRecord };
       try {
@@ -355,7 +363,7 @@ export class CustomerCellProvisioner {
 
   private async runStep<T extends ProviderReference>(
     reservation: ProvisioningReservation,
-    context: Omit<CellProviderContext, "idempotencyKey">,
+    context: ProviderContextBase,
     request: ProvisioningRequest,
     step: Exclude<ProvisioningStep, "health-check">,
     operation: (context: CellProviderContext) => Promise<T>
@@ -363,8 +371,9 @@ export class CustomerCellProvisioner {
     reservation.attempt = await this.claimStep(reservation.attempt, step);
     let resource: T;
     try {
-      resource = await operation(this.stepContext(context, reservation.attempt.id, step));
+      resource = await this.callProvider(reservation.attempt, context, step, operation);
     } catch (error) {
+      if (error instanceof ProvisioningLeaseLostError || error instanceof ProvisioningFailure) throw error;
       throw new ProvisioningFailure(step, "PROVIDER_OPERATION_FAILED", errorMessage(error));
     }
     reservation.attempt = await this.record(
@@ -382,7 +391,7 @@ export class CustomerCellProvisioner {
 
   private async resourceFor<T extends ProviderReference>(
     reservation: ProvisioningReservation,
-    context: Omit<CellProviderContext, "idempotencyKey">,
+    context: ProviderContextBase,
     request: ProvisioningRequest,
     step: Exclude<ProvisioningStep, "health-check">,
     operation: (context: CellProviderContext) => Promise<T>
@@ -391,11 +400,58 @@ export class CustomerCellProvisioner {
     return reference ? ({ reference } as T) : this.runStep(reservation, context, request, step, operation);
   }
 
-  private async healthCheck(context: CellProviderContext) {
+  private async healthCheck(attempt: ProvisioningAttemptRecord, context: ProviderContextBase) {
     try {
-      return await this.provider.healthCheck(context);
+      return await this.callProvider(attempt, context, "health-check", (stepContext) => this.provider.healthCheck(stepContext));
     } catch (error) {
+      if (error instanceof ProvisioningLeaseLostError || error instanceof ProvisioningFailure) throw error;
       throw new ProvisioningFailure("health-check", "HEALTH_CHECK_FAILED", errorMessage(error));
+    }
+  }
+
+  private async callProvider<T>(
+    attempt: ProvisioningAttemptRecord,
+    context: ProviderContextBase,
+    step: ProvisioningStep,
+    operation: (context: CellProviderContext) => Promise<T>
+  ): Promise<T> {
+    const controller = new AbortController();
+    const deadline = new Date(Date.now() + PROVIDER_OPERATION_TIMEOUT_MS);
+    let active = true;
+    let heartbeatInFlight = false;
+    let rejectGuard!: (error: unknown) => void;
+    const guard = new Promise<never>((_resolve, reject) => {
+      rejectGuard = reject;
+    });
+    const failGuard = (error: unknown) => {
+      if (!active) return;
+      controller.abort(error);
+      rejectGuard(error);
+    };
+    const heartbeat = setInterval(() => {
+      if (!active || heartbeatInFlight) return;
+      heartbeatInFlight = true;
+      void this.repository.heartbeatProvisioningAttempt(attempt.id, attempt.leaseVersion)
+        .catch((error: unknown) => {
+          failGuard(error instanceof ProvisioningLeaseLostError
+            ? error
+            : new ProvisioningFailure(step, "REPOSITORY_PERSISTENCE_FAILED", errorMessage(error)));
+        })
+        .finally(() => {
+          heartbeatInFlight = false;
+        });
+    }, PROVISIONING_HEARTBEAT_MS);
+    const timeout = setTimeout(() => {
+      failGuard(new ProvisioningFailure(step, "PROVIDER_OPERATION_FAILED", `Provider operation deadline exceeded for ${step}`));
+    }, PROVIDER_OPERATION_TIMEOUT_MS);
+
+    try {
+      const providerCall = Promise.resolve().then(() => operation(this.stepContext(context, attempt, step, controller.signal, deadline)));
+      return await Promise.race([providerCall, guard]);
+    } finally {
+      active = false;
+      clearInterval(heartbeat);
+      clearTimeout(timeout);
     }
   }
 
@@ -408,13 +464,19 @@ export class CustomerCellProvisioner {
   }
 
   private stepContext(
-    context: Omit<CellProviderContext, "idempotencyKey">,
-    attemptId: string,
-    step: ProvisioningStep
+    context: ProviderContextBase,
+    attempt: ProvisioningAttemptRecord,
+    step: ProvisioningStep,
+    signal: AbortSignal,
+    deadline: Date
   ): CellProviderContext {
     return {
       ...context,
-      idempotencyKey: `cell/${context.cellId}/attempt/${attemptId}/step/${step}`
+      idempotencyKey: `cell/${context.cellId}/attempt/${attempt.id}/step/${step}`,
+      leaseVersion: attempt.leaseVersion,
+      fencingToken: `attempt/${attempt.id}/lease/${attempt.leaseVersion}`,
+      signal,
+      deadline
     };
   }
 
@@ -524,6 +586,8 @@ interface ProvisioningReservation {
   attempt: ProvisioningAttemptRecord;
   shouldRun: boolean;
 }
+
+type ProviderContextBase = Pick<CellProviderContext, "cellId" | "cellKey" | "correlationId">;
 
 export interface ProvisioningResultEvidence {
   attemptId: string;

@@ -7,7 +7,7 @@ import {
   CustomerCellProvisioner,
   type PlatformRepository
 } from "./provisioning";
-import type { ProvisioningAction } from "./types";
+import { ProvisioningLeaseLostError, type ProvisioningAction } from "./types";
 
 const request = {
   cellId: "cell_ara_global",
@@ -126,7 +126,8 @@ describe("CustomerCellProvisioner", () => {
           deployApplication: async () => ({ reference: "application://ara", applicationUrl: "https://ara.example.test" }),
           bindSignalLoopInstallation: async () => ({ reference: "signalloop://ara" }),
           healthCheck: async () => ({ healthy: true })
-        }
+        },
+        safety: productionProviderSafetyContract()
       })
     );
 
@@ -307,6 +308,62 @@ describe("CustomerCellProvisioner", () => {
     expect(takeoverWorker.auditEvents.filter((event) => event.action === "storage")).toHaveLength(1);
     expect(attempt?.actions.some((action) => action.result === "FAILED")).toBe(false);
     expect(takeoverWorker.cell.lifecycleStatus).toBe("ACTIVE");
+  });
+
+  it("heartbeats a long-running provider call so another worker cannot take over its lease", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-11T12:00:00Z"));
+    const repository = createInMemoryPlatformRepository();
+    const provider = new ControlledDatabaseProvider();
+    const provisioner = new CustomerCellProvisioner(repository, provider);
+
+    const worker = provisioner.provision(request);
+    await provider.databaseStarted;
+    await vi.advanceTimersByTimeAsync(5 * 60 * 1000);
+
+    const observer = await provisioner.provision(request);
+    expect(observer.attempt.result).toBe("IN_PROGRESS");
+    expect(provider.databaseContexts).toHaveLength(1);
+
+    provider.releaseDatabase();
+    const completed = await worker;
+    expect(completed.cell.lifecycleStatus).toBe("ACTIVE");
+  });
+
+  it("aborts a provider call after lease loss and prevents its stale continuation from persisting", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-11T12:00:00Z"));
+    const repository = createInMemoryPlatformRepository();
+    const heartbeatProvisioningAttempt = repository.heartbeatProvisioningAttempt.bind(repository);
+    repository.heartbeatProvisioningAttempt = async (attemptId, leaseVersion) => {
+      const takeover = await repository.claimProvisioningAttempt(attemptId, new Date("9999-12-31T23:59:59Z"));
+      expect(takeover?.leaseVersion).toBe(leaseVersion + 1);
+      throw new ProvisioningLeaseLostError(attemptId);
+    };
+    const provider = new ControlledDatabaseProvider();
+    const provisioner = new CustomerCellProvisioner(repository, provider);
+
+    const staleWorker = provisioner.provision(request);
+    await provider.databaseStarted;
+    await vi.advanceTimersByTimeAsync(60_000);
+    await staleWorker;
+
+    const takenOverAttempt = await repository.findLatestAttemptForCell(request.cellId);
+    expect(provider.databaseContexts[0]?.signal.aborted).toBe(true);
+    expect(takenOverAttempt?.actions).not.toContainEqual(expect.objectContaining({ step: "database", result: "SUCCEEDED" }));
+    expect(provider.storageCalls).toBe(0);
+
+    repository.heartbeatProvisioningAttempt = heartbeatProvisioningAttempt;
+    vi.setSystemTime(new Date("2026-08-11T12:06:00Z"));
+    const takeoverWorker = await provisioner.provision(request);
+
+    expect(takeoverWorker.cell.lifecycleStatus).toBe("ACTIVE");
+    expect(provider.storageCalls).toBe(1);
+    expect(provider.databaseContexts.map((context) => context.idempotencyKey)).toEqual([
+      `cell/${request.cellId}/attempt/${takeoverWorker.attempt.id}/step/database`,
+      `cell/${request.cellId}/attempt/${takeoverWorker.attempt.id}/step/database`
+    ]);
+    expect(provider.databaseContexts[0]?.fencingToken).not.toBe(provider.databaseContexts[1]?.fencingToken);
   });
 
   it("returns success when finalization committed but its acknowledgement was lost", async () => {
@@ -570,6 +627,42 @@ class IdempotentCountingProvider extends LocalCellProvider {
   }
 }
 
+class ControlledDatabaseProvider extends LocalCellProvider {
+  public readonly databaseContexts: Array<Parameters<LocalCellProvider["createDatabase"]>[0]> = [];
+  public storageCalls = 0;
+  public readonly databaseStarted: Promise<void>;
+  private signalDatabaseStarted!: () => void;
+  private releaseBlockedDatabase!: () => void;
+
+  public constructor() {
+    super();
+    this.databaseStarted = new Promise<void>((resolve) => {
+      this.signalDatabaseStarted = resolve;
+    });
+  }
+
+  public override async createDatabase(context: Parameters<LocalCellProvider["createDatabase"]>[0]) {
+    this.databaseContexts.push(context);
+    if (this.databaseContexts.length === 1) {
+      this.signalDatabaseStarted();
+      await new Promise<void>((resolve) => {
+        this.releaseBlockedDatabase = resolve;
+        context.signal.addEventListener("abort", () => resolve(), { once: true });
+      });
+    }
+    return super.createDatabase(context);
+  }
+
+  public override async createStoragePrefix(context: Parameters<LocalCellProvider["createStoragePrefix"]>[0]) {
+    this.storageCalls += 1;
+    return super.createStoragePrefix(context);
+  }
+
+  public releaseDatabase(): void {
+    this.releaseBlockedDatabase();
+  }
+}
+
 async function seedInterruptedAttempt(repository: PlatformRepository) {
   const reservation = await repository.reserveCustomerCell(request);
   const attempt = await repository.reserveProvisioningAttempt(
@@ -604,5 +697,13 @@ function productionConfig() {
     applicationCredentialReference: "vault://platform/application",
     signalLoopEndpoint: "https://signalloop.example.test",
     signalLoopCredentialReference: "vault://platform/signalloop"
+  };
+}
+
+function productionProviderSafetyContract() {
+  return {
+    idempotency: "provider-enforced" as const,
+    fencing: "provider-enforced" as const,
+    cancellation: "abort-signal" as const
   };
 }

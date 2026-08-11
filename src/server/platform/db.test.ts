@@ -100,6 +100,20 @@ describe("PrismaPlatformRepository", () => {
     expect(database.state.actions).toEqual([]);
   });
 
+  it("heartbeats only the currently fenced provisioning lease without appending action evidence", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-11T12:01:00Z"));
+    const database = actionDatabase({ leaseVersion: 4 });
+    const repository = new PrismaPlatformRepository(database.client);
+
+    const heartbeat = await repository.heartbeatProvisioningAttempt("attempt_1", 4);
+
+    expect(heartbeat.updatedAt).toEqual(new Date("2026-08-11T12:01:00Z"));
+    expect(database.state.updatedAt).toEqual(new Date("2026-08-11T12:01:00Z"));
+    expect(database.state.actions).toEqual([]);
+    await expect(repository.heartbeatProvisioningAttempt("attempt_1", 3)).rejects.toThrow(/lease/i);
+  });
+
   it("rolls back activation completion and safely retries after a cell update crash", async () => {
     const database = transactionalDatabase({ failCellUpdateOnce: true });
     const repository = new PrismaPlatformRepository(database.client);
