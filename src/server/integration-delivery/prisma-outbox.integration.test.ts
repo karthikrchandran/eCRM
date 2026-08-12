@@ -77,6 +77,57 @@ describe("Prisma/PostgreSQL integration delivery repository", () => {
     }
   });
 
+  it("rotates the PostgreSQL lease fence through repeated heartbeats and closes the same attempt on ack or fail", async () => {
+    const cellId = "cell_heartbeat_fence";
+    const at = new Date("2030-08-12T12:30:00Z");
+    const delivered = await repository.enqueue(outbox(cellId, "heartbeat_ack"));
+    const firstClaim = await repository.claim(cellId, "worker_ack", at, 1_000);
+    const firstHeartbeat = await repository.heartbeat(delivered.id, firstClaim!.fenceToken!, new Date(at.getTime() + 200), 1_000);
+    const secondHeartbeat = await repository.heartbeat(delivered.id, firstHeartbeat.fenceToken!, new Date(at.getTime() + 400), 1_000);
+    await repository.ack(delivered.id, secondHeartbeat.fenceToken!, new Date(at.getTime() + 500), "ack_heartbeat");
+
+    await expect(client.cellIntegrationDeliveryAttempt.findMany({ where: { outboxId: delivered.id } })).resolves.toMatchObject([
+      { fenceToken: secondHeartbeat.fenceToken, result: "DELIVERED", acknowledgementId: "ack_heartbeat", completedAt: new Date(at.getTime() + 500) }
+    ]);
+
+    const failed = await repository.enqueue(outbox(cellId, "heartbeat_fail"));
+    const failedClaim = await repository.claim(cellId, "worker_fail", new Date(at.getTime() + 600), 1_000);
+    const failedHeartbeat = await repository.heartbeat(failed.id, failedClaim!.fenceToken!, new Date(at.getTime() + 700), 1_000);
+    await repository.fail(failed.id, failedHeartbeat.fenceToken!, new Date(at.getTime() + 800), new Date(at.getTime() + 1_800), "remote failed", "REMOTE_503", 5);
+
+    await expect(client.cellIntegrationDeliveryAttempt.findMany({ where: { outboxId: failed.id } })).resolves.toMatchObject([
+      { fenceToken: failedHeartbeat.fenceToken, result: "FAILED", errorCode: "REMOTE_503", completedAt: new Date(at.getTime() + 800) }
+    ]);
+  });
+
+  it("keeps a heartbeat-protected PostgreSQL lease unavailable for reclaim", async () => {
+    const cellId = "cell_long_running_lease";
+    const at = new Date("2030-08-12T12:45:00Z");
+    const created = await repository.enqueue(outbox(cellId, "long_running"));
+    const claimed = await repository.claim(cellId, "worker_slow", at, 1_000);
+    const refreshed = await repository.heartbeat(created.id, claimed!.fenceToken!, new Date(at.getTime() + 750), 1_000);
+
+    await expect(repository.claim(cellId, "worker_reclaim", new Date(at.getTime() + 1_001), 1_000)).resolves.toBeUndefined();
+    await repository.ack(created.id, refreshed.fenceToken!, new Date(at.getTime() + 1_002), "ack_slow");
+  });
+
+  it("atomically defers a circuit-blocked claim and closes its immutable attempt history", async () => {
+    const cellId = "cell_circuit_defer";
+    const at = new Date("2030-08-12T12:50:00Z");
+    const created = await repository.enqueue(outbox(cellId, "circuit_defer"));
+    const claimed = await repository.claim(cellId, "worker_defer", at, 30_000);
+    const retryAt = new Date(at.getTime() + 60_000);
+
+    await repository.defer(created.id, claimed!.fenceToken!, retryAt, at, "Destination circuit is open");
+
+    await expect(client.cellIntegrationOutbox.findUniqueOrThrow({ where: { id: created.id } })).resolves.toMatchObject({
+      status: "PENDING", nextAttemptAt: retryAt, leaseOwner: null, leaseUntil: null, fenceToken: null
+    });
+    await expect(client.cellIntegrationDeliveryAttempt.findMany({ where: { outboxId: created.id } })).resolves.toMatchObject([
+      { result: "DEFERRED", completedAt: at, errorCode: "CIRCUIT_OPEN", errorMessage: "Destination circuit is open" }
+    ]);
+  });
+
   it("scopes status, claims, and dead-letter replay to the authenticated cell", async () => {
     const at = new Date("2030-08-12T13:00:00Z");
     const ara = await repository.enqueue(outbox("cell_ara", "cross_cell_ara"));

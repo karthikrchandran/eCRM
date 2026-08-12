@@ -55,12 +55,19 @@ export class PrismaIntegrationDeliveryRepository implements IntegrationDeliveryR
 
   public async heartbeat(id: string, fenceToken: string, now: Date, leaseMs: number): Promise<OutboxRecord> {
     const nextFence = randomUUID();
-    const changed = await this.client.cellIntegrationOutbox.updateMany({
-      where: { id, status: "CLAIMED", fenceToken, leaseUntil: { gte: now } },
-      data: { fenceToken: nextFence, leaseUntil: new Date(now.getTime() + leaseMs) }
+    return this.client.$transaction(async (transaction) => {
+      const changed = await transaction.cellIntegrationOutbox.updateMany({
+        where: { id, status: "CLAIMED", fenceToken, leaseUntil: { gte: now } },
+        data: { fenceToken: nextFence, leaseUntil: new Date(now.getTime() + leaseMs) }
+      });
+      if (changed.count !== 1) throw new Error("Lease fence rejected");
+      const attempt = await transaction.cellIntegrationDeliveryAttempt.updateMany({
+        where: { outboxId: id, fenceToken, completedAt: null },
+        data: { fenceToken: nextFence }
+      });
+      if (attempt.count !== 1) throw new Error("Delivery attempt fence rejected");
+      return mapOutbox(await transaction.cellIntegrationOutbox.findUniqueOrThrow({ where: { id } }));
     });
-    if (changed.count !== 1) throw new Error("Lease fence rejected");
-    return mapOutbox(await this.client.cellIntegrationOutbox.findUniqueOrThrow({ where: { id } }));
   }
 
   public async ack(id: string, fenceToken: string, now: Date, acknowledgementId = "ack", checkpoint?: string): Promise<void> {
@@ -102,12 +109,19 @@ export class PrismaIntegrationDeliveryRepository implements IntegrationDeliveryR
     });
   }
 
-  public async defer(id: string, fenceToken: string, nextAttemptAt: Date): Promise<void> {
-    const changed = await this.client.cellIntegrationOutbox.updateMany({
-      where: { id, status: "CLAIMED", fenceToken },
-      data: { status: "PENDING", nextAttemptAt, leaseOwner: null, leaseUntil: null, fenceToken: null }
+  public async defer(id: string, fenceToken: string, nextAttemptAt: Date, now: Date, reason: string): Promise<void> {
+    await this.client.$transaction(async (transaction) => {
+      const changed = await transaction.cellIntegrationOutbox.updateMany({
+        where: { id, status: "CLAIMED", fenceToken },
+        data: { status: "PENDING", nextAttemptAt, leaseOwner: null, leaseUntil: null, fenceToken: null }
+      });
+      if (changed.count !== 1) throw new Error("Lease fence rejected");
+      const attempt = await transaction.cellIntegrationDeliveryAttempt.updateMany({
+        where: { outboxId: id, fenceToken, completedAt: null },
+        data: { result: "DEFERRED", completedAt: now, errorCode: "CIRCUIT_OPEN", errorMessage: reason }
+      });
+      if (attempt.count !== 1) throw new Error("Delivery attempt fence rejected");
     });
-    if (changed.count !== 1) throw new Error("Lease fence rejected");
   }
 
   public async replay(cellId: string, id: string, actorId: string, reason: string, now: Date): Promise<void> {

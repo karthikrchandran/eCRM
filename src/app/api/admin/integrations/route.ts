@@ -7,6 +7,7 @@ import { integrationCapabilities, type IntegrationCapability } from "@/server/in
 import { configuredDestinationProvider } from "@/server/integration-delivery/provider";
 import { reconcileCellProjectionStreams } from "@/server/integration-delivery/reconciliation";
 import { getIntegrationCredentialService, getIntegrationDeliveryRepository } from "@/server/integration-delivery/runtime";
+import type { DeliveryStatus } from "@/server/integration-delivery/outbox";
 
 type Actor = { id: string; role: "ADMIN" | "SALES" };
 type Authorization = { user: Actor; cellId: string; cellKey: string };
@@ -29,7 +30,7 @@ type Dependencies = {
   issue(actor: Actor, input: { name: string; capabilities: IntegrationCapability[]; expiresAt: Date; correlationId: string; reason: string }): Promise<unknown>;
   rotate?(actor: Actor, credentialId: string, input: { expiresAt: Date; correlationId: string; reason: string }): Promise<unknown>;
   revoke?(actor: Actor, credentialId: string, input: { correlationId: string; reason: string }): Promise<void>;
-  status(cellId: string): Promise<unknown>;
+  status(cellId: string): Promise<DeliveryStatus>;
   deadLetters(cellId: string): Promise<Array<{ id: string; attempts: number; errorCode: string | null; updatedAt?: Date }>>;
   repairCandidates(cellId: string): Promise<Array<Record<string, unknown>>>;
   replay(cellId: string, id: string, actorId: string, reason: string, now: Date): Promise<void>;
@@ -53,7 +54,15 @@ export function createIntegrationAdminHandlers(dependencies: Dependencies) {
         dependencies.deadLetters(authorization.cellId), dependencies.repairCandidates(authorization.cellId)
       ]);
       return Response.json({
-        credentials, status,
+        credentials,
+        status: {
+          pending: status.pending, claimed: status.claimed, failed: status.failed, delivered: status.delivered,
+          deadLetter: status.deadLetter, sourceCount: status.sourceCount, checkpoint: status.checkpoint, degraded: status.degraded,
+          circuits: status.circuits.map((circuit) => ({
+            destinationInstallation: circuit.destinationInstallation, state: circuit.state, failureCount: circuit.failureCount,
+            lastFailureAt: circuit.lastFailureAt, openedAt: circuit.openedAt, openUntil: circuit.openUntil
+          }))
+        },
         deadLetters: deadLetters.map(({ id, attempts, errorCode, updatedAt }) => ({ id, attempts, errorCode, updatedAt })),
         repairCandidates: repairCandidates.map(({ id, status: repairStatus, sourceCount, destinationCount, sourceCheckpoint, destinationCheckpoint, createdAt }) => ({
           id, status: repairStatus, sourceCount, destinationCount, sourceCheckpoint, destinationCheckpoint, createdAt

@@ -36,7 +36,15 @@ describe("cell integration administration API", () => {
   });
 
   it("returns payload-free delivery status and requires a reason for dead-letter replay", async () => {
-    const status = vi.fn().mockResolvedValue({ pending: 1, deadLetter: 1, checkpoint: "cp_1", sourceCount: 4 });
+    const status = vi.fn().mockResolvedValue({
+      pending: 1, claimed: 2, failed: 3, delivered: 4, deadLetter: 1, checkpoint: "cp_1", sourceCount: 4, degraded: true,
+      circuits: [{
+        id: "circuit_internal", cellId: "cell_ara", destinationInstallation: "signalloop:ara", state: "HALF_OPEN", failureCount: 5,
+        lastFailureAt: new Date("2026-08-12T11:00:00Z"), openedAt: new Date("2026-08-12T11:01:00Z"), openUntil: new Date("2026-08-12T12:01:00Z"),
+        probeFenceToken: "secret-fence", probeLeaseOwner: "worker-secret", probeLeaseUntil: new Date("2026-08-12T12:00:00Z"),
+        windowStartedAt: new Date("2026-08-12T10:00:00Z"), createdAt: new Date("2026-08-12T10:00:00Z"), updatedAt: new Date("2026-08-12T11:01:00Z")
+      }]
+    });
     const deadLetters = vi.fn().mockResolvedValue([{ id: "outbox_1", attempts: 5, errorCode: "REMOTE_503", payload: { secret: "must not leak" } }]);
     const handlers = createIntegrationAdminHandlers({
       authorize: vi.fn().mockResolvedValue(authorized), requireModule: vi.fn(), list: vi.fn().mockResolvedValue([]), issue: vi.fn(),
@@ -45,6 +53,15 @@ describe("cell integration administration API", () => {
     const response = await handlers.GET(new Request("http://cell/api/admin/integrations"));
     const body = await response.json();
     expect(JSON.stringify(body)).not.toContain("must not leak");
+    expect(JSON.stringify(body.status)).not.toContain("secret-fence");
+    expect(JSON.stringify(body.status)).not.toContain("worker-secret");
+    expect(body.status).toEqual({
+      pending: 1, claimed: 2, failed: 3, delivered: 4, deadLetter: 1, checkpoint: "cp_1", sourceCount: 4, degraded: true,
+      circuits: [{
+        destinationInstallation: "signalloop:ara", state: "HALF_OPEN", failureCount: 5,
+        lastFailureAt: "2026-08-12T11:00:00.000Z", openedAt: "2026-08-12T11:01:00.000Z", openUntil: "2026-08-12T12:01:00.000Z"
+      }]
+    });
     expect(body.deadLetters[0]).toEqual({ id: "outbox_1", attempts: 5, errorCode: "REMOTE_503" });
 
     const replay = await handlers.POST(new Request("http://cell/api/admin/integrations", { method: "POST", body: JSON.stringify({ action: "replay", outboxId: "outbox_1", reason: "" }) }));

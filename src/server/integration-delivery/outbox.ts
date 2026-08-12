@@ -64,7 +64,7 @@ export interface IntegrationDeliveryRepository {
   heartbeat(id: string, fenceToken: string, now: Date, leaseMs: number): Promise<OutboxRecord>;
   ack(id: string, fenceToken: string, now: Date, acknowledgementId?: string, checkpoint?: string): Promise<void>;
   fail(id: string, fenceToken: string, now: Date, nextAttemptAt: Date, error: string, errorCode: string, maxAttempts: number): Promise<void>;
-  defer(id: string, fenceToken: string, nextAttemptAt: Date): Promise<void>;
+  defer(id: string, fenceToken: string, nextAttemptAt: Date, now: Date, reason: string): Promise<void>;
   replay(cellId: string, id: string, actorId: string, reason: string, now: Date): Promise<void>;
   status(cellId: string): Promise<DeliveryStatus>;
   deadLetters(cellId: string): Promise<OutboxRecord[]>;
@@ -80,8 +80,8 @@ export interface IntegrationDeliveryRepository {
 }
 
 export interface DestinationProvider {
-  deliver(destinationInstallation: string, message: { eventType: string; payloadVersion: number; payload: Record<string, unknown>; correlationId: string; idempotencyKey: string }): Promise<{ acknowledgementId: string; checkpoint?: string }>;
-  reconcileIdempotency(destinationInstallation: string, idempotencyKey: string): Promise<{ acknowledgementId: string; checkpoint?: string } | undefined>;
+  deliver(destinationInstallation: string, message: { eventType: string; payloadVersion: number; payload: Record<string, unknown>; correlationId: string; idempotencyKey: string }, signal?: AbortSignal): Promise<{ acknowledgementId: string; checkpoint?: string }>;
+  reconcileIdempotency(destinationInstallation: string, idempotencyKey: string, signal?: AbortSignal): Promise<{ acknowledgementId: string; checkpoint?: string } | undefined>;
   checkpoint(destinationInstallation: string, stream: ProjectionStream): Promise<ProjectionState>;
 }
 
@@ -98,38 +98,89 @@ export class CellIntegrationDeliveryService {
     if (!record || !record.fenceToken) return false;
     const permit = await this.repository.acquireCircuitPermit(cellId, record.destinationInstallation, workerId, now, this.options.leaseMs);
     if (!permit.allowed) {
-      await this.repository.defer(record.id, record.fenceToken, permit.deferUntil ?? new Date(now.getTime() + (this.options.circuitOpenMs ?? 30_000)));
+      await this.repository.defer(
+        record.id, record.fenceToken,
+        permit.deferUntil ?? new Date(now.getTime() + (this.options.circuitOpenMs ?? 30_000)),
+        now, "Destination circuit is open"
+      );
       return true;
     }
+    let fenceToken = record.fenceToken;
+    let ownershipLost = false;
+    let deadlineExpired = false;
+    const controller = new AbortController();
+    const heartbeatMs = Math.max(1, Math.floor(this.options.leaseMs / 3));
+    let heartbeatWork = Promise.resolve();
+    const heartbeatTimer = setInterval(() => {
+      heartbeatWork = heartbeatWork.then(async () => {
+        if (ownershipLost || deadlineExpired) return;
+        try {
+          const refreshed = await this.repository.heartbeat(record.id, fenceToken, this.options.now?.() ?? new Date(), this.options.leaseMs);
+          if (!refreshed.fenceToken) throw new Error("Lease fence rejected");
+          fenceToken = refreshed.fenceToken;
+        } catch (error) {
+          ownershipLost = true;
+          clearInterval(heartbeatTimer);
+          controller.abort(error);
+        }
+      });
+    }, heartbeatMs);
+    const deadlineTimer = setTimeout(() => {
+      deadlineExpired = true;
+      clearInterval(heartbeatTimer);
+      controller.abort(Object.assign(new Error("Destination request deadline exceeded"), { code: "REQUEST_TIMEOUT" }));
+    }, Math.max(1, this.options.leaseMs - heartbeatMs));
+    const finishLeaseGuard = async () => {
+      clearInterval(heartbeatTimer);
+      clearTimeout(deadlineTimer);
+      await heartbeatWork;
+    };
     try {
       let acknowledgement: { acknowledgementId: string; checkpoint?: string } | undefined;
       if (record.errorCode === "AMBIGUOUS_ACK") {
-        acknowledgement = await this.provider.reconcileIdempotency(record.destinationInstallation, record.idempotencyKey);
+        acknowledgement = await abortable(this.provider.reconcileIdempotency(record.destinationInstallation, record.idempotencyKey, controller.signal), controller.signal);
       }
-      acknowledgement ??= await this.provider.deliver(record.destinationInstallation, {
+      acknowledgement ??= await abortable(this.provider.deliver(record.destinationInstallation, {
         eventType: record.eventType, payloadVersion: record.payloadVersion, payload: record.payload,
         correlationId: record.correlationId, idempotencyKey: record.idempotencyKey
-      });
-      await this.repository.recordCircuitSuccess(cellId, record.destinationInstallation, now, permit.probeFenceToken);
-      await this.repository.ack(record.id, record.fenceToken, now, acknowledgement.acknowledgementId, acknowledgement.checkpoint);
+      }, controller.signal), controller.signal);
+      await finishLeaseGuard();
+      if (ownershipLost) return true;
+      if (deadlineExpired) throw Object.assign(new Error("Destination request deadline exceeded"), { code: "REQUEST_TIMEOUT" });
+      const completedAt = this.options.now?.() ?? at ?? new Date();
+      await this.repository.ack(record.id, fenceToken, completedAt, acknowledgement.acknowledgementId, acknowledgement.checkpoint);
+      await this.repository.recordCircuitSuccess(cellId, record.destinationInstallation, completedAt, permit.probeFenceToken);
     } catch (error) {
-      const typed = error as Error & { code?: string };
-      if (typed.code === "AMBIGUOUS_ACK") {
-        const reconciled = await this.provider.reconcileIdempotency(record.destinationInstallation, record.idempotencyKey);
-        if (reconciled) {
-          await this.repository.recordCircuitSuccess(cellId, record.destinationInstallation, now, permit.probeFenceToken);
-          await this.repository.ack(record.id, record.fenceToken, now, reconciled.acknowledgementId, reconciled.checkpoint);
-          return true;
+      let typed = error as Error & { code?: string };
+      if (typed.code === "AMBIGUOUS_ACK" && !controller.signal.aborted) {
+        try {
+          const reconciled = await abortable(this.provider.reconcileIdempotency(record.destinationInstallation, record.idempotencyKey, controller.signal), controller.signal);
+          if (reconciled) {
+            await finishLeaseGuard();
+            if (ownershipLost) return true;
+            if (deadlineExpired) typed = controller.signal.reason as Error & { code?: string };
+            else {
+              const completedAt = this.options.now?.() ?? at ?? new Date();
+              await this.repository.ack(record.id, fenceToken, completedAt, reconciled.acknowledgementId, reconciled.checkpoint);
+              await this.repository.recordCircuitSuccess(cellId, record.destinationInstallation, completedAt, permit.probeFenceToken);
+              return true;
+            }
+          }
+        } catch (reconciliationError) {
+          typed = reconciliationError as Error & { code?: string };
         }
       }
+      await finishLeaseGuard();
+      if (ownershipLost) return true;
       const attempt = record.attempts + 1;
       const exponential = Math.min(this.options.maxDelayMs, this.options.baseDelayMs * 2 ** Math.max(0, attempt - 1));
       const jitter = Math.floor(exponential * 0.2 * (this.options.random?.() ?? Math.random()));
+      const completedAt = this.options.now?.() ?? at ?? new Date();
       await this.repository.fail(
-        record.id, record.fenceToken, now, new Date(now.getTime() + exponential + jitter),
+        record.id, fenceToken, completedAt, new Date(completedAt.getTime() + exponential + jitter),
         typed.message.slice(0, 500), typed.code ?? "DELIVERY_FAILED", this.options.maxAttempts
       );
-      await this.repository.recordCircuitFailure(cellId, record.destinationInstallation, now, {
+      await this.repository.recordCircuitFailure(cellId, record.destinationInstallation, completedAt, {
         failureThreshold: this.options.failureThreshold ?? 5,
         failureWindowMs: this.options.failureWindowMs ?? 60_000,
         circuitOpenMs: this.options.circuitOpenMs ?? 30_000
@@ -137,6 +188,18 @@ export class CellIntegrationDeliveryService {
     }
     return true;
   }
+}
+
+function abortable<T>(operation: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) return Promise.reject(signal.reason);
+  return new Promise<T>((resolve, reject) => {
+    const aborted = () => reject(signal.reason);
+    signal.addEventListener("abort", aborted, { once: true });
+    operation.then(
+      (value) => { signal.removeEventListener("abort", aborted); resolve(value); },
+      (error) => { signal.removeEventListener("abort", aborted); reject(error); }
+    );
+  });
 }
 
 export function createInMemoryIntegrationDeliveryRepository(): IntegrationDeliveryRepository {
@@ -213,10 +276,10 @@ export function createInMemoryIntegrationDeliveryRepository(): IntegrationDelive
         result: "FAILED", error: errorCode, occurredAt: now
       });
     }),
-    defer: async (id, fenceToken, nextAttemptAt) => exclusive(async () => {
+    defer: async (id, fenceToken, nextAttemptAt, now) => exclusive(async () => {
       const record = records.get(id);
       if (!record || record.status !== "CLAIMED" || record.fenceToken !== fenceToken) throw new Error("Lease fence rejected");
-      records.set(id, { ...record, status: record.attempts > 0 ? "FAILED" : "PENDING", nextAttemptAt, leaseOwner: null, leaseUntil: null, fenceToken: null, updatedAt: nextAttemptAt });
+      records.set(id, { ...record, status: "PENDING", nextAttemptAt, leaseOwner: null, leaseUntil: null, fenceToken: null, updatedAt: now });
     }),
     replay: async (cellId, id, actorId, reason, now) => exclusive(async () => {
       if (!reason.trim()) throw new Error("Replay reason is required");

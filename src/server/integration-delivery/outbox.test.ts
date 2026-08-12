@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   CellIntegrationDeliveryService,
@@ -18,6 +18,8 @@ const source = {
 };
 
 describe("cell integration outbox", () => {
+  afterEach(() => vi.useRealTimers());
+
   it("stores a source mutation and outbox intent atomically and never copies payload into audit", async () => {
     const repository = createInMemoryIntegrationDeliveryRepository();
     await expect(repository.withSourceMutation!(async (transaction) => {
@@ -70,7 +72,112 @@ describe("cell integration outbox", () => {
     await worker.runOnce("cell_ara", "worker_a", new Date(now.getTime() + 1_000));
     expect(await repository.status("cell_ara")).toMatchObject({ delivered: 1, failed: 0, checkpoint: "cp_1" });
     expect(provider.deliver).toHaveBeenCalledTimes(1);
-    expect(provider.reconcileIdempotency).toHaveBeenLastCalledWith(source.destinationInstallation, source.idempotencyKey);
+    expect(provider.reconcileIdempotency).toHaveBeenLastCalledWith(source.destinationInstallation, source.idempotencyKey, expect.any(AbortSignal));
+  });
+
+  it("heartbeats a long-running delivery so its lease cannot be reclaimed and acks with the refreshed fence", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+    const repository = createInMemoryIntegrationDeliveryRepository();
+    await repository.enqueue(source);
+    let finish!: (value: { acknowledgementId: string }) => void;
+    const provider: DestinationProvider = {
+      deliver: vi.fn((_destination, _message, signal) => new Promise<{ acknowledgementId: string }>((resolve, reject) => {
+        finish = resolve;
+        signal?.addEventListener("abort", () => reject(signal.reason), { once: true });
+      })),
+      reconcileIdempotency: vi.fn(), checkpoint: vi.fn()
+    };
+    const worker = new CellIntegrationDeliveryService(repository, provider, {
+      now: () => new Date(), random: () => 0, maxAttempts: 3, baseDelayMs: 100, maxDelayMs: 1_000, leaseMs: 300
+    });
+
+    const running = worker.runOnce("cell_ara", "worker_slow");
+    await vi.advanceTimersByTimeAsync(150);
+    await expect(repository.claim("cell_ara", "worker_reclaim", new Date(now.getTime() + 301), 300)).resolves.toBeUndefined();
+    finish({ acknowledgementId: "ack_slow" });
+    await running;
+    expect(await repository.status("cell_ara")).toMatchObject({ delivered: 1, claimed: 0 });
+  });
+
+  it("aborts and ignores a stale remote continuation after heartbeat lease ownership is lost", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+    const underlying = createInMemoryIntegrationDeliveryRepository();
+    await underlying.enqueue(source);
+    const ack = vi.spyOn(underlying, "ack");
+    vi.spyOn(underlying, "heartbeat").mockRejectedValue(new Error("Lease fence rejected"));
+    let signal!: AbortSignal;
+    let finish!: (value: { acknowledgementId: string }) => void;
+    const provider: DestinationProvider = {
+      deliver: vi.fn((_destination, _message, requestSignal) => {
+        signal = requestSignal!;
+        return new Promise<{ acknowledgementId: string }>((resolve) => { finish = resolve; });
+      }),
+      reconcileIdempotency: vi.fn(), checkpoint: vi.fn()
+    };
+    const worker = new CellIntegrationDeliveryService(underlying, provider, {
+      now: () => new Date(), random: () => 0, maxAttempts: 3, baseDelayMs: 100, maxDelayMs: 1_000, leaseMs: 300
+    });
+
+    const running = worker.runOnce("cell_ara", "worker_stale");
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(100);
+    expect(signal.aborted).toBe(true);
+    await running;
+    finish({ acknowledgementId: "late_ack" });
+    await Promise.resolve();
+    expect(ack).not.toHaveBeenCalled();
+    expect(await underlying.status("cell_ara")).toMatchObject({ delivered: 0, claimed: 1 });
+  });
+
+  it("keeps heartbeat and deadline protection active during ambiguous acknowledgement reconciliation", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+    const repository = createInMemoryIntegrationDeliveryRepository();
+    await repository.enqueue(source);
+    const initial = await repository.claim("cell_ara", "worker_initial", now, 300);
+    await repository.fail(initial!.id, initial!.fenceToken!, now, now, "timeout after send", "AMBIGUOUS_ACK", 3);
+    let reconcile!: (value: { acknowledgementId: string }) => void;
+    const provider: DestinationProvider = {
+      deliver: vi.fn(),
+      reconcileIdempotency: vi.fn(() => new Promise<{ acknowledgementId: string }>((resolve) => { reconcile = resolve; })),
+      checkpoint: vi.fn()
+    };
+    const worker = new CellIntegrationDeliveryService(repository, provider, {
+      now: () => new Date(), random: () => 0, maxAttempts: 3, baseDelayMs: 100, maxDelayMs: 1_000, leaseMs: 300
+    });
+
+    const running = worker.runOnce("cell_ara", "worker_reconcile");
+    await vi.advanceTimersByTimeAsync(150);
+    await expect(repository.claim("cell_ara", "worker_reclaim", new Date(now.getTime() + 301), 300)).resolves.toBeUndefined();
+    reconcile({ acknowledgementId: "ack_reconciled" });
+    await running;
+    expect(provider.deliver).not.toHaveBeenCalled();
+    expect(await repository.status("cell_ara")).toMatchObject({ delivered: 1, claimed: 0 });
+  });
+
+  it("keeps heartbeat protection active while reconciling an ambiguous response from the current send", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+    const repository = createInMemoryIntegrationDeliveryRepository();
+    await repository.enqueue({ ...source, idempotencyKey: "ambiguous_current_send" });
+    let reconcile!: (value: { acknowledgementId: string }) => void;
+    const provider: DestinationProvider = {
+      deliver: vi.fn().mockRejectedValue(Object.assign(new Error("timeout after send"), { code: "AMBIGUOUS_ACK" })),
+      reconcileIdempotency: vi.fn(() => new Promise<{ acknowledgementId: string }>((resolve) => { reconcile = resolve; })),
+      checkpoint: vi.fn()
+    };
+    const worker = new CellIntegrationDeliveryService(repository, provider, {
+      now: () => new Date(), random: () => 0, maxAttempts: 3, baseDelayMs: 100, maxDelayMs: 1_000, leaseMs: 300
+    });
+
+    const running = worker.runOnce("cell_ara", "worker_current_send");
+    await vi.advanceTimersByTimeAsync(150);
+    await expect(repository.claim("cell_ara", "worker_reclaim", new Date(now.getTime() + 301), 300)).resolves.toBeUndefined();
+    reconcile({ acknowledgementId: "ack_current_send" });
+    await running;
+    expect(await repository.status("cell_ara")).toMatchObject({ delivered: 1, claimed: 0 });
   });
 
   it("dead-letters after bounded retry exhaustion and replays only with an operator reason", async () => {
@@ -123,7 +230,7 @@ describe("cell integration outbox", () => {
 
     await worker.runOnce("cell_ara", "worker_b", new Date(now.getTime() + 100));
     expect(provider.deliver).toHaveBeenCalledTimes(1);
-    expect(await repository.status("cell_ara")).toMatchObject({ pending: 1, failed: 1 });
+    expect(await repository.status("cell_ara")).toMatchObject({ pending: 2, failed: 0 });
 
     const probeAt = new Date(now.getTime() + 1_000);
     const [first, second] = await Promise.all([
