@@ -7,7 +7,7 @@ import { buildTranscriptResult } from "@/server/sales-day/transcription";
 import { salesVoiceNoteUploadMetadataSchema } from "@/server/sales-day/validators";
 
 export async function POST(request: Request) {
-  const user = await requireUser();
+  const user = await requireUser("crm");
   const formData = await request.formData();
   const audio = formData.get("audio");
 

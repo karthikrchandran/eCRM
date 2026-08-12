@@ -13,7 +13,7 @@ export default async function Customer360LauncherPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const user = await requireUser();
+  const user = await requireUser("crm");
   const rawSearchParams = await searchParams;
   const filters = leadFilterSchema.parse({
     followUp: rawSearchParams.followUp,

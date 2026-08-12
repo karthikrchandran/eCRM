@@ -105,7 +105,7 @@ export function parseProposalPdfMetadataFormForTest(formData: FormData): ParseRe
 export async function createProposalAction(_previousState: ActionState, formData: FormData): Promise<ActionState> {
   "use server";
 
-  const user = await requireUser();
+  const user = await requireUser("proposals");
   const parsed = parseProposalFormForTest(formData);
 
   if (!parsed.ok) {
@@ -126,7 +126,7 @@ export async function addProposalPdfMetadataAction(
 ): Promise<ActionState> {
   "use server";
 
-  const user = await requireUser();
+  const user = await requireUser("proposals");
   const parsed = parseProposalPdfMetadataFormForTest(formData);
 
   if (!parsed.ok) {
@@ -142,7 +142,7 @@ export async function addProposalPdfMetadataAction(
 export async function changeProposalStatusAction(opportunityId: string, proposalId: string, formData: FormData) {
   "use server";
 
-  const user = await requireUser();
+  const user = await requireUser("proposals");
   const status = formData.get("status")?.toString() as ProposalStatusValue;
 
   await changeProposalStatus(user, proposalId, status);

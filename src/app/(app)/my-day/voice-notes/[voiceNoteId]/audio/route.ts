@@ -9,7 +9,7 @@ type RouteContext = {
 };
 
 export async function GET(_request: Request, context: RouteContext) {
-  const user = await requireUser();
+  const user = await requireUser("crm");
   const { voiceNoteId } = await context.params;
   const note = await db.salesVoiceNote.findUnique({
     where: { id: voiceNoteId },

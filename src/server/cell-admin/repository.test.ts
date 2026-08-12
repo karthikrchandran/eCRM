@@ -25,7 +25,7 @@ describe("Prisma cell administration repository", () => {
     const durable = { configuration: original, audits: [] as CellAuditEventRecord[] };
     const repository = new PrismaCellAdministrationRepository(transactionalClient(durable));
 
-    await repository.updateConfigurationWithAudit(updated, audit);
+    await repository.updateConfigurationWithAudit(updated, original.revision, audit);
 
     expect(durable.configuration.defaultCurrency).toBe("USD");
     expect(durable.audits).toEqual([audit]);
@@ -35,7 +35,7 @@ describe("Prisma cell administration repository", () => {
     const durable = { configuration: original, audits: [] as CellAuditEventRecord[] };
     const repository = new PrismaCellAdministrationRepository(transactionalClient(durable, true));
 
-    await expect(repository.updateConfigurationWithAudit(updated, audit)).rejects.toThrow("audit insert failed");
+    await expect(repository.updateConfigurationWithAudit(updated, original.revision, audit)).rejects.toThrow("audit insert failed");
 
     expect(durable.configuration.defaultCurrency).toBe("INR");
     expect(durable.audits).toEqual([]);
@@ -52,10 +52,11 @@ function transactionalClient(
       const pendingAudits = [...durable.audits];
       const transaction = {
         cellConfiguration: {
-          upsert: async () => {
+          updateMany: async () => {
             pendingConfiguration = updated;
-            return updated;
-          }
+            return { count: 1 };
+          },
+          findUniqueOrThrow: async () => pendingConfiguration
         },
         cellAuditEvent: {
           create: async ({ data }: { data: CellAuditEventRecord }) => {
@@ -78,6 +79,8 @@ function configuration(defaultCurrency: "INR" | "USD"): CellConfigurationRecord 
     id: "default",
     displayName: "eCRM",
     logoUrl: null,
+    supportUrl: null,
+    legalUrl: null,
     primaryColor: "#1e3a5f",
     locale: "en-US",
     timezone: "UTC",
@@ -85,6 +88,7 @@ function configuration(defaultCurrency: "INR" | "USD"): CellConfigurationRecord 
     enabledModules: ["crm"],
     allowedModules: ["crm"],
     planCode: "ENTERPRISE",
+    revision: defaultCurrency === "INR" ? 1 : 2,
     createdAt: new Date("2026-08-11T12:00:00Z"),
     updatedAt: new Date("2026-08-11T12:00:00Z")
   };

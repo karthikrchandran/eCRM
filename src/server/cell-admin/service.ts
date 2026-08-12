@@ -10,6 +10,8 @@ export type CellConfigurationRecord = {
   id: "default";
   displayName: string;
   logoUrl: string | null;
+  supportUrl: string | null;
+  legalUrl: string | null;
   primaryColor: string;
   locale: string;
   timezone: string;
@@ -17,6 +19,7 @@ export type CellConfigurationRecord = {
   enabledModules: string[];
   allowedModules: string[];
   planCode: string;
+  revision: number;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -51,9 +54,16 @@ export class FinalActiveAdminError extends Error {
   }
 }
 
+export class ConfigurationConflictError extends Error {
+  public constructor() {
+    super("Cell configuration changed. Refresh and try again");
+    this.name = "ConfigurationConflictError";
+  }
+}
+
 export interface CellAdministrationRepository {
   getConfiguration(): Promise<CellConfigurationRecord | undefined>;
-  updateConfigurationWithAudit(configuration: CellConfigurationRecord, audit: CellAuditEventRecord): Promise<CellConfigurationRecord>;
+  updateConfigurationWithAudit(configuration: CellConfigurationRecord, expectedRevision: number, audit: CellAuditEventRecord): Promise<CellConfigurationRecord | undefined>;
   getBusinessCurrency(): Promise<SupportedCurrency>;
   appendAuditEvent(event: CellAuditEventRecord): Promise<void>;
   auditEvents(): Promise<CellAuditEventRecord[]>;
@@ -80,6 +90,8 @@ export class CellAdministrationService {
       id: "default",
       displayName: "eCRM",
       logoUrl: null,
+      supportUrl: null,
+      legalUrl: null,
       primaryColor: "#1e3a5f",
       locale: "en-US",
       timezone: "UTC",
@@ -87,6 +99,7 @@ export class CellAdministrationService {
       enabledModules: [],
       allowedModules: [],
       planCode: "UNASSIGNED",
+      revision: 0,
       createdAt: now,
       updatedAt: now
     };
@@ -94,12 +107,19 @@ export class CellAdministrationService {
 
   public async updateConfiguration(
     user: CellAdminActor,
-    update: Partial<Pick<CellConfigurationRecord, "displayName" | "logoUrl" | "primaryColor" | "locale" | "timezone" | "defaultCurrency" | "enabledModules">>,
-    context: { correlationId: string; reason: string }
+    update: Partial<Pick<CellConfigurationRecord, "displayName" | "logoUrl" | "supportUrl" | "legalUrl" | "primaryColor" | "locale" | "timezone" | "defaultCurrency" | "enabledModules">>,
+    context: { correlationId: string; reason: string; expectedRevision?: number }
   ): Promise<CellConfigurationRecord> {
     const action = "cell-configuration.update";
     if (user.role !== "ADMIN") return this.reject(user, action, "default", context, "ADMIN_REQUIRED", "Only Admin can manage customer-cell administration");
     const existing = await this.getConfiguration(user);
+    const expectedRevision = context.expectedRevision ?? existing.revision;
+    if (expectedRevision !== existing.revision) {
+      return this.reject(user, action, "default", context, "CONFIGURATION_CONFLICT", "Cell configuration changed. Refresh and try again", configurationAuditSnapshot(existing));
+    }
+    if (!safePublicHttps(update.supportUrl) || !safePublicHttps(update.legalUrl)) {
+      return this.reject(user, action, "default", context, "UNSAFE_EXTERNAL_URL", "Support and legal URLs must use public HTTPS", configurationAuditSnapshot(existing));
+    }
     const excluded = update.enabledModules?.find((module) => !existing.allowedModules.includes(module));
     if (excluded) return this.reject(
       user,
@@ -115,13 +135,17 @@ export class CellAdministrationService {
       ...existing,
       ...update,
       displayName: update.displayName?.trim() || existing.displayName || "eCRM",
-      logoUrl: update.logoUrl?.trim() || null,
+      logoUrl: update.logoUrl === undefined ? existing.logoUrl : update.logoUrl?.trim() || null,
+      supportUrl: update.supportUrl === undefined ? existing.supportUrl : update.supportUrl?.trim() || null,
+      legalUrl: update.legalUrl === undefined ? existing.legalUrl : update.legalUrl?.trim() || null,
       allowedModules: existing.allowedModules,
       planCode: existing.planCode,
+      revision: existing.revision + 1,
       updatedAt: this.now()
     };
-    return this.repository.updateConfigurationWithAudit(
+    const stored = await this.repository.updateConfigurationWithAudit(
       configuration,
+      expectedRevision,
       this.audit(
         user,
         action,
@@ -134,6 +158,13 @@ export class CellAdministrationService {
         configurationAuditSnapshot(configuration)
       )
     );
+    if (stored) return stored;
+    const current = await this.getConfiguration(user);
+    await this.repository.appendAuditEvent(this.audit(
+      user, action, "CellConfiguration", "default", context, "FAILED", "CONFIGURATION_CONFLICT",
+      configurationAuditSnapshot(current), configurationAuditSnapshot(configuration)
+    ));
+    throw new ConfigurationConflictError();
   }
 
   public listUsers(user: CellAdminActor): Promise<LocalUserRecord[]> {
@@ -156,11 +187,21 @@ export class CellAdministrationService {
       role: input.role,
       active: true
     };
-    return this.repository.createUserWithAudit(
-      record,
-      await this.hash(input.password),
-      this.audit(user, action, "User", record.id, context, "SUCCEEDED", undefined, null, userAuditSnapshot(record))
-    );
+    try {
+      return await this.repository.createUserWithAudit(
+        record,
+        await this.hash(input.password),
+        this.audit(user, action, "User", record.id, context, "SUCCEEDED", undefined, null, userAuditSnapshot(record))
+      );
+    } catch (error) {
+      if (isDuplicateEmail(error)) {
+        await this.repository.appendAuditEvent(this.audit(
+          user, action, "User", record.id, context, "FAILED", "DUPLICATE_EMAIL", null, userAuditSnapshot(record)
+        ));
+        throw new Error("A local user with this email already exists");
+      }
+      throw error;
+    }
   }
 
   public async updateUser(
@@ -266,13 +307,16 @@ function configurationAuditSnapshot(configuration: Partial<CellConfigurationReco
   return {
     displayName: configuration.displayName ?? null,
     logoUrl: configuration.logoUrl ?? null,
+    supportUrl: configuration.supportUrl ?? null,
+    legalUrl: configuration.legalUrl ?? null,
     primaryColor: configuration.primaryColor ?? null,
     locale: configuration.locale ?? null,
     timezone: configuration.timezone ?? null,
     defaultCurrency: configuration.defaultCurrency ?? null,
     enabledModules: configuration.enabledModules ? [...configuration.enabledModules] : [],
     allowedModules: configuration.allowedModules ? [...configuration.allowedModules] : [],
-    planCode: configuration.planCode ?? null
+    planCode: configuration.planCode ?? null,
+    revision: configuration.revision ?? 0
   };
 }
 
@@ -290,7 +334,13 @@ export function createInMemoryCellAdministrationRepository(options: {
   users?: LocalUserRecord[];
 } = {}): InMemoryCellAdministrationRepository {
   let configuration = options.configuration
-    ? { ...options.configuration, enabledModules: [...options.configuration.enabledModules], allowedModules: [...options.configuration.allowedModules] }
+    ? {
+        ...options.configuration,
+        supportUrl: options.configuration.supportUrl ?? null,
+        legalUrl: options.configuration.legalUrl ?? null,
+        revision: options.configuration.revision ?? 0,
+        enabledModules: [...options.configuration.enabledModules], allowedModules: [...options.configuration.allowedModules]
+      }
     : undefined;
   const allowedModules = options.allowedModules ?? [];
   const users = new Map((options.users ?? []).map((user) => [user.id, { ...user }]));
@@ -304,12 +354,14 @@ export function createInMemoryCellAdministrationRepository(options: {
       ? { ...configuration, enabledModules: [...configuration.enabledModules], allowedModules: [...configuration.allowedModules] }
       : allowedModules.length
         ? {
-            id: "default", displayName: "eCRM", logoUrl: null, primaryColor: "#1e3a5f", locale: "en-US", timezone: "UTC",
+            id: "default", displayName: "eCRM", logoUrl: null, supportUrl: null, legalUrl: null, primaryColor: "#1e3a5f", locale: "en-US", timezone: "UTC",
             defaultCurrency: businessCurrency, enabledModules: [], allowedModules: [...allowedModules], planCode: "UNASSIGNED",
+            revision: 0,
             createdAt: new Date(), updatedAt: new Date()
           }
         : undefined,
-    updateConfigurationWithAudit: async (next, audit) => {
+    updateConfigurationWithAudit: async (next, expectedRevision, audit) => {
+      if ((configuration?.revision ?? 0) !== expectedRevision) return undefined;
       configuration = { ...next, enabledModules: [...next.enabledModules], allowedModules: [...next.allowedModules] };
       audits.push({ ...audit });
       return { ...configuration, enabledModules: [...configuration.enabledModules], allowedModules: [...configuration.allowedModules] };
@@ -349,4 +401,22 @@ export function createInMemoryCellAdministrationRepository(options: {
     },
     passwordHashFor: (userId) => passwordHashes.get(userId)
   };
+}
+
+function safePublicHttps(value: string | null | undefined): boolean {
+  if (value === undefined || value === null || value.trim() === "") return true;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:" || url.username || url.password) return false;
+    const host = url.hostname.toLowerCase();
+    return host !== "localhost" && host !== "127.0.0.1" && host !== "::1" && host !== "169.254.169.254"
+      && !host.startsWith("10.") && !host.startsWith("192.168.") && !/^172\.(1[6-9]|2\d|3[01])\./.test(host);
+  } catch {
+    return false;
+  }
+}
+
+function isDuplicateEmail(error: unknown): boolean {
+  return (typeof error === "object" && error !== null && "code" in error && error.code === "P2002")
+    || (error instanceof Error && /email.*already exists|unique constraint/i.test(error.message));
 }

@@ -66,6 +66,23 @@ describe("platform lifecycle administration", () => {
     ]);
   });
 
+  it("atomically accepts only one of two conflicting transitions and audits the rejected loser", async () => {
+    const repository = createInMemoryPlatformAdministrationRepository([activeCell]);
+    const service = new PlatformAdministrationService(repository);
+
+    const results = await Promise.allSettled([
+      service.transitionCell(activeCell.id, "SUSPENDED", { ...command, correlationId: "corr_suspend" }),
+      service.transitionCell(activeCell.id, "OFFBOARDING", { ...command, correlationId: "corr_offboard" })
+    ]);
+
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(results.filter((result) => result.status === "rejected")).toHaveLength(1);
+    expect(await repository.auditEventsForCell(activeCell.id)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ result: "SUCCEEDED" }),
+      expect.objectContaining({ result: "FAILED", error: "CONCURRENT_LIFECYCLE_TRANSITION" })
+    ]));
+  });
+
   it("activates a provisioning cell only with persisted completion and health evidence", async () => {
     const provisioningCell = { ...activeCell, lifecycleStatus: "PROVISIONING" as const };
     const repository = createInMemoryPlatformAdministrationRepository([provisioningCell], {
@@ -125,10 +142,12 @@ describe("support grants", () => {
       cellId: activeCell.id,
       operatorId: "support@example.com",
       caseReference: "CASE-101",
+      capabilities: ["configuration:read"],
       expiresAt: new Date("2026-08-11T13:00:00Z")
     });
 
     expect(service.isSupportGrantActive(grant)).toBe(true);
+    expect(grant.capabilities).toEqual(["configuration:read"]);
     expect(await repository.auditEventsForCell(activeCell.id)).toEqual([
       expect.objectContaining({ action: "support-grant.create", result: "SUCCEEDED" })
     ]);
@@ -143,6 +162,7 @@ describe("support grants", () => {
       operatorId: "support@example.com",
       caseReference: "CASE-101",
       reason: command.reason,
+      capabilities: ["configuration:read"],
       startsAt: new Date("2026-08-11T12:00:00Z"),
       expiresAt: new Date("2026-08-11T13:00:00Z"),
       actor: command.actor,

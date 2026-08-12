@@ -6,7 +6,7 @@ import { saveProductionTemplateAction, saveProductionTemplateStageAction } from 
 import { listProductionTemplateConfig } from "@/server/production/queries";
 
 export default async function AdminProductionConfigPage() {
-  const user = await requireUser();
+  const user = await requireUser("production");
 
   if (!canManageAdminSettings(user.role)) {
     notFound();

@@ -95,6 +95,7 @@ export interface SupportGrantRecord {
   cellId: string;
   operatorId: string;
   caseReference: string;
+  capabilities: string[];
   reason: string;
   startsAt: Date;
   expiresAt: Date;

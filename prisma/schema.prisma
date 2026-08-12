@@ -175,6 +175,8 @@ model CellConfiguration {
   id              String       @id @default("default")
   displayName     String       @default("eCRM")
   logoUrl         String?
+  supportUrl      String?
+  legalUrl        String?
   primaryColor    String       @default("#1e3a5f")
   locale          String       @default("en-US")
   timezone        String       @default("UTC")
@@ -182,6 +184,7 @@ model CellConfiguration {
   enabledModules  String[]     @default([])
   allowedModules  String[]     @default([])
   planCode        String       @default("UNASSIGNED")
+  revision        Int          @default(0)
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 }

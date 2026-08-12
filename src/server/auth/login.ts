@@ -1,6 +1,7 @@
 import type { UserRole } from "@prisma/client";
 import { z } from "zod";
 import { db } from "@/server/db";
+import { isConfiguredCellRuntimeActive } from "@/server/runtime/cell-config";
 import { verifyPassword as verifyPasswordHash } from "./password";
 import type { SessionUser } from "./session";
 
@@ -32,6 +33,7 @@ type LoginUserRecord = {
 type LoginDependencies = {
   findUserByEmail?: (email: string) => Promise<LoginUserRecord | null>;
   verifyPassword?: (password: string, passwordHash: string) => Promise<boolean>;
+  isCellActive?: () => boolean;
 };
 
 async function findUserByEmail(email: string) {
@@ -47,6 +49,9 @@ export async function authenticateLogin(
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Check your login details." };
   }
+
+  const cellIsActive = dependencies.isCellActive ?? isConfiguredCellRuntimeActive;
+  if (!cellIsActive()) return { error: "Customer cell is not active." };
 
   const lookupUser = dependencies.findUserByEmail ?? findUserByEmail;
   const verifyPassword = dependencies.verifyPassword ?? verifyPasswordHash;

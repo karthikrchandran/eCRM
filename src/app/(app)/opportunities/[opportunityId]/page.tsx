@@ -38,7 +38,7 @@ function formatDate(date: Date | null) {
 }
 
 export default async function OpportunityDetailPage({ params }: { params: Promise<{ opportunityId: string }> }) {
-  const user = await requireUser();
+  const user = await requireUser("crm");
   const { opportunityId } = await params;
   const [opportunity, options, proposals] = await Promise.all([
     getOpportunityDetail(user, opportunityId),

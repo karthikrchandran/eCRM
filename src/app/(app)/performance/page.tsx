@@ -24,7 +24,7 @@ export default async function PerformancePage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const user = await requireUser();
+  const user = await requireUser("reports");
   const rawSearchParams = await searchParams;
   const filters = {
     financialYear: parseOptionalNumber(rawSearchParams.financialYear),

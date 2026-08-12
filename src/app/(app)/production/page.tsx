@@ -5,7 +5,7 @@ import { updateProductionStageStatusAction } from "@/server/production/actions";
 import { listProductionFormOptions, listProductionWorkItems } from "@/server/production/queries";
 
 export default async function ProductionPage() {
-  const user = await requireUser();
+  const user = await requireUser("production");
   const [workItems, options] = await Promise.all([listProductionWorkItems(user), listProductionFormOptions()]);
 
   return (

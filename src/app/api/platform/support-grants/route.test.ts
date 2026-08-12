@@ -7,7 +7,8 @@ describe("platform support-grant API", () => {
     const createSupportGrant = vi.fn().mockResolvedValue({ id: "grant_1", cellId: "cell_ara" });
     const handlers = createSupportGrantCollectionHandlers({
       authorize: () => ({ actor: "platform-admin@example.com" }),
-      createSupportGrant
+      createSupportGrant,
+      issueAccessToken: vi.fn().mockResolvedValue("scoped-token")
     });
     const response = await handlers.POST(new Request("http://localhost/api/platform/support-grants", {
       method: "POST",
@@ -16,6 +17,7 @@ describe("platform support-grant API", () => {
         cellId: "cell_ara",
         operatorId: "support@example.com",
         caseReference: "CASE-101",
+        capabilities: ["configuration:read"],
         reason: "Investigate login issue",
         expiresAt: "2026-08-12T00:00:00Z",
         correlationId: "corr_3"

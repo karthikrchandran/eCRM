@@ -99,7 +99,7 @@ export function parseProductionTemplateStageFormForTest(formData: FormData): Par
 export async function instantiateProductionForOrderLineItemAction(orderId: string, orderLineItemId: string) {
   "use server";
 
-  const user = await requireUser();
+  const user = await requireUser("production");
   await instantiateProductionForOrderLineItem(user, orderLineItemId);
   revalidatePath("/production");
   revalidatePath("/orders");
@@ -114,7 +114,7 @@ export async function updateProductionStageStatusAction(
 ): Promise<ActionState> {
   "use server";
 
-  const user = await requireUser();
+  const user = await requireUser("production");
   const parsed = parseProductionStageStatusFormForTest(formData);
 
   if (!parsed.ok) {
@@ -131,7 +131,7 @@ export async function updateProductionStageStatusAction(
 export async function saveProductionTemplateAction(formData: FormData) {
   "use server";
 
-  const user = await requireUser();
+  const user = await requireUser("production");
   const parsed = parseProductionTemplateFormForTest(formData);
 
   if (!parsed.ok) {
@@ -147,7 +147,7 @@ export async function saveProductionTemplateAction(formData: FormData) {
 export async function saveProductionTemplateStageAction(formData: FormData) {
   "use server";
 
-  const user = await requireUser();
+  const user = await requireUser("production");
   const parsed = parseProductionTemplateStageFormForTest(formData);
 
   if (!parsed.ok) {

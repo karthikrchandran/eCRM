@@ -30,6 +30,8 @@ describe("cell-local administration", () => {
         id: "default",
         displayName: "eCRM",
         logoUrl: null,
+        supportUrl: null,
+        legalUrl: null,
         primaryColor: "#1e3a5f",
         locale: "en-US",
         timezone: "UTC",
@@ -37,6 +39,7 @@ describe("cell-local administration", () => {
         enabledModules: ["crm"],
         allowedModules: ["crm", "finance"],
         planCode: "ENTERPRISE",
+        revision: 0,
         createdAt: new Date("2026-08-11T12:00:00Z"),
         updatedAt: new Date("2026-08-11T12:00:00Z")
       }
@@ -64,6 +67,8 @@ describe("cell-local administration", () => {
         id: "default",
         displayName: "eCRM",
         logoUrl: null,
+        supportUrl: null,
+        legalUrl: null,
         primaryColor: "#1e3a5f",
         locale: "en-US",
         timezone: "UTC",
@@ -71,12 +76,14 @@ describe("cell-local administration", () => {
         enabledModules: ["crm"],
         allowedModules: ["crm", "finance"],
         planCode: "ENTERPRISE",
+        revision: 0,
         createdAt: new Date("2026-08-11T12:00:00Z"),
         updatedAt: new Date("2026-08-11T12:00:00Z")
       }
     });
     await repository.updateConfigurationWithAudit(
-      { ...(await repository.getConfiguration())!, defaultCurrency: "USD" },
+      { ...(await repository.getConfiguration())!, defaultCurrency: "USD", revision: 1 },
+      0,
       {
         id: "audit_settings",
         actorId: admin.id,
@@ -167,6 +174,61 @@ describe("cell-local administration", () => {
     expect((await repository.listUsers()).filter((user) => user.role === "ADMIN" && user.active)).toHaveLength(1);
     expect(await repository.auditEvents()).toContainEqual(
       expect.objectContaining({ result: "FAILED", error: "FINAL_ACTIVE_ADMIN" })
+    );
+  });
+
+  it("rejects one of two stale concurrent configuration writes and audits the current snapshot", async () => {
+    const repository = createInMemoryCellAdministrationRepository({
+      configuration: {
+        id: "default", displayName: "eCRM", logoUrl: null, supportUrl: null, legalUrl: null,
+        primaryColor: "#1e3a5f", locale: "en-US", timezone: "UTC", defaultCurrency: "INR",
+        enabledModules: ["crm"], allowedModules: ["crm", "finance"], planCode: "ENTERPRISE", revision: 1,
+        createdAt: new Date("2026-08-11T12:00:00Z"), updatedAt: new Date("2026-08-11T12:00:00Z")
+      }
+    });
+    const service = new CellAdministrationService(repository);
+
+    const results = await Promise.allSettled([
+      service.updateConfiguration(admin, { displayName: "Acme" }, { ...audit, correlationId: "corr_brand", expectedRevision: 1 }),
+      service.updateConfiguration(admin, { defaultCurrency: "USD" }, { ...audit, correlationId: "corr_currency", expectedRevision: 1 })
+    ]);
+
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(results.filter((result) => result.status === "rejected")).toHaveLength(1);
+    expect(await repository.auditEvents()).toContainEqual(expect.objectContaining({
+      result: "FAILED",
+      error: "CONFIGURATION_CONFLICT",
+      before: expect.objectContaining({ revision: 2 })
+    }));
+  });
+
+  it("records a durable FAILED audit when a duplicate local email is rejected", async () => {
+    const repository = createInMemoryCellAdministrationRepository({
+      users: [{ id: "existing", name: "Existing", email: "duplicate@example.com", role: "SALES", active: true }]
+    });
+    const service = new CellAdministrationService(repository, async () => "hash");
+
+    await expect(service.createUser(admin, {
+      name: "Duplicate", email: "DUPLICATE@example.com", password: "SecurePassphrase123!", role: "SALES"
+    }, audit)).rejects.toThrow("already exists");
+
+    expect(await repository.auditEvents()).toContainEqual(expect.objectContaining({
+      action: "local-user.create", result: "FAILED", error: "DUPLICATE_EMAIL"
+    }));
+  });
+
+  it("accepts only public HTTPS support and legal URLs with neutral null fallback", async () => {
+    const repository = createInMemoryCellAdministrationRepository({ allowedModules: ["crm"] });
+    const service = new CellAdministrationService(repository);
+
+    const updated = await service.updateConfiguration(admin, {
+      supportUrl: "https://support.example.com/help",
+      legalUrl: "https://www.example.com/legal"
+    }, audit);
+    expect(updated).toMatchObject({ supportUrl: "https://support.example.com/help", legalUrl: "https://www.example.com/legal" });
+
+    await expect(service.updateConfiguration(admin, { supportUrl: "http://127.0.0.1/admin" }, audit)).rejects.toThrow(
+      "Support and legal URLs must use public HTTPS"
     );
   });
 });

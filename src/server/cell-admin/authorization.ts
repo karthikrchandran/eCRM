@@ -8,6 +8,7 @@ export async function authorizeCellAdmin(
   resolveUser: () => Promise<LocalUser | null> = getCurrentUser
 ): Promise<{ user: LocalUser; cellId: string; cellKey: string } | Response> {
   if (runtime.mode !== "cell") return Response.json({ error: "Not found." }, { status: 404 });
+  if (runtime.lifecycleStatus !== "ACTIVE") return Response.json({ error: "Customer cell is not active." }, { status: 423 });
   const user = await resolveUser();
   if (!user) return Response.json({ error: "Unauthorized." }, { status: 401 });
   if (user.role !== "ADMIN") return Response.json({ error: "Forbidden." }, { status: 403 });

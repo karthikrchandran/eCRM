@@ -17,7 +17,7 @@ export default async function BookOrderPage({
 }: {
   params: Promise<{ opportunityId: string; proposalId: string }>;
 }) {
-  const user = await requireUser();
+  const user = await requireUser("orders");
   const { opportunityId, proposalId } = await params;
   const proposal = await loadAcceptedProposalForBooking(user, proposalId);
 

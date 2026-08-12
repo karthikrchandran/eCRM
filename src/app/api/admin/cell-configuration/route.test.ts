@@ -17,6 +17,23 @@ describe("cell configuration API", () => {
     expect(getConfiguration).not.toHaveBeenCalled();
   });
 
+  it("rejects unsafe support and legal URLs before calling the service", async () => {
+    const updateConfiguration = vi.fn();
+    const handlers = createCellConfigurationHandlers({
+      authorize: vi.fn().mockResolvedValue({ user: { id: "admin_1", role: "ADMIN" }, cellId: "cell_1", cellKey: "acme" }),
+      getConfiguration: vi.fn(),
+      updateConfiguration
+    });
+
+    const response = await handlers.PATCH(new Request("http://localhost/api/admin/cell-configuration", {
+      method: "PATCH",
+      body: JSON.stringify({ supportUrl: "http://169.254.169.254/latest/meta-data", revision: 1, correlationId: "corr", reason: "test" })
+    }));
+
+    expect(response.status).toBe(400);
+    expect(updateConfiguration).not.toHaveBeenCalled();
+  });
+
   it("updates branding/modules and returns 200", async () => {
     const updateConfiguration = vi.fn().mockResolvedValue({ displayName: "Acme CRM", enabledModules: ["crm"] });
     const handlers = createCellConfigurationHandlers({
@@ -30,6 +47,7 @@ describe("cell configuration API", () => {
       body: JSON.stringify({
         displayName: "Acme CRM",
         enabledModules: ["crm"],
+        revision: 1,
         correlationId: "corr_1",
         reason: "Approved branding update"
       })
@@ -37,7 +55,8 @@ describe("cell configuration API", () => {
     expect(response.status).toBe(200);
     expect(updateConfiguration).toHaveBeenCalledWith(authorized.user, { displayName: "Acme CRM", enabledModules: ["crm"] }, {
       correlationId: "corr_1",
-      reason: "Approved branding update"
+      reason: "Approved branding update",
+      expectedRevision: 1
     });
   });
 
@@ -50,7 +69,7 @@ describe("cell configuration API", () => {
     const response = await handlers.PATCH(new Request("http://localhost/api/admin/cell-configuration", {
       method: "PATCH",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ enabledModules: ["finance"], correlationId: "corr_1", reason: "Enable finance" })
+      body: JSON.stringify({ enabledModules: ["finance"], revision: 1, correlationId: "corr_1", reason: "Enable finance" })
     }));
     expect(response.status).toBe(409);
   });

@@ -11,6 +11,8 @@ function configuration(defaultCurrency: "INR" | "USD" = "INR") {
     id: "default" as const,
     displayName: "eCRM",
     logoUrl: null,
+    supportUrl: null,
+    legalUrl: null,
     primaryColor: "#1e3a5f",
     locale: "en-US",
     timezone: "UTC",
@@ -18,6 +20,7 @@ function configuration(defaultCurrency: "INR" | "USD" = "INR") {
     enabledModules: ["crm"],
     allowedModules: ["crm", "finance"],
     planCode: "ENTERPRISE",
+    revision: 0,
     createdAt: new Date("2026-08-11T12:00:00Z"),
     updatedAt: new Date("2026-08-11T12:00:00Z")
   };

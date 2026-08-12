@@ -19,13 +19,24 @@ export class PrismaCellAdministrationRepository implements CellAdministrationRep
     return configuration ? mapConfiguration(configuration) : undefined;
   }
 
-  public async updateConfigurationWithAudit(configuration: CellConfigurationRecord, audit: CellAuditEventRecord): Promise<CellConfigurationRecord> {
+  public async updateConfigurationWithAudit(
+    configuration: CellConfigurationRecord,
+    expectedRevision: number,
+    audit: CellAuditEventRecord
+  ): Promise<CellConfigurationRecord | undefined> {
     return this.client.$transaction(async (transaction) => {
-      const stored = await transaction.cellConfiguration.upsert({
-        where: { id: "default" },
-        create: configurationData(configuration),
-        update: configurationData(configuration)
-      });
+      if (expectedRevision === 0) {
+        const existing = await transaction.cellConfiguration.findUnique({ where: { id: "default" }, select: { revision: true } });
+        if (existing) return undefined;
+        await transaction.cellConfiguration.create({ data: configurationData(configuration) });
+      } else {
+        const changed = await transaction.cellConfiguration.updateMany({
+          where: { id: "default", revision: expectedRevision },
+          data: configurationData(configuration)
+        });
+        if (changed.count !== 1) return undefined;
+      }
+      const stored = await transaction.cellConfiguration.findUniqueOrThrow({ where: { id: "default" } });
       await transaction.cellAuditEvent.create({ data: auditData(audit) });
       return mapConfiguration(stored);
     });
@@ -107,19 +118,22 @@ function configurationData(configuration: CellConfigurationRecord) {
     id: "default",
     displayName: configuration.displayName,
     logoUrl: configuration.logoUrl,
+    supportUrl: configuration.supportUrl,
+    legalUrl: configuration.legalUrl,
     primaryColor: configuration.primaryColor,
     locale: configuration.locale,
     timezone: configuration.timezone,
     defaultCurrency: configuration.defaultCurrency,
     enabledModules: configuration.enabledModules,
     allowedModules: configuration.allowedModules,
-    planCode: configuration.planCode
+    planCode: configuration.planCode,
+    revision: configuration.revision
   };
 }
 
 function mapConfiguration(configuration: {
-  id: string; displayName: string; logoUrl: string | null; primaryColor: string; locale: string; timezone: string;
-  defaultCurrency: string; enabledModules: string[]; allowedModules: string[]; planCode: string; createdAt: Date; updatedAt: Date;
+  id: string; displayName: string; logoUrl: string | null; supportUrl: string | null; legalUrl: string | null; primaryColor: string; locale: string; timezone: string;
+  defaultCurrency: string; enabledModules: string[]; allowedModules: string[]; planCode: string; revision: number; createdAt: Date; updatedAt: Date;
 }): CellConfigurationRecord {
   return {
     ...configuration,

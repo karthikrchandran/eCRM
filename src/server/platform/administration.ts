@@ -24,7 +24,12 @@ export interface PlatformAdministrationRepository {
   listCells(): Promise<CustomerCellRecord[]>;
   getCell(cellId: string): Promise<CustomerCellRecord | undefined>;
   getProvisioningActivationEvidence(cellId: string): Promise<ProvisioningActivationEvidence | undefined>;
-  transitionCellWithAudit(cellId: string, status: CustomerCellLifecycleStatus, audit: ControlPlaneAuditEventRecord): Promise<CustomerCellRecord>;
+  transitionCellWithAudit(
+    cellId: string,
+    expectedStatus: CustomerCellLifecycleStatus,
+    status: CustomerCellLifecycleStatus,
+    audit: ControlPlaneAuditEventRecord
+  ): Promise<CustomerCellRecord | undefined>;
   appendAuditEvent(event: ControlPlaneAuditEventRecord): Promise<void>;
   auditEventsForCell(cellId: string): Promise<ControlPlaneAuditEventRecord[]>;
   createSupportGrantWithAudit(grant: SupportGrantRecord, audit: ControlPlaneAuditEventRecord): Promise<SupportGrantRecord>;
@@ -80,7 +85,14 @@ export class PlatformAdministrationService {
       throw new Error(`Cannot transition customer cell from ${cell.lifecycleStatus} to ${status}`);
     }
 
-    return this.repository.transitionCellWithAudit(cellId, status, this.audit(cellId, action, command, "SUCCEEDED"));
+    const updated = await this.repository.transitionCellWithAudit(
+      cellId,
+      cell.lifecycleStatus,
+      status,
+      this.audit(cellId, action, command, "SUCCEEDED")
+    );
+    if (!updated) throw new Error("Customer cell lifecycle changed concurrently");
+    return updated;
   }
 
   public async deleteCell(
@@ -99,22 +111,27 @@ export class PlatformAdministrationService {
       );
     }
     const reason = `${command.reason}; retention=${command.retentionEvidence}; backup=${command.backupEvidence}`;
-    return this.repository.transitionCellWithAudit(
+    const updated = await this.repository.transitionCellWithAudit(
       cellId,
+      cell.lifecycleStatus,
       "DELETED",
       this.audit(cellId, "cell.lifecycle.deleted", { ...command, reason }, "SUCCEEDED")
     );
+    if (!updated) throw new Error("Customer cell lifecycle changed concurrently");
+    return updated;
   }
 
   public async createSupportGrant(input: PlatformAuditCommand & {
     cellId: string;
     operatorId: string;
     caseReference: string;
+    capabilities: string[];
     expiresAt: Date;
   }): Promise<SupportGrantRecord> {
     await this.requiredCell(input.cellId);
     const startsAt = this.now();
-    if (!input.operatorId.trim() || !input.caseReference.trim() || !input.reason.trim() || input.expiresAt <= startsAt) {
+    if (!input.operatorId.trim() || !input.caseReference.trim() || !input.reason.trim() || input.expiresAt <= startsAt
+      || input.capabilities.length === 0 || input.capabilities.some((capability) => !["configuration:read", "users:read"].includes(capability))) {
       await this.repository.appendAuditEvent(this.audit(input.cellId, "support-grant.create", input, "FAILED", "INVALID_SUPPORT_GRANT"));
       throw new Error("Support grant requires operator, case, reason, and a future expiry");
     }
@@ -123,6 +140,7 @@ export class PlatformAdministrationService {
       cellId: input.cellId,
       operatorId: input.operatorId,
       caseReference: input.caseReference,
+      capabilities: [...new Set(input.capabilities)],
       reason: input.reason,
       startsAt,
       expiresAt: input.expiresAt,
@@ -202,9 +220,13 @@ export function createInMemoryPlatformAdministrationRepository(
       return cell ? { ...cell } : undefined;
     },
     getProvisioningActivationEvidence: async (cellId) => activationEvidence[cellId],
-    transitionCellWithAudit: async (cellId, status, audit) => {
+    transitionCellWithAudit: async (cellId, expectedStatus, status, audit) => {
       const cell = cells.get(cellId);
       if (!cell) throw new Error("Customer cell was not found");
+      if (cell.lifecycleStatus !== expectedStatus) {
+        auditEvents.push({ ...audit, result: "FAILED", error: "CONCURRENT_LIFECYCLE_TRANSITION" });
+        return undefined;
+      }
       const updated = { ...cell, lifecycleStatus: status, updatedAt: new Date() };
       cells.set(cellId, updated);
       auditEvents.push({ ...audit });

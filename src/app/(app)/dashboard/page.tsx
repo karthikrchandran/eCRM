@@ -25,7 +25,7 @@ function MetricCard({ detail, label, value }: { detail: string; label: string; v
 }
 
 export default async function DashboardPage() {
-  const user = await requireUser();
+  const user = await requireUser("crm");
   const reports = await getReportsOverview(user);
   const openOpportunities = metricByLabel(reports.dashboardMetrics, "Open opportunities");
   const pipelineValue = metricByLabel(reports.dashboardMetrics, "Pipeline value");

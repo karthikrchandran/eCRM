@@ -71,7 +71,7 @@ export function parseOrderStatusFormForTest(formData: FormData): ParseResult<{ s
 export async function bookOrderAction(_previousState: ActionState, formData: FormData): Promise<ActionState> {
   "use server";
 
-  const user = await requireUser();
+  const user = await requireUser("orders");
   const parsed = parseOrderBookingFormForTest(formData);
 
   if (!parsed.ok) {
@@ -92,7 +92,7 @@ export async function updateOrderPoMetadataAction(
 ): Promise<ActionState> {
   "use server";
 
-  const user = await requireUser();
+  const user = await requireUser("orders");
   const parsed = parsePoMetadataFormForTest(formData);
 
   if (!parsed.ok) {
@@ -108,7 +108,7 @@ export async function updateOrderPoMetadataAction(
 export async function changeOrderStatusAction(orderId: string, formData: FormData) {
   "use server";
 
-  const user = await requireUser();
+  const user = await requireUser("orders");
   const parsed = parseOrderStatusFormForTest(formData);
 
   if (!parsed.ok) {

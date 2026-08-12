@@ -13,7 +13,7 @@ describe("cell administration authorization", () => {
 
   it("returns 401 without a valid active local session", async () => {
     const result = await authorizeCellAdmin(
-      { mode: "cell", cellId: "cell_ara", cellKey: "ara-global" },
+      { mode: "cell", cellId: "cell_ara", cellKey: "ara-global", lifecycleStatus: "ACTIVE" },
       vi.fn().mockResolvedValue(null)
     );
     expect(result).toBeInstanceOf(Response);
@@ -21,7 +21,7 @@ describe("cell administration authorization", () => {
   });
 
   it("returns 403 for Sales and accepts Admin without a customer selector", async () => {
-    const runtime = { mode: "cell", cellId: "cell_ara", cellKey: "ara-global" } as const;
+    const runtime = { mode: "cell", cellId: "cell_ara", cellKey: "ara-global", lifecycleStatus: "ACTIVE" } as const;
     const denied = await authorizeCellAdmin(runtime, vi.fn().mockResolvedValue({ id: "sales_1", role: "SALES" }));
     expect((denied as Response).status).toBe(403);
 
@@ -30,5 +30,15 @@ describe("cell administration authorization", () => {
       cellId: "cell_ara",
       cellKey: "ara-global"
     });
+  });
+
+  it.each(["SUSPENDED", "OFFBOARDING", "DELETED"] as const)("denies Admin mutations while the cell is %s", async (lifecycleStatus) => {
+    const result = await authorizeCellAdmin(
+      { mode: "cell", cellId: "cell_ara", cellKey: "ara-global", lifecycleStatus },
+      vi.fn().mockResolvedValue({ id: "admin_1", role: "ADMIN" })
+    );
+
+    expect(result).toBeInstanceOf(Response);
+    expect((result as Response).status).toBe(423);
   });
 });

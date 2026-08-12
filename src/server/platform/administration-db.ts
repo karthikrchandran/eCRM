@@ -34,11 +34,22 @@ export class PrismaPlatformAdministrationRepository implements PlatformAdministr
 
   public async transitionCellWithAudit(
     cellId: string,
+    expectedStatus: CustomerCellRecord["lifecycleStatus"],
     status: CustomerCellRecord["lifecycleStatus"],
     audit: ControlPlaneAuditEventRecord
-  ): Promise<CustomerCellRecord> {
+  ): Promise<CustomerCellRecord | undefined> {
     return this.client.$transaction(async (transaction) => {
-      const cell = await transaction.customerCell.update({ where: { id: cellId }, data: { lifecycleStatus: status } });
+      const result = await transaction.customerCell.updateMany({
+        where: { id: cellId, lifecycleStatus: expectedStatus },
+        data: { lifecycleStatus: status }
+      });
+      if (result.count !== 1) {
+        await transaction.controlPlaneAuditEvent.create({
+          data: auditData({ ...audit, result: "FAILED", error: "CONCURRENT_LIFECYCLE_TRANSITION" })
+        });
+        return undefined;
+      }
+      const cell = await transaction.customerCell.findUniqueOrThrow({ where: { id: cellId } });
       await transaction.controlPlaneAuditEvent.create({ data: auditData(audit) });
       return mapCell(cell);
     });
@@ -119,6 +130,7 @@ function grantData(grant: SupportGrantRecord) {
     cellId: grant.cellId,
     operatorId: grant.operatorId,
     caseReference: grant.caseReference,
+    capabilities: grant.capabilities,
     reason: grant.reason,
     startsAt: grant.startsAt,
     expiresAt: grant.expiresAt,
@@ -132,7 +144,7 @@ function grantData(grant: SupportGrantRecord) {
 }
 
 function mapGrant(grant: {
-  id: string; cellId: string; operatorId: string; caseReference: string; reason: string; startsAt: Date; expiresAt: Date;
+  id: string; cellId: string; operatorId: string; caseReference: string; capabilities: string[]; reason: string; startsAt: Date; expiresAt: Date;
   revokedAt: Date | null; revokedBy: string | null; revocationReason: string | null; actor: string; correlationId: string; createdAt: Date;
 }): SupportGrantRecord {
   return {

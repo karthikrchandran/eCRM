@@ -120,6 +120,7 @@ model SupportGrant {
   cellId        String
   operatorId    String
   caseReference String
+  capabilities  String[]
   reason        String
   startsAt      DateTime
   expiresAt     DateTime

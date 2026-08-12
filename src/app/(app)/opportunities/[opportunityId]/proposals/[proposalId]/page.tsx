@@ -9,7 +9,7 @@ export default async function ProposalDetailPage({
 }: {
   params: Promise<{ opportunityId: string; proposalId: string }>;
 }) {
-  const user = await requireUser();
+  const user = await requireUser("proposals");
   const { opportunityId, proposalId } = await params;
   const proposal = await getProposalDetail(user, proposalId);
 

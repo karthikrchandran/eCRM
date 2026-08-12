@@ -44,7 +44,7 @@ export async function createProductServiceAction(
 ): Promise<ActionState> {
   "use server";
 
-  const user = await requireUser();
+  const user = await requireUser("production");
   const parsed = parseProductServiceFormForTest(formData);
 
   if (!parsed.ok) {
@@ -63,7 +63,7 @@ export async function updateProductServiceAction(
 ): Promise<ActionState> {
   "use server";
 
-  const user = await requireUser();
+  const user = await requireUser("production");
   const parsed = parseProductServiceFormForTest(formData);
 
   if (!parsed.ok) {
@@ -78,7 +78,7 @@ export async function updateProductServiceAction(
 export async function setProductServiceActiveAction(productServiceId: string, active: boolean) {
   "use server";
 
-  const user = await requireUser();
+  const user = await requireUser("production");
   await setProductServiceActive(user, productServiceId, active);
   revalidatePath("/admin/products");
 }

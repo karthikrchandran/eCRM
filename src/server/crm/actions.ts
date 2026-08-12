@@ -56,7 +56,7 @@ export function parseLeadCustomerFormForTest(formData: FormData): LeadCustomerPa
 export async function createLeadCustomerAction(_previousState: ActionState, formData: FormData): Promise<ActionState> {
   "use server";
 
-  const user = await requireUser();
+  const user = await requireUser("crm");
   const parsed = parseLeadCustomerFormForTest(formData);
 
   if (!parsed.ok) {
@@ -75,7 +75,7 @@ export async function updateLeadCustomerAction(
 ): Promise<ActionState> {
   "use server";
 
-  const user = await requireUser();
+  const user = await requireUser("crm");
   const parsed = parseLeadCustomerFormForTest(formData);
 
   if (!parsed.ok) {
@@ -95,7 +95,7 @@ export async function createBranchAction(
 ): Promise<ActionState> {
   "use server";
 
-  const user = await requireUser();
+  const user = await requireUser("crm");
   const result = branchInputSchema.safeParse({
     leadCustomerId,
     name: formData.get("name"),
@@ -127,7 +127,7 @@ export async function createContactAction(
 ): Promise<ActionState> {
   "use server";
 
-  const user = await requireUser();
+  const user = await requireUser("crm");
   const result = parseContactFormForTest(leadCustomerId, formData);
 
   if (!result.ok) {
@@ -162,7 +162,7 @@ export async function updateContactAction(
 ): Promise<ActionState> {
   "use server";
 
-  const user = await requireUser();
+  const user = await requireUser("crm");
   const result = parseContactFormForTest(leadCustomerId, formData);
   if (!result.ok) {
     return result;
@@ -180,7 +180,7 @@ export async function createActivityAction(
 ): Promise<ActionState> {
   "use server";
 
-  const user = await requireUser();
+  const user = await requireUser("crm");
   const result = activityInputSchema.safeParse({
     leadCustomerId,
     branchId: formData.get("branchId"),
@@ -207,7 +207,7 @@ export async function createActivityAction(
 export async function completeActivityAction(leadCustomerId: string, activityId: string) {
   "use server";
 
-  const user = await requireUser();
+  const user = await requireUser("crm");
   await completeActivity(user, activityId);
   revalidatePath("/leads");
   revalidatePath(`/leads/${leadCustomerId}`);
@@ -220,7 +220,7 @@ export async function reassignLeadOwnerAction(
 ): Promise<ActionState> {
   "use server";
 
-  const user = await requireUser();
+  const user = await requireUser("crm");
   const result = reassignmentInputSchema.safeParse({
     leadCustomerId,
     toOwnerId: formData.get("toOwnerId"),

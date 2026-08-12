@@ -10,6 +10,10 @@ afterEach(() => {
   } else {
     process.env.SHARED_DATA_API_TOKEN = originalToken;
   }
+  delete process.env.APP_MODE;
+  delete process.env.CELL_ID;
+  delete process.env.CELL_KEY;
+  delete process.env.CELL_LIFECYCLE_STATUS;
 });
 
 describe("requireSharedDataApiToken", () => {
@@ -48,5 +52,17 @@ describe("requireSharedDataApiToken", () => {
 
     expect(response?.status).toBe(500);
     await expect(response?.json()).resolves.toEqual({ error: "Shared data API token is not configured." });
+  });
+
+  it("denies integration mutations when the cell is suspended even with a valid token", () => {
+    process.env.SHARED_DATA_API_TOKEN = "shared-secret";
+    process.env.APP_MODE = "cell";
+    process.env.CELL_ID = "cell_ara";
+    process.env.CELL_KEY = "ara";
+    process.env.CELL_LIFECYCLE_STATUS = "SUSPENDED";
+    const response = requireSharedDataApiToken(new Request("http://localhost/api/shared-records", {
+      headers: { authorization: "Bearer shared-secret" }
+    }));
+    expect(response?.status).toBe(423);
   });
 });
