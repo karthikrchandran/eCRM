@@ -24,7 +24,7 @@ const listSharedRecordsMock = vi.mocked(listSharedRecords);
 describe("shared records route handlers", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    requireSharedDataApiTokenMock.mockReturnValue(null);
+    requireSharedDataApiTokenMock.mockResolvedValue(null);
   });
 
   it("returns list responses with parsed filters", async () => {

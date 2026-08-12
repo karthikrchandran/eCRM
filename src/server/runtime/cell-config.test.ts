@@ -12,31 +12,18 @@ describe("parseRuntimeConfig", () => {
   });
 
   it("parses required cell settings in cell mode", () => {
-    expect(parseRuntimeConfig({ APP_MODE: "cell", CELL_ID: "cell_ara", CELL_KEY: "ara-global", CELL_LIFECYCLE_STATUS: "ACTIVE" })).toEqual({
+    expect(parseRuntimeConfig({ APP_MODE: "cell", CELL_ID: "cell_ara", CELL_KEY: "ara-global" })).toEqual({
       mode: "cell",
       cellId: "cell_ara",
-      cellKey: "ara-global",
-      lifecycleStatus: "ACTIVE"
+      cellKey: "ara-global"
     });
   });
 
-  it("requires a server-projected lifecycle status for cell runtime", () => {
-    expect(() => parseRuntimeConfig({ APP_MODE: "cell", CELL_ID: "cell_ara", CELL_KEY: "ara-global" })).toThrow(
-      "CELL_LIFECYCLE_STATUS is required"
-    );
-  });
-
-  it.each(["SUSPENDED", "OFFBOARDING", "DELETED"])("preserves %s so request authorization can fail closed", (status) => {
-    expect(parseRuntimeConfig({
-      APP_MODE: "cell",
-      CELL_ID: "cell_ara",
-      CELL_KEY: "ara-global",
-      CELL_LIFECYCLE_STATUS: status
-    })).toMatchObject({ lifecycleStatus: status });
-  });
-
-  it("allows sessions and business requests only for ACTIVE cell projections", () => {
-    expect(isCellRuntimeActive({ mode: "cell", cellId: "cell_ara", cellKey: "ara", lifecycleStatus: "ACTIVE" })).toBe(true);
-    expect(isCellRuntimeActive({ mode: "cell", cellId: "cell_ara", cellKey: "ara", lifecycleStatus: "SUSPENDED" })).toBe(false);
+  it("allows sessions and business requests only from the durable matching ACTIVE projection", async () => {
+    const runtime = { mode: "cell", cellId: "cell_ara", cellKey: "ara" } as const;
+    await expect(isCellRuntimeActive(runtime, async () => ({ cellId: "cell_ara", lifecycleStatus: "ACTIVE" }))).resolves.toBe(true);
+    await expect(isCellRuntimeActive(runtime, async () => ({ cellId: "cell_ara", lifecycleStatus: "SUSPENDED" }))).resolves.toBe(false);
+    await expect(isCellRuntimeActive(runtime, async () => undefined)).resolves.toBe(false);
+    await expect(isCellRuntimeActive(runtime, async () => ({ cellId: "cell_other", lifecycleStatus: "ACTIVE" }))).resolves.toBe(false);
   });
 });

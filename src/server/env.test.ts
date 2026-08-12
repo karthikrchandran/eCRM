@@ -38,10 +38,9 @@ describe("getServerEnv", () => {
     process.env.APP_MODE = "cell";
     process.env.CELL_ID = "cell_ara";
     process.env.CELL_KEY = "ara-global";
-    process.env.CELL_LIFECYCLE_STATUS = "ACTIVE";
 
     expect(getServerEnv()).toMatchObject({
-      runtime: { mode: "cell", cellId: "cell_ara", cellKey: "ara-global", lifecycleStatus: "ACTIVE" }
+      runtime: { mode: "cell", cellId: "cell_ara", cellKey: "ara-global" }
     });
   });
 
@@ -52,7 +51,6 @@ describe("getServerEnv", () => {
     setValidServerEnv();
     process.env.APP_MODE = "cell";
     process.env.CELL_ID = "cell_ara";
-    process.env.CELL_LIFECYCLE_STATUS = "ACTIVE";
 
     if (cellKey === undefined) {
       delete process.env.CELL_KEY;

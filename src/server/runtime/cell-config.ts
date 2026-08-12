@@ -12,23 +12,20 @@ const cellRuntimeConfigSchema = z
     CELL_ID: z.string({ error: "CELL_ID is required" }).trim().min(1, { error: "CELL_ID is required" }),
     CELL_KEY: z
       .string({ error: "CELL_KEY is required" })
-      .regex(/^[a-z0-9-]+$/, { error: "CELL_KEY must match ^[a-z0-9-]+$" }),
-    CELL_LIFECYCLE_STATUS: z.enum(["ACTIVE", "SUSPENDED", "OFFBOARDING", "DELETED"], {
-      error: "CELL_LIFECYCLE_STATUS is required and must be ACTIVE, SUSPENDED, OFFBOARDING, or DELETED"
-    })
+      .regex(/^[a-z0-9-]+$/, { error: "CELL_KEY must match ^[a-z0-9-]+$" })
   })
-  .transform(({ CELL_ID, CELL_KEY, CELL_LIFECYCLE_STATUS }) => ({
+  .transform(({ CELL_ID, CELL_KEY }) => ({
     mode: "cell" as const,
     cellId: CELL_ID,
-    cellKey: CELL_KEY,
-    lifecycleStatus: CELL_LIFECYCLE_STATUS
+    cellKey: CELL_KEY
   }));
 
 export type RuntimeConfig = { mode: "platform" } | {
   mode: "cell";
   cellId: string;
   cellKey: string;
-  lifecycleStatus: "ACTIVE" | "SUSPENDED" | "OFFBOARDING" | "DELETED";
+  /** @deprecated accepted only for source compatibility; authorization ignores it. */
+  lifecycleStatus?: "ACTIVE" | "SUSPENDED" | "OFFBOARDING" | "DELETED";
 };
 
 export function parseRuntimeConfig(input: Record<string, string | undefined>): RuntimeConfig {
@@ -41,10 +38,26 @@ export function parseRuntimeConfig(input: Record<string, string | undefined>): R
   return cellRuntimeConfigSchema.parse(input);
 }
 
-export function isCellRuntimeActive(runtime: RuntimeConfig): boolean {
-  return runtime.mode !== "cell" || runtime.lifecycleStatus === "ACTIVE";
+export async function isCellRuntimeActive(
+  runtime: RuntimeConfig,
+  loadProjection: (cellId: string) => Promise<{ cellId: string; lifecycleStatus: string } | undefined>
+): Promise<boolean> {
+  if (runtime.mode !== "cell") return true;
+  const projection = await loadProjection(runtime.cellId);
+  return projection?.cellId === runtime.cellId && projection.lifecycleStatus === "ACTIVE";
 }
 
-export function isConfiguredCellRuntimeActive(input: Record<string, string | undefined> = process.env): boolean {
-  return isCellRuntimeActive(parseRuntimeConfig({ ...input, APP_MODE: input.APP_MODE ?? "platform" }));
+export async function isConfiguredCellRuntimeActive(
+  input: Record<string, string | undefined> = process.env,
+  loadProjection?: (cellId: string) => Promise<{ cellId: string; lifecycleStatus: string } | undefined>
+): Promise<boolean> {
+  const runtime = parseRuntimeConfig({ ...input, APP_MODE: input.APP_MODE ?? "platform" });
+  if (runtime.mode !== "cell") return true;
+  const loader = loadProjection ?? (async (cellId: string) => {
+    const { db } = await import("@/server/db");
+    return (await db.cellControlProjection.findUnique({
+      where: { cellId }, select: { cellId: true, lifecycleStatus: true }
+    })) ?? undefined;
+  });
+  return isCellRuntimeActive(runtime, loader);
 }

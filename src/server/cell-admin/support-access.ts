@@ -62,6 +62,7 @@ export async function authorizeSupportAccess(
     runtime: RuntimeConfig;
     secret: string;
     now?: () => Date;
+    findControl(cellId: string): Promise<{ cellId: string; lifecycleStatus: string } | undefined>;
     findGrant(grantId: string): Promise<SupportGrantProjection | undefined>;
     audit(event: SupportAudit): Promise<void> | void;
   }
@@ -71,7 +72,9 @@ export async function authorizeSupportAccess(
   let targetId = "unknown";
   const correlationId = request.headers.get("x-correlation-id") ?? `support_${randomUUID()}`;
   try {
-    if (dependencies.runtime.mode !== "cell" || dependencies.runtime.lifecycleStatus !== "ACTIVE") throw new SupportAccessDeniedError();
+    if (dependencies.runtime.mode !== "cell") throw new SupportAccessDeniedError();
+    const control = await dependencies.findControl(dependencies.runtime.cellId);
+    if (control?.cellId !== dependencies.runtime.cellId || control.lifecycleStatus !== "ACTIVE") throw new SupportAccessDeniedError();
     if (!supportCapabilities.includes(capability as SupportCapability)) throw new SupportAccessDeniedError();
     const token = request.headers.get("authorization")?.match(/^Bearer\s+(.+)$/i)?.[1];
     if (!token || dependencies.secret.length < 32) throw new SupportAccessDeniedError();

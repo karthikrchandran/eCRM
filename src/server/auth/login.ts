@@ -33,7 +33,7 @@ type LoginUserRecord = {
 type LoginDependencies = {
   findUserByEmail?: (email: string) => Promise<LoginUserRecord | null>;
   verifyPassword?: (password: string, passwordHash: string) => Promise<boolean>;
-  isCellActive?: () => boolean;
+  isCellActive?: () => boolean | Promise<boolean>;
 };
 
 async function findUserByEmail(email: string) {
@@ -51,7 +51,7 @@ export async function authenticateLogin(
   }
 
   const cellIsActive = dependencies.isCellActive ?? isConfiguredCellRuntimeActive;
-  if (!cellIsActive()) return { error: "Customer cell is not active." };
+  if (!await cellIsActive()) return { error: "Customer cell is not active." };
 
   const lookupUser = dependencies.findUserByEmail ?? findUserByEmail;
   const verifyPassword = dependencies.verifyPassword ?? verifyPasswordHash;

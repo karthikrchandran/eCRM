@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { authorizeSupportAccess, issueSupportAccessToken, SupportAccessDeniedError } from "./support-access";
 
 const secret = "support-access-secret-that-is-at-least-32-bytes";
-const runtime = { mode: "cell", cellId: "cell_ara", cellKey: "ara", lifecycleStatus: "ACTIVE" } as const;
+const runtime = { mode: "cell", cellId: "cell_ara", cellKey: "ara" } as const;
 const grant = {
   id: "grant_1", cellId: "cell_ara", operatorId: "support@example.com", caseReference: "CASE-101",
   capabilities: ["configuration:read"] as const,
@@ -21,7 +21,8 @@ describe("scoped support access", () => {
       "x-support-operator-id": grant.operatorId,
       "x-support-case-reference": grant.caseReference
     }}), "configuration:read", {
-      runtime, secret, now: () => new Date("2026-08-11T12:30:00Z"), findGrant: async () => grant, audit
+      runtime, secret, now: () => new Date("2026-08-11T12:30:00Z"),
+      findControl: async () => ({ cellId: "cell_ara", lifecycleStatus: "ACTIVE" }), findGrant: async () => grant, audit
     });
 
     expect(context).toMatchObject({ grantId: grant.id, operatorId: grant.operatorId, caseReference: grant.caseReference });
@@ -41,8 +42,21 @@ describe("scoped support access", () => {
       "x-support-operator-id": input.operator,
       "x-support-case-reference": input.caseReference
     }}), input.capability, {
-      runtime, secret, now: () => new Date("2026-08-11T12:30:00Z"), findGrant: async () => input.projected, audit
+      runtime, secret, now: () => new Date("2026-08-11T12:30:00Z"),
+      findControl: async () => ({ cellId: "cell_ara", lifecycleStatus: "ACTIVE" }), findGrant: async () => input.projected, audit
     })).rejects.toBeInstanceOf(SupportAccessDeniedError);
     expect(audit).toHaveBeenCalledWith(expect.objectContaining({ result: "FAILED" }));
+  });
+
+  it("denies a valid token when the local lifecycle or grant projection is missing", async () => {
+    const token = await issueSupportAccessToken(grant, secret);
+    const request = new Request("http://cell/api/support/access", { headers: {
+      authorization: `Bearer ${token}`, "x-support-operator-id": grant.operatorId,
+      "x-support-case-reference": grant.caseReference
+    }});
+    await expect(authorizeSupportAccess(request, "configuration:read", {
+      runtime, secret, now: () => new Date("2026-08-11T12:30:00Z"),
+      findControl: async () => undefined, findGrant: async () => grant, audit: vi.fn()
+    })).rejects.toBeInstanceOf(SupportAccessDeniedError);
   });
 });

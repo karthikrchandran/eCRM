@@ -4,11 +4,10 @@ import { createSupportGrantCollectionHandlers } from "./route";
 
 describe("platform support-grant API", () => {
   it("creates a time-bound grant with case and audit context", async () => {
-    const createSupportGrant = vi.fn().mockResolvedValue({ id: "grant_1", cellId: "cell_ara" });
+    const createSupportGrant = vi.fn().mockResolvedValue({ id: "grant_1", cellId: "cell_ara", accessToken: "scoped-token" });
     const handlers = createSupportGrantCollectionHandlers({
       authorize: () => ({ actor: "platform-admin@example.com" }),
-      createSupportGrant,
-      issueAccessToken: vi.fn().mockResolvedValue("scoped-token")
+      createSupportGrant
     });
     const response = await handlers.POST(new Request("http://localhost/api/platform/support-grants", {
       method: "POST",
@@ -24,6 +23,10 @@ describe("platform support-grant API", () => {
       })
     }));
     expect(response.status).toBe(201);
+    await expect(response.json()).resolves.toEqual({
+      grant: { id: "grant_1", cellId: "cell_ara" },
+      accessToken: "scoped-token"
+    });
     expect(createSupportGrant).toHaveBeenCalledWith(expect.objectContaining({ actor: "platform-admin@example.com", expiresAt: new Date("2026-08-12T00:00:00Z") }));
   });
 });

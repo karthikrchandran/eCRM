@@ -3,7 +3,6 @@ import { z } from "zod";
 import { authorizePlatformAdmin, type PlatformAdministrator } from "@/server/platform/admin-auth";
 import type { PlatformAdministrationService } from "@/server/platform/administration";
 import { getPlatformAdministrationService } from "@/server/platform/runtime";
-import { issueSupportAccessToken } from "@/server/cell-admin/support-access";
 
 const supportGrantSchema = z.object({
   cellId: z.string().trim().min(1),
@@ -18,8 +17,7 @@ const supportGrantSchema = z.object({
 type GrantInput = Parameters<PlatformAdministrationService["createSupportGrant"]>[0];
 type Dependencies = {
   authorize(request: Request): PlatformAdministrator | Response;
-  createSupportGrant(input: GrantInput): ReturnType<PlatformAdministrationService["createSupportGrant"]>;
-  issueAccessToken(grant: Awaited<ReturnType<PlatformAdministrationService["createSupportGrant"]>>): Promise<string>;
+  createSupportGrant(input: GrantInput): Promise<Awaited<ReturnType<PlatformAdministrationService["createSupportGrant"]>> & { accessToken: string }>;
 };
 
 export function createSupportGrantCollectionHandlers(dependencies: Dependencies) {
@@ -29,8 +27,8 @@ export function createSupportGrantCollectionHandlers(dependencies: Dependencies)
       if (administrator instanceof Response) return administrator;
       try {
         const body = supportGrantSchema.parse(await request.json());
-        const grant = await dependencies.createSupportGrant({ ...body, actor: administrator.actor });
-        const accessToken = await dependencies.issueAccessToken(grant);
+        const created = await dependencies.createSupportGrant({ ...body, actor: administrator.actor });
+        const { accessToken, ...grant } = created;
         return Response.json({ grant, accessToken }, { status: 201 });
       } catch (error) {
         if (error instanceof z.ZodError || error instanceof SyntaxError) return Response.json({ error: "Invalid support grant." }, { status: 400 });
@@ -42,8 +40,7 @@ export function createSupportGrantCollectionHandlers(dependencies: Dependencies)
 
 const handlers = createSupportGrantCollectionHandlers({
   authorize: (request) => authorizePlatformAdmin(request),
-  createSupportGrant: (input) => getPlatformAdministrationService().createSupportGrant(input),
-  issueAccessToken: (grant) => issueSupportAccessToken(grant, process.env.SUPPORT_ACCESS_SECRET ?? "")
+  createSupportGrant: (input) => getPlatformAdministrationService().createSupportGrant(input)
 });
 
 export const POST = handlers.POST;

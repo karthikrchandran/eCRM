@@ -17,20 +17,20 @@ afterEach(() => {
 });
 
 describe("requireSharedDataApiToken", () => {
-  it("returns null when the bearer token matches the configured shared token", () => {
+  it("returns null when the bearer token matches the configured shared token", async () => {
     process.env.SHARED_DATA_API_TOKEN = "shared-secret";
     const request = new Request("http://localhost/api/shared-records", {
       headers: { authorization: "Bearer shared-secret" }
     });
 
-    expect(requireSharedDataApiToken(request)).toBeNull();
+    expect(await requireSharedDataApiToken(request)).toBeNull();
   });
 
   it("rejects missing or invalid bearer tokens", async () => {
     process.env.SHARED_DATA_API_TOKEN = "shared-secret";
 
-    const missing = requireSharedDataApiToken(new Request("http://localhost/api/shared-records"));
-    const invalid = requireSharedDataApiToken(
+    const missing = await requireSharedDataApiToken(new Request("http://localhost/api/shared-records"));
+    const invalid = await requireSharedDataApiToken(
       new Request("http://localhost/api/shared-records", {
         headers: { authorization: "Bearer wrong-secret" }
       })
@@ -44,7 +44,7 @@ describe("requireSharedDataApiToken", () => {
   it("fails closed when the shared token is not configured", async () => {
     delete process.env.SHARED_DATA_API_TOKEN;
 
-    const response = requireSharedDataApiToken(
+    const response = await requireSharedDataApiToken(
       new Request("http://localhost/api/shared-records", {
         headers: { authorization: "Bearer shared-secret" }
       })
@@ -54,15 +54,14 @@ describe("requireSharedDataApiToken", () => {
     await expect(response?.json()).resolves.toEqual({ error: "Shared data API token is not configured." });
   });
 
-  it("denies integration mutations when the cell is suspended even with a valid token", () => {
+  it("denies integration mutations when the durable cell projection is not active even with a valid token", async () => {
     process.env.SHARED_DATA_API_TOKEN = "shared-secret";
     process.env.APP_MODE = "cell";
     process.env.CELL_ID = "cell_ara";
     process.env.CELL_KEY = "ara";
-    process.env.CELL_LIFECYCLE_STATUS = "SUSPENDED";
-    const response = requireSharedDataApiToken(new Request("http://localhost/api/shared-records", {
+    const response = await requireSharedDataApiToken(new Request("http://localhost/api/shared-records", {
       headers: { authorization: "Bearer shared-secret" }
-    }));
+    }), async () => false);
     expect(response?.status).toBe(423);
   });
 });

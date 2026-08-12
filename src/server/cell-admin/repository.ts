@@ -26,9 +26,18 @@ export class PrismaCellAdministrationRepository implements CellAdministrationRep
   ): Promise<CellConfigurationRecord | undefined> {
     return this.client.$transaction(async (transaction) => {
       if (expectedRevision === 0) {
-        const existing = await transaction.cellConfiguration.findUnique({ where: { id: "default" }, select: { revision: true } });
-        if (existing) return undefined;
-        await transaction.cellConfiguration.create({ data: configurationData(configuration) });
+        const changed = await transaction.cellConfiguration.updateMany({
+          where: { id: "default", revision: 0 },
+          data: configurationData(configuration)
+        });
+        if (changed.count === 0) {
+          try {
+            await transaction.cellConfiguration.create({ data: configurationData(configuration) });
+          } catch (error) {
+            if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") return undefined;
+            throw error;
+          }
+        }
       } else {
         const changed = await transaction.cellConfiguration.updateMany({
           where: { id: "default", revision: expectedRevision },

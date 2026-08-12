@@ -106,3 +106,23 @@ export interface SupportGrantRecord {
   correlationId: string;
   createdAt: Date;
 }
+
+export type ControlProjectionDeliveryStatus = "PENDING" | "FAILED" | "DELIVERED";
+
+export interface ControlProjectionDeliveryRecord {
+  id: string;
+  cellId: string;
+  version: number;
+  type: "LIFECYCLE" | "SUPPORT_GRANT";
+  correlationId: string;
+  idempotencyKey: string;
+  issuedAt: Date;
+  payload: Record<string, unknown>;
+  status: ControlProjectionDeliveryStatus;
+  attempts: number;
+  lastAttemptAt?: Date;
+  deliveredAt?: Date;
+  lastError?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}

@@ -13,32 +13,37 @@ describe("cell administration authorization", () => {
 
   it("returns 401 without a valid active local session", async () => {
     const result = await authorizeCellAdmin(
-      { mode: "cell", cellId: "cell_ara", cellKey: "ara-global", lifecycleStatus: "ACTIVE" },
-      vi.fn().mockResolvedValue(null)
+      { mode: "cell", cellId: "cell_ara", cellKey: "ara-global" },
+      vi.fn().mockResolvedValue(null),
+      vi.fn().mockResolvedValue(true)
     );
     expect(result).toBeInstanceOf(Response);
     expect((result as Response).status).toBe(401);
   });
 
   it("returns 403 for Sales and accepts Admin without a customer selector", async () => {
-    const runtime = { mode: "cell", cellId: "cell_ara", cellKey: "ara-global", lifecycleStatus: "ACTIVE" } as const;
-    const denied = await authorizeCellAdmin(runtime, vi.fn().mockResolvedValue({ id: "sales_1", role: "SALES" }));
+    const runtime = { mode: "cell", cellId: "cell_ara", cellKey: "ara-global" } as const;
+    const active = vi.fn().mockResolvedValue(true);
+    const denied = await authorizeCellAdmin(runtime, vi.fn().mockResolvedValue({ id: "sales_1", role: "SALES" }), active);
     expect((denied as Response).status).toBe(403);
 
-    await expect(authorizeCellAdmin(runtime, vi.fn().mockResolvedValue({ id: "admin_1", role: "ADMIN" }))).resolves.toEqual({
+    await expect(authorizeCellAdmin(runtime, vi.fn().mockResolvedValue({ id: "admin_1", role: "ADMIN" }), active)).resolves.toEqual({
       user: { id: "admin_1", role: "ADMIN" },
       cellId: "cell_ara",
       cellKey: "ara-global"
     });
   });
 
-  it.each(["SUSPENDED", "OFFBOARDING", "DELETED"] as const)("denies Admin mutations while the cell is %s", async (lifecycleStatus) => {
+  it("denies Admin mutations when the durable control projection is not ACTIVE", async () => {
+    const getUser = vi.fn().mockResolvedValue({ id: "admin_1", role: "ADMIN" });
     const result = await authorizeCellAdmin(
-      { mode: "cell", cellId: "cell_ara", cellKey: "ara-global", lifecycleStatus },
-      vi.fn().mockResolvedValue({ id: "admin_1", role: "ADMIN" })
+      { mode: "cell", cellId: "cell_ara", cellKey: "ara-global", lifecycleStatus: "ACTIVE" },
+      getUser,
+      vi.fn().mockResolvedValue(false)
     );
 
     expect(result).toBeInstanceOf(Response);
     expect((result as Response).status).toBe(423);
+    expect(getUser).not.toHaveBeenCalled();
   });
 });

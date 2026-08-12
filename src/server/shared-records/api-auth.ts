@@ -1,7 +1,10 @@
 import { isConfiguredCellRuntimeActive } from "@/server/runtime/cell-config";
 
-export function requireSharedDataApiToken(request: Request): Response | null {
-  if (!isConfiguredCellRuntimeActive()) return Response.json({ error: "Customer cell is not active." }, { status: 423 });
+export async function requireSharedDataApiToken(
+  request: Request,
+  isCellActive: () => Promise<boolean> = () => isConfiguredCellRuntimeActive()
+): Promise<Response | null> {
+  if (!await isCellActive()) return Response.json({ error: "Customer cell is not active." }, { status: 423 });
   const configuredToken = process.env.SHARED_DATA_API_TOKEN;
 
   if (!configuredToken) {

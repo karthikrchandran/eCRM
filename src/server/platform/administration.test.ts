@@ -1,9 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+import { verifyControlProjectionSignature } from "@/server/cell-control/projection";
 
 import {
   PlatformAdministrationService,
   createInMemoryPlatformAdministrationRepository
 } from "./administration";
+import type { CellControlProjectionClient } from "./administration";
 import type { CustomerCellRecord } from "./types";
 
 const activeCell: CustomerCellRecord = {
@@ -28,6 +31,45 @@ const command = {
 };
 
 describe("platform lifecycle administration", () => {
+  it("does not report suspension until the cell durably acknowledges the signed projection", async () => {
+    const repository = createInMemoryPlatformAdministrationRepository([activeCell]);
+    const deliver = vi.fn().mockResolvedValue({ acknowledged: true, version: 1 });
+    const service = projectedService(repository, deliver);
+
+    const updated = await service.transitionCell(activeCell.id, "SUSPENDED", command);
+
+    expect(updated.lifecycleStatus).toBe("SUSPENDED");
+    const [projection, signature] = deliver.mock.calls[0]!;
+    expect(projection).toMatchObject({
+      cellId: activeCell.id, version: 1, type: "LIFECYCLE", correlationId: command.correlationId,
+      payload: { lifecycleStatus: "SUSPENDED" }
+    });
+    expect(verifyControlProjectionSignature(projection, signature, projectionSecret)).toBe(true);
+    await expect(repository.projectionDeliveriesForCell(activeCell.id)).resolves.toEqual([
+      expect.objectContaining({ status: "DELIVERED", version: 1, idempotencyKey: expect.any(String) })
+    ]);
+  });
+
+  it("keeps platform state unchanged when projection delivery fails and retries idempotently", async () => {
+    const repository = createInMemoryPlatformAdministrationRepository([activeCell]);
+    const deliver = vi.fn()
+      .mockRejectedValueOnce(new Error("cell unavailable"))
+      .mockResolvedValueOnce({ acknowledged: true, version: 1 });
+    const service = projectedService(repository, deliver);
+
+    await expect(service.transitionCell(activeCell.id, "SUSPENDED", command)).rejects.toThrow("cell unavailable");
+    expect((await repository.getCell(activeCell.id))?.lifecycleStatus).toBe("ACTIVE");
+    await expect(repository.projectionDeliveriesForCell(activeCell.id)).resolves.toEqual([
+      expect.objectContaining({ status: "FAILED", attempts: 1, lastError: "cell unavailable" })
+    ]);
+
+    await expect(service.transitionCell(activeCell.id, "SUSPENDED", command)).resolves.toMatchObject({ lifecycleStatus: "SUSPENDED" });
+    expect(deliver.mock.calls[0]?.[0]).toEqual(deliver.mock.calls[1]?.[0]);
+    await expect(repository.projectionDeliveriesForCell(activeCell.id)).resolves.toEqual([
+      expect.objectContaining({ status: "DELIVERED", attempts: 2 })
+    ]);
+  });
+
   it.each([
     ["ACTIVE", "SUSPENDED"],
     ["SUSPENDED", "ACTIVE"],
@@ -35,7 +77,7 @@ describe("platform lifecycle administration", () => {
     ["SUSPENDED", "OFFBOARDING"]
   ] as const)("allows %s to %s and appends tenant-scoped audit", async (from, to) => {
     const repository = createInMemoryPlatformAdministrationRepository([{ ...activeCell, lifecycleStatus: from }]);
-    const service = new PlatformAdministrationService(repository);
+    const service = projectedService(repository);
 
     const updated = await service.transitionCell(activeCell.id, to, command);
 
@@ -54,7 +96,7 @@ describe("platform lifecycle administration", () => {
 
   it("rejects an invalid transition without changing the cell and audits the failure", async () => {
     const repository = createInMemoryPlatformAdministrationRepository([activeCell]);
-    const service = new PlatformAdministrationService(repository);
+    const service = projectedService(repository);
 
     await expect(service.transitionCell(activeCell.id, "DELETED" as never, command)).rejects.toThrow(
       "Cannot transition customer cell from ACTIVE to DELETED"
@@ -68,7 +110,7 @@ describe("platform lifecycle administration", () => {
 
   it("atomically accepts only one of two conflicting transitions and audits the rejected loser", async () => {
     const repository = createInMemoryPlatformAdministrationRepository([activeCell]);
-    const service = new PlatformAdministrationService(repository);
+    const service = projectedService(repository);
 
     const results = await Promise.allSettled([
       service.transitionCell(activeCell.id, "SUSPENDED", { ...command, correlationId: "corr_suspend" }),
@@ -79,7 +121,7 @@ describe("platform lifecycle administration", () => {
     expect(results.filter((result) => result.status === "rejected")).toHaveLength(1);
     expect(await repository.auditEventsForCell(activeCell.id)).toEqual(expect.arrayContaining([
       expect.objectContaining({ result: "SUCCEEDED" }),
-      expect.objectContaining({ result: "FAILED", error: "CONCURRENT_LIFECYCLE_TRANSITION" })
+      expect.objectContaining({ result: "FAILED", error: "Another control projection delivery is pending reconciliation" })
     ]));
   });
 
@@ -88,7 +130,7 @@ describe("platform lifecycle administration", () => {
     const repository = createInMemoryPlatformAdministrationRepository([provisioningCell], {
       [activeCell.id]: { provisioningAttemptId: "attempt_1", provisioningComplete: true, healthCheckPassed: true }
     });
-    const service = new PlatformAdministrationService(repository);
+    const service = projectedService(repository);
 
     const activated = await service.transitionCell(activeCell.id, "ACTIVE", {
       ...command,
@@ -104,7 +146,7 @@ describe("platform lifecycle administration", () => {
   it("rejects provisioning activation without completion and health evidence", async () => {
     const provisioningCell = { ...activeCell, lifecycleStatus: "PROVISIONING" as const };
     const repository = createInMemoryPlatformAdministrationRepository([provisioningCell]);
-    const service = new PlatformAdministrationService(repository);
+    const service = projectedService(repository);
 
     await expect(service.transitionCell(activeCell.id, "ACTIVE", command)).rejects.toThrow(
       "Provisioning completion and health evidence are required"
@@ -117,7 +159,7 @@ describe("platform lifecycle administration", () => {
 
   it("requires backup and retention evidence before terminal deletion", async () => {
     const repository = createInMemoryPlatformAdministrationRepository([{ ...activeCell, lifecycleStatus: "OFFBOARDING" }]);
-    const service = new PlatformAdministrationService(repository);
+    const service = projectedService(repository);
 
     await expect(service.deleteCell(activeCell.id, { ...command, retentionEvidence: "", backupEvidence: "" })).rejects.toThrow(
       "Retention and backup evidence are required"
@@ -133,9 +175,27 @@ describe("platform lifecycle administration", () => {
 });
 
 describe("support grants", () => {
+  it("does not create an active grant when token signing cannot succeed", async () => {
+    const repository = createInMemoryPlatformAdministrationRepository([activeCell]);
+    const deliver = vi.fn();
+    const service = new PlatformAdministrationService(repository, () => new Date("2026-08-11T12:00:00Z"), {
+      projectionSecret,
+      projectionClient: { deliver },
+      issueAccessToken: async () => { throw new Error("SUPPORT_ACCESS_SECRET must be at least 32 characters"); }
+    });
+
+    await expect(service.createSupportGrant({
+      ...command, cellId: activeCell.id, operatorId: "support@example.com", caseReference: "CASE-101",
+      capabilities: ["configuration:read"], expiresAt: new Date("2026-08-11T13:00:00Z")
+    })).rejects.toThrow("SUPPORT_ACCESS_SECRET");
+    expect(deliver).not.toHaveBeenCalled();
+    expect(await repository.getSupportGrant("grant_missing")).toBeUndefined();
+    expect(await repository.projectionDeliveriesForCell(activeCell.id)).toEqual([]);
+  });
+
   it("creates a time-bound cell grant and audits creation", async () => {
     const repository = createInMemoryPlatformAdministrationRepository([activeCell]);
-    const service = new PlatformAdministrationService(repository, () => new Date("2026-08-11T12:00:00Z"));
+    const service = projectedService(repository);
 
     const grant = await service.createSupportGrant({
       ...command,
@@ -155,7 +215,7 @@ describe("support grants", () => {
 
   it("rejects expired grants and revoked grants", async () => {
     const repository = createInMemoryPlatformAdministrationRepository([activeCell]);
-    const service = new PlatformAdministrationService(repository, () => new Date("2026-08-11T14:00:00Z"));
+    const service = projectedService(repository, undefined, () => new Date("2026-08-11T14:00:00Z"));
     const expired = await repository.createSupportGrant({
       id: "grant_expired",
       cellId: activeCell.id,
@@ -180,3 +240,17 @@ describe("support grants", () => {
     );
   });
 });
+
+const projectionSecret = "platform-to-cell-control-projection-secret-32-bytes";
+
+function projectedService(
+  repository: ReturnType<typeof createInMemoryPlatformAdministrationRepository>,
+  deliver: CellControlProjectionClient["deliver"] = async (envelope) => ({ acknowledged: true, version: envelope.version }),
+  now: () => Date = () => new Date("2026-08-11T12:00:00Z")
+) {
+  return new PlatformAdministrationService(repository, now, {
+    projectionSecret,
+    projectionClient: { deliver },
+    issueAccessToken: async () => "support-token"
+  });
+}

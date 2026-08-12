@@ -208,6 +208,48 @@ model CellAuditEvent {
   @@index([targetType, targetId, occurredAt])
 }
 
+model CellControlProjection {
+  cellId               String   @id
+  lifecycleStatus      String
+  version              Int
+  appliedAt            DateTime
+  sourceEventId        String
+  sourceIdempotencyKey String   @unique
+  events               CellControlProjectionEvent[]
+}
+
+model CellControlProjectionEvent {
+  id             String   @id @default(cuid())
+  cellId         String
+  version        Int
+  type           String
+  correlationId  String
+  idempotencyKey String   @unique
+  issuedAt       DateTime
+  appliedAt      DateTime
+  payload        Json
+  control        CellControlProjection @relation(fields: [cellId], references: [cellId], onDelete: Restrict)
+
+  @@unique([cellId, version])
+  @@index([cellId, appliedAt])
+  @@index([correlationId])
+}
+
+model CellSupportGrantProjection {
+  id                String   @id
+  cellId            String
+  operatorId        String
+  caseReference     String
+  capabilities      String[]
+  startsAt          DateTime
+  expiresAt         DateTime
+  revokedAt         DateTime?
+  projectionVersion Int
+  appliedAt         DateTime
+
+  @@index([cellId, expiresAt])
+}
+
 model SharedBusinessRecord {
   id                   String           @id @default(cuid())
   entityType           SharedRecordType

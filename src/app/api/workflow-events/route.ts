@@ -16,7 +16,7 @@ const workflowEventSchema = z.object({
 });
 
 export async function POST(request: Request) {
-  const authResponse = requireSharedDataApiToken(request);
+  const authResponse = await requireSharedDataApiToken(request);
   if (authResponse) return authResponse;
 
   let body: unknown;

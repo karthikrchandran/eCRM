@@ -18,7 +18,7 @@ const ingestWorkflowEventMock = vi.mocked(ingestWorkflowEvent);
 describe("workflow-events route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    requireSharedDataApiTokenMock.mockReturnValue(null);
+    requireSharedDataApiTokenMock.mockResolvedValue(null);
     ingestWorkflowEventMock.mockResolvedValue({ id: "event_1" } as never);
   });
 
@@ -47,7 +47,7 @@ describe("workflow-events route", () => {
   });
 
   it("does not ingest an event when bearer authentication fails", async () => {
-    requireSharedDataApiTokenMock.mockReturnValue(Response.json({ error: "Unauthorized." }, { status: 401 }));
+    requireSharedDataApiTokenMock.mockResolvedValue(Response.json({ error: "Unauthorized." }, { status: 401 }));
 
     const response = await POST(new Request("http://localhost/api/workflow-events", { method: "POST" }));
 

@@ -23,6 +23,12 @@ enum ProvisioningResult {
   FAILED
 }
 
+enum ControlProjectionDeliveryStatus {
+  PENDING
+  FAILED
+  DELIVERED
+}
+
 model CustomerCell {
   id                         String                      @id
   cellKey                    String                      @unique
@@ -46,6 +52,31 @@ model CustomerCell {
   provisioningAttempts       ProvisioningAttempt[]
   auditEvents                ControlPlaneAuditEvent[]
   supportGrants              SupportGrant[]
+  controlProjectionDeliveries ControlProjectionDelivery[]
+}
+
+model ControlProjectionDelivery {
+  id             String                          @id @default(cuid())
+  cellId         String
+  version        Int
+  type           String
+  correlationId  String
+  idempotencyKey String                          @unique
+  issuedAt       DateTime
+  payload        Json
+  status         ControlProjectionDeliveryStatus @default(PENDING)
+  attempts       Int                             @default(0)
+  lastAttemptAt  DateTime?
+  deliveredAt    DateTime?
+  lastError      String?
+  createdAt      DateTime                        @default(now())
+  updatedAt      DateTime                        @updatedAt
+  cell           CustomerCell                    @relation(fields: [cellId], references: [id], onDelete: Restrict)
+
+  @@unique([cellId, version])
+  @@index([status, updatedAt])
+  @@index([cellId, createdAt])
+  @@index([correlationId])
 }
 
 model InstallationConnection {

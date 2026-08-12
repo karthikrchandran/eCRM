@@ -3,9 +3,16 @@ import { PlatformAdministrationService } from "./administration";
 import { getPlatformDatabase, PrismaPlatformRepository } from "./db";
 import { CustomerCellProvisioner } from "./provisioning";
 import { ProductionCellProvider } from "./providers/production-driver";
+import { HttpCellControlProjectionClient } from "./control-projection-client";
+import { issueSupportAccessToken } from "@/server/cell-admin/support-access";
 
 export function getPlatformAdministrationService(): PlatformAdministrationService {
-  return new PlatformAdministrationService(new PrismaPlatformAdministrationRepository(getPlatformDatabase()));
+  const database = getPlatformDatabase();
+  return new PlatformAdministrationService(new PrismaPlatformAdministrationRepository(database), () => new Date(), {
+    projectionSecret: process.env.CELL_CONTROL_PROJECTION_SECRET ?? "",
+    projectionClient: new HttpCellControlProjectionClient(database),
+    issueAccessToken: (grant) => issueSupportAccessToken(grant, process.env.SUPPORT_ACCESS_SECRET ?? "")
+  });
 }
 
 export function getCustomerCellProvisioner(): CustomerCellProvisioner {

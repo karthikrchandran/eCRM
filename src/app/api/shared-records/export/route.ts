@@ -48,7 +48,7 @@ function parseCursor(cursorParam: string | null): string | null {
 }
 
 export async function GET(request: Request) {
-  const authResponse = requireSharedDataApiToken(request);
+  const authResponse = await requireSharedDataApiToken(request);
   if (authResponse) {
     return authResponse;
   }

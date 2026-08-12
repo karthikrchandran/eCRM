@@ -33,29 +33,17 @@ export function createSupportAccessHandler(dependencies: Dependencies) {
   };
 }
 
-function projectedGrant(grantId: string): SupportGrantProjection | undefined {
-  try {
-    const rows = JSON.parse(process.env.SUPPORT_GRANTS_JSON ?? "[]") as Array<Record<string, unknown>>;
-    const row = rows.find((entry) => entry.id === grantId);
-    if (!row || typeof row.id !== "string" || typeof row.cellId !== "string" || typeof row.operatorId !== "string"
-      || typeof row.caseReference !== "string" || !Array.isArray(row.capabilities)
-      || typeof row.startsAt !== "string" || typeof row.expiresAt !== "string") return undefined;
-    return {
-      id: row.id, cellId: row.cellId, operatorId: row.operatorId, caseReference: row.caseReference,
-      capabilities: row.capabilities.filter((value): value is string => typeof value === "string"),
-      startsAt: new Date(row.startsAt), expiresAt: new Date(row.expiresAt),
-      revokedAt: typeof row.revokedAt === "string" ? new Date(row.revokedAt) : undefined
-    };
-  } catch {
-    return undefined;
-  }
-}
-
 const GET = createSupportAccessHandler({
   authorize: (request, capability) => authorizeSupportAccess(request, capability, {
     runtime: getServerEnv().runtime,
     secret: process.env.SUPPORT_ACCESS_SECRET ?? "",
-    findGrant: async (grantId) => projectedGrant(grantId),
+    findControl: async (cellId) => (await db.cellControlProjection.findUnique({
+      where: { cellId }, select: { cellId: true, lifecycleStatus: true }
+    })) ?? undefined,
+    findGrant: async (grantId): Promise<SupportGrantProjection | undefined> => {
+      const grant = await db.cellSupportGrantProjection.findUnique({ where: { id: grantId } });
+      return grant ? { ...grant, revokedAt: grant.revokedAt ?? undefined } : undefined;
+    },
     audit: async (event) => { await db.cellAuditEvent.create({ data: event }); }
   }),
   readConfiguration: () => db.cellConfiguration.findUnique({
