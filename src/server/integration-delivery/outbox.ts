@@ -71,7 +71,7 @@ export interface IntegrationDeliveryRepository {
   auditEvents(): Promise<DeliveryAudit[]>;
   sourceState(cellId: string, stream: ProjectionStream): Promise<ProjectionState>;
   saveReconciliation(cellId: string, destinationInstallation: string, stream: ProjectionStream, source: ProjectionState, destination: ProjectionState, reconciledAt: Date): Promise<void>;
-  saveRepairCandidate(candidate: RepairCandidate, audit: DeliveryAudit): Promise<void>;
+  saveRepairCandidate(candidate: RepairCandidate, audit: Omit<DeliveryAudit, "targetId">): Promise<RepairCandidate>;
   resolveRepairCandidates(cellId: string, destinationInstallation: string, stream: ProjectionStream, audit: DeliveryAudit): Promise<void>;
   repairCandidates(cellId: string): Promise<RepairCandidate[]>;
   acquireCircuitPermit(cellId: string, destinationInstallation: string, workerId: string, now: Date, probeLeaseMs: number): Promise<CircuitPermit>;
@@ -244,9 +244,11 @@ export function createInMemoryIntegrationDeliveryRepository(): IntegrationDelive
     },
     saveRepairCandidate: async (candidate, audit) => exclusive(async () => {
       const existing = repairs.find((item) => item.cellId === candidate.cellId && item.destinationInstallation === candidate.destinationInstallation && item.stream === candidate.stream && item.status === "OPEN");
+      const resolved = existing ?? structuredClone(candidate);
       if (existing) Object.assign(existing, structuredClone(candidate), { id: existing.id, createdAt: existing.createdAt });
-      else repairs.push(structuredClone(candidate));
-      audits.push(structuredClone(audit));
+      else repairs.push(resolved);
+      audits.push(structuredClone({ ...audit, targetId: resolved.id }));
+      return structuredClone(resolved);
     }),
     resolveRepairCandidates: async (cellId, destinationInstallation, stream, audit) => exclusive(async () => {
       let resolved = false;

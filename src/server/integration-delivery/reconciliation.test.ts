@@ -22,6 +22,34 @@ describe("integration projection reconciliation", () => {
     expect(await repository.status("cell_ara")).toMatchObject({ sourceCount: 2 });
   });
 
+  it("targets repeated mismatch audits at the same durable repair candidate", async () => {
+    const repository = createInMemoryIntegrationDeliveryRepository();
+    await repository.withSourceMutation!(async (transaction) => {
+      await transaction.writeSource("record_1", { version: 1 });
+    });
+    const provider = { checkpoint: vi.fn().mockResolvedValue({ count: 0, version: 0, checkpoint: null }) };
+    const now = new Date("2026-08-12T12:30:00Z");
+
+    const first = await reconcileCellProjection("cell_ara", "destination", repository, provider, {
+      actorId: "admin_1", correlationId: "corr_first", reason: "Scheduled verification", now, stream: "SHARED_RECORD"
+    });
+    const durableCandidate = (await repository.repairCandidates("cell_ara"))[0];
+    const repeated = await reconcileCellProjection("cell_ara", "destination", repository, provider, {
+      actorId: "admin_1", correlationId: "corr_repeated", reason: "Repeated verification", now: new Date(now.getTime() + 1), stream: "SHARED_RECORD"
+    });
+
+    expect(first.repairCandidateId).toBe(durableCandidate.id);
+    expect(repeated.repairCandidateId).toBe(durableCandidate.id);
+    expect(first.repairCandidateCreated).toBe(true);
+    expect(repeated.repairCandidateCreated).toBe(false);
+    expect(await repository.repairCandidates("cell_ara")).toEqual([
+      expect.objectContaining({ id: durableCandidate.id, status: "OPEN", correlationId: "corr_repeated" })
+    ]);
+    expect((await repository.auditEvents())
+      .filter((event) => event.action === "integration-projection.reconciliation-mismatch")
+      .map((event) => event.targetId)).toEqual([durableCandidate.id, durableCandidate.id]);
+  });
+
   it("reconciles each stream independently and deduplicates one open repair until resolution", async () => {
     const repository = createInMemoryIntegrationDeliveryRepository();
     await repository.withSourceMutation!(async (transaction) => {

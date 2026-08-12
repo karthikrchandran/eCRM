@@ -91,6 +91,38 @@ describe("Prisma/PostgreSQL integration delivery repository", () => {
     expect(await repository.deadLetters("cell_ara")).toHaveLength(0);
   });
 
+  it("preserves immutable delivery attempts across replay and repository restart", async () => {
+    const cellId = "cell_replay_history";
+    const firstAt = new Date("2030-08-12T13:30:00Z");
+    const created = await repository.enqueue(outbox(cellId, "replay_history"));
+    const firstClaim = await repository.claim(cellId, "worker_first", firstAt, 30_000);
+    expect(firstClaim?.id).toBe(created.id);
+    await repository.fail(firstClaim!.id, firstClaim!.fenceToken!, firstAt, firstAt, "failed", "REMOTE_503", 1);
+
+    await repository.replay(cellId, created.id, "admin_replay", "Destination restored", new Date(firstAt.getTime() + 1));
+
+    const restartClient = new PrismaClient({ datasourceUrl: scopedDatabaseUrl });
+    const restart = new PrismaIntegrationDeliveryRepository(restartClient);
+    try {
+      await expect(restartClient.cellIntegrationDeliveryAttempt.findMany({
+        where: { outboxId: created.id }, orderBy: { attemptNumber: "asc" }
+      })).resolves.toMatchObject([{ attemptNumber: 1, result: "DEAD_LETTER" }]);
+
+      const replayed = await restart.claim(cellId, "worker_restart", new Date(firstAt.getTime() + 2), 30_000);
+      expect(replayed?.id).toBe(created.id);
+      await restart.ack(replayed!.id, replayed!.fenceToken!, new Date(firstAt.getTime() + 3), "ack_replayed");
+
+      await expect(restartClient.cellIntegrationDeliveryAttempt.findMany({
+        where: { outboxId: created.id }, orderBy: { attemptNumber: "asc" }
+      })).resolves.toMatchObject([
+        { attemptNumber: 1, result: "DEAD_LETTER" },
+        { attemptNumber: 2, result: "DELIVERED", acknowledgementId: "ack_replayed" }
+      ]);
+    } finally {
+      await restartClient.$disconnect();
+    }
+  });
+
   it("persists one stable outbox event for an ambiguous source retry and a new version for a later change", async () => {
     const previous = { APP_MODE: process.env.APP_MODE, CELL_ID: process.env.CELL_ID, CELL_KEY: process.env.CELL_KEY, INTEGRATION_DESTINATION_INSTALLATION: process.env.INTEGRATION_DESTINATION_INSTALLATION };
     Object.assign(process.env, { APP_MODE: "cell", CELL_ID: "cell_ara", CELL_KEY: "ara", INTEGRATION_DESTINATION_INSTALLATION: "signalloop:ara" });

@@ -119,7 +119,6 @@ export class PrismaIntegrationDeliveryRepository implements IntegrationDeliveryR
         status: "PENDING", attempts: 0, nextAttemptAt: now, lastError: null, errorCode: null
       } });
       if (changed.count !== 1) throw new Error("Dead letter not found");
-      await transaction.cellIntegrationDeliveryAttempt.deleteMany({ where: { outboxId: id } });
       await transaction.cellAuditEvent.create({ data: auditData({
         id: `audit_${randomUUID()}`, actorId, action: "integration-outbox.replay", targetId: id,
         correlationId: record.correlationId, reason, result: "SUCCEEDED", occurredAt: now
@@ -171,19 +170,21 @@ export class PrismaIntegrationDeliveryRepository implements IntegrationDeliveryR
     });
   }
 
-  public async saveRepairCandidate(candidate: RepairCandidate, audit: DeliveryAudit): Promise<void> {
-    await this.client.$transaction(async (transaction) => {
+  public async saveRepairCandidate(candidate: RepairCandidate, audit: Omit<DeliveryAudit, "targetId">): Promise<RepairCandidate> {
+    return this.client.$transaction(async (transaction) => {
       const existing = await transaction.cellIntegrationRepairCandidate.findFirst({ where: {
         cellId: candidate.cellId, destinationInstallation: candidate.destinationInstallation, stream: candidate.stream, status: "OPEN"
       } });
-      if (existing) await transaction.cellIntegrationRepairCandidate.update({ where: { id: existing.id }, data: {
+      const resolved = existing
+        ? await transaction.cellIntegrationRepairCandidate.update({ where: { id: existing.id }, data: {
         sourceCheckpoint: candidate.sourceCheckpoint, destinationCheckpoint: candidate.destinationCheckpoint,
         sourceCount: candidate.sourceCount, destinationCount: candidate.destinationCount,
         sourceVersion: candidate.sourceVersion, destinationVersion: candidate.destinationVersion,
         correlationId: candidate.correlationId, reason: candidate.reason
-      } });
-      else await transaction.cellIntegrationRepairCandidate.create({ data: candidate });
-      await transaction.cellAuditEvent.create({ data: auditData(audit) });
+      } })
+        : await transaction.cellIntegrationRepairCandidate.create({ data: candidate });
+      await transaction.cellAuditEvent.create({ data: auditData({ ...audit, targetId: resolved.id }) });
+      return { ...resolved, status: resolved.status as RepairCandidate["status"] };
     });
   }
 

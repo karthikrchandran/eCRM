@@ -29,12 +29,16 @@ export async function reconcileCellProjection(
     sourceCheckpoint: source.checkpoint, destinationCheckpoint: destination.checkpoint, status: "OPEN",
     correlationId: context.correlationId, reason: context.reason, createdAt: context.now
   };
-  await repository.saveRepairCandidate(candidate, {
+  const resolvedCandidate = await repository.saveRepairCandidate(candidate, {
     id: `audit_${randomUUID()}`, actorId: context.actorId, action: "integration-projection.reconciliation-mismatch",
-    targetId: candidate.id, correlationId: context.correlationId, reason: context.reason, result: "FAILED",
+    correlationId: context.correlationId, reason: context.reason, result: "FAILED",
     error: "CHECKPOINT_OR_COUNT_MISMATCH", occurredAt: context.now
   });
-  return { matched: false, stream, sourceCount: source.count, destinationCount: destination.count, sourceVersion: source.version, destinationVersion: destination.version, repairCandidateCreated: true };
+  return {
+    matched: false, stream, sourceCount: source.count, destinationCount: destination.count,
+    sourceVersion: source.version, destinationVersion: destination.version,
+    repairCandidateId: resolvedCandidate.id, repairCandidateCreated: resolvedCandidate.id === candidate.id
+  };
 }
 
 export async function reconcileCellProjectionStreams(
