@@ -8,7 +8,7 @@ type SharedRecordRouteContext = {
 };
 
 export async function GET(request: Request, context: SharedRecordRouteContext) {
-  const authResponse = requireSharedDataApiToken(request);
+  const authResponse = await requireSharedDataApiToken(request, "SHARED_RECORDS_READ");
   if (authResponse) {
     return authResponse;
   }

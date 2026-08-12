@@ -22,7 +22,7 @@ The current workflow covers the sales path from leads and Customer 360 through p
 
    Use the root `.env` file as the canonical local environment file. Prisma CLI commands load it automatically, and the seed script uses the same `DATABASE_URL` and seed credentials. You may also export the same variables in your shell before running Prisma or seed commands. Use `.env.local` only for optional Next.js-only local overrides.
 
-   Set `SHARED_DATA_API_TOKEN` to a long random value before using `/api/shared-records`. Shared-records clients must send it as a `Bearer` token.
+   In cell mode, issue a capability-scoped credential from Admin Settings before using `/api/shared-records` or `/api/workflow-events`. The generated secret is displayed once and sent as a `Bearer` token. The legacy shared token is development-only behind `ALLOW_LEGACY_SHARED_DATA_TOKEN=true` and is rejected in production.
 
 3. Start the preferred local database with Docker Compose.
 
@@ -103,9 +103,22 @@ npm run gate
 
 Use the fast local checks while developing, and run the full gate before handing off work or opening a pull request. Prefer testing user-visible behavior for UI changes and reserve Playwright for the most important user journeys.
 
+## Control-projection reconciliation
+
+In platform mode, run one bounded reconciliation batch with the same platform database and cell-projection secrets used by the application:
+
+```powershell
+$env:APP_MODE = "platform"
+$env:PLATFORM_DATABASE_URL = "postgresql://..."
+$env:CELL_CONTROL_PROJECTION_SECRET = "..."
+npm run worker:control-projections
+```
+
+Optional positive-integer settings are `CONTROL_PROJECTION_BATCH_SIZE`, `CONTROL_PROJECTION_MAX_ATTEMPTS`, `CONTROL_PROJECTION_LEASE_MS`, and `CONTROL_PROJECTION_BACKOFF_MS`. The worker leases due `PENDING`/`FAILED` deliveries, retries with bounded exponential backoff, and records terminal dead-letter audit evidence. Schedule this command in the deployment's worker scheduler if recurring reconciliation is required; this repository does not install a cron schedule.
+
 ## Shared Records API
 
-`/api/shared-records` is the first shared CRM data slice for eCRM and EmailVoice synchronization. It is protected by `SHARED_DATA_API_TOKEN` and uses simple `searchText contains` filtering for the first low-volume slice. The schema includes a normal index on `searchText`; full-text or trigram search is intentionally deferred until volume requires it.
+`/api/shared-records` is the first shared CRM data slice for eCRM and EmailVoice synchronization. It requires a current-cell credential with the exact read or write capability and uses simple `searchText contains` filtering for the first low-volume slice. Durable outbound delivery, dead-letter replay, and reconciliation commands are documented in `docs/operations/cell-integration-delivery.md`.
 
 ## Gates
 

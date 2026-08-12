@@ -1,52 +1,36 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-import { requireSharedDataApiToken } from "./api-auth";
+import { requireIntegrationCapability } from "./api-auth";
 
-const originalToken = process.env.SHARED_DATA_API_TOKEN;
+describe("integration API authentication", () => {
+  it("passes the bearer secret and exact route capability to cell-local authentication", async () => {
+    const authenticate = vi.fn().mockResolvedValue({ cellId: "cell_ara" });
+    const response = await requireIntegrationCapability(new Request("http://cell/api/shared-records", {
+      headers: { authorization: "Bearer generated-secret" }
+    }), "SHARED_RECORDS_WRITE", { isCellActive: async () => true, authenticate });
 
-afterEach(() => {
-  if (originalToken === undefined) {
-    delete process.env.SHARED_DATA_API_TOKEN;
-  } else {
-    process.env.SHARED_DATA_API_TOKEN = originalToken;
-  }
-});
+    expect(response).toBeNull();
+    expect(authenticate).toHaveBeenCalledWith("generated-secret", "SHARED_RECORDS_WRITE");
+  });
 
-describe("requireSharedDataApiToken", () => {
-  it("returns null when the bearer token matches the configured shared token", () => {
-    process.env.SHARED_DATA_API_TOKEN = "shared-secret";
-    const request = new Request("http://localhost/api/shared-records", {
-      headers: { authorization: "Bearer shared-secret" }
+  it("returns the same unauthorized response for missing, wrong-capability, expired, revoked, rotated, or cross-cell credentials", async () => {
+    for (const reason of ["missing", "wrong capability", "expired", "revoked", "rotated", "cross cell"]) {
+      const response = await requireIntegrationCapability(new Request("http://cell/api/shared-records"), "SHARED_RECORDS_READ", {
+        isCellActive: async () => true,
+        authenticate: vi.fn().mockRejectedValue(new Error(reason))
+      });
+      expect(response?.status).toBe(401);
+      await expect(response?.json()).resolves.toEqual({ error: "Unauthorized." });
+    }
+  });
+
+  it("denies before credential lookup when the durable cell lifecycle is not active", async () => {
+    const authenticate = vi.fn();
+    const response = await requireIntegrationCapability(new Request("http://cell/api/workflow-events"), "WORKFLOW_EVENTS_WRITE", {
+      isCellActive: async () => false,
+      authenticate
     });
-
-    expect(requireSharedDataApiToken(request)).toBeNull();
-  });
-
-  it("rejects missing or invalid bearer tokens", async () => {
-    process.env.SHARED_DATA_API_TOKEN = "shared-secret";
-
-    const missing = requireSharedDataApiToken(new Request("http://localhost/api/shared-records"));
-    const invalid = requireSharedDataApiToken(
-      new Request("http://localhost/api/shared-records", {
-        headers: { authorization: "Bearer wrong-secret" }
-      })
-    );
-
-    expect(missing?.status).toBe(401);
-    await expect(missing?.json()).resolves.toEqual({ error: "Unauthorized." });
-    expect(invalid?.status).toBe(401);
-  });
-
-  it("fails closed when the shared token is not configured", async () => {
-    delete process.env.SHARED_DATA_API_TOKEN;
-
-    const response = requireSharedDataApiToken(
-      new Request("http://localhost/api/shared-records", {
-        headers: { authorization: "Bearer shared-secret" }
-      })
-    );
-
-    expect(response?.status).toBe(500);
-    await expect(response?.json()).resolves.toEqual({ error: "Shared data API token is not configured." });
+    expect(response?.status).toBe(423);
+    expect(authenticate).not.toHaveBeenCalled();
   });
 });

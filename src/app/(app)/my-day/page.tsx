@@ -28,7 +28,7 @@ export default async function MyDayRoute({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const user = await requireUser();
+  const user = await requireUser("crm");
   const rawSearchParams = await searchParams;
   const date = parseDate(rawSearchParams.date);
   const activeView = parseView(rawSearchParams.view);

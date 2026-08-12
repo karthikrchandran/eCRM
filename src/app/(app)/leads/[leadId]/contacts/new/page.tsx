@@ -5,7 +5,7 @@ import { createContactAction } from "@/server/crm/actions";
 import { getLeadCustomerDetail } from "@/server/crm/queries";
 
 export default async function NewContactPage({ params }: { params: Promise<{ leadId: string }> }) {
-  const user = await requireUser();
+  const user = await requireUser("crm");
   const { leadId } = await params;
   const lead = await getLeadCustomerDetail(user, leadId);
 

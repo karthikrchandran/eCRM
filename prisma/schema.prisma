@@ -171,6 +171,242 @@ model BusinessSettings {
   updatedAt       DateTime     @updatedAt
 }
 
+enum IntegrationCredentialStatus {
+  ACTIVE
+  ROTATED
+  REVOKED
+}
+
+enum CellIntegrationOutboxStatus {
+  PENDING
+  CLAIMED
+  FAILED
+  DELIVERED
+  DEAD_LETTER
+}
+
+enum CellIntegrationRepairStatus {
+  OPEN
+  RESOLVED
+  DISMISSED
+}
+
+enum CellIntegrationCircuitState {
+  CLOSED
+  OPEN
+  HALF_OPEN
+}
+
+enum CellIntegrationProjectionStream {
+  SHARED_RECORD
+  WORKFLOW_EVENT
+}
+
+model CellConfiguration {
+  id              String       @id @default("default")
+  displayName     String       @default("eCRM")
+  logoUrl         String?
+  supportUrl      String?
+  legalUrl        String?
+  primaryColor    String       @default("#1e3a5f")
+  locale          String       @default("en-US")
+  timezone        String       @default("UTC")
+  defaultCurrency CurrencyCode @default(INR)
+  enabledModules  String[]     @default([])
+  allowedModules  String[]     @default([])
+  planCode        String       @default("UNASSIGNED")
+  revision        Int          @default(0)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+}
+
+model CellAuditEvent {
+  id            String   @id @default(cuid())
+  actorId       String
+  action        String
+  targetType    String
+  targetId      String
+  correlationId String
+  reason        String
+  before        Json?
+  after         Json?
+  result        String
+  error         String?
+  occurredAt    DateTime @default(now())
+
+  @@index([actorId, occurredAt])
+  @@index([correlationId])
+  @@index([targetType, targetId, occurredAt])
+}
+
+model CellControlProjection {
+  cellId               String   @id
+  lifecycleStatus      String
+  version              Int
+  appliedAt            DateTime
+  sourceEventId        String
+  sourceIdempotencyKey String   @unique
+  events               CellControlProjectionEvent[]
+}
+
+model CellControlProjectionEvent {
+  id             String   @id @default(cuid())
+  cellId         String
+  version        Int
+  type           String
+  correlationId  String
+  idempotencyKey String   @unique
+  issuedAt       DateTime
+  appliedAt      DateTime
+  payload        Json
+  control        CellControlProjection @relation(fields: [cellId], references: [cellId], onDelete: Restrict)
+
+  @@unique([cellId, version])
+  @@index([cellId, appliedAt])
+  @@index([correlationId])
+}
+
+model CellSupportGrantProjection {
+  id                String   @id
+  cellId            String
+  operatorId        String
+  caseReference     String
+  capabilities      String[]
+  startsAt          DateTime
+  expiresAt         DateTime
+  revokedAt         DateTime?
+  projectionVersion Int
+  appliedAt         DateTime
+
+  @@index([cellId, expiresAt])
+}
+
+model IntegrationCredential {
+  id           String                      @id
+  cellId       String
+  name         String
+  secretHash   String
+  capabilities String[]
+  status       IntegrationCredentialStatus @default(ACTIVE)
+  expiresAt    DateTime
+  rotatedAt    DateTime?
+  revokedAt    DateTime?
+  lastUsedAt   DateTime?
+  createdAt    DateTime                    @default(now())
+  updatedAt    DateTime                    @updatedAt
+
+  @@index([cellId, status, expiresAt])
+}
+
+model CellIntegrationOutbox {
+  id                      String                      @id @default(cuid())
+  cellId                  String
+  eventType               String
+  payloadVersion          Int
+  payload                 Json
+  correlationId           String
+  idempotencyKey          String
+  destinationInstallation String
+  status                  CellIntegrationOutboxStatus @default(PENDING)
+  attempts                Int                         @default(0)
+  leaseOwner              String?
+  leaseUntil              DateTime?
+  fenceToken              String?
+  nextAttemptAt           DateTime                    @default(now())
+  lastError               String?
+  errorCode               String?
+  acknowledgementId       String?
+  destinationCheckpoint   String?
+  createdAt               DateTime                    @default(now())
+  updatedAt               DateTime                    @updatedAt
+  deliveryAttempts        CellIntegrationDeliveryAttempt[]
+
+  @@unique([cellId, destinationInstallation, idempotencyKey])
+  @@index([cellId, status, nextAttemptAt])
+  @@index([leaseUntil])
+  @@index([correlationId])
+}
+
+model CellIntegrationDeliveryAttempt {
+  id                String   @id @default(cuid())
+  outboxId          String
+  attemptNumber     Int
+  workerId          String
+  fenceToken        String
+  startedAt         DateTime
+  completedAt       DateTime?
+  result            String
+  errorCode         String?
+  errorMessage      String?
+  acknowledgementId String?
+  outbox            CellIntegrationOutbox @relation(fields: [outboxId], references: [id], onDelete: Cascade)
+
+  @@unique([outboxId, attemptNumber])
+  @@index([result, startedAt])
+}
+
+model CellIntegrationProjectionCheckpoint {
+  id                      String   @id @default(cuid())
+  cellId                  String
+  destinationInstallation String
+  stream                  CellIntegrationProjectionStream @default(SHARED_RECORD)
+  sourceCheckpoint        String?
+  destinationCheckpoint   String?
+  sourceCount             Int      @default(0)
+  destinationCount        Int      @default(0)
+  sourceVersion           Int      @default(0)
+  destinationVersion      Int      @default(0)
+  reconciledAt            DateTime
+  updatedAt               DateTime @updatedAt
+
+  @@unique([cellId, destinationInstallation, stream])
+}
+
+model CellIntegrationRepairCandidate {
+  id                      String                      @id @default(cuid())
+  cellId                  String
+  destinationInstallation String
+  stream                  CellIntegrationProjectionStream @default(SHARED_RECORD)
+  sourceCheckpoint        String?
+  destinationCheckpoint   String?
+  sourceCount             Int
+  destinationCount        Int
+  sourceVersion           Int                         @default(0)
+  destinationVersion      Int                         @default(0)
+  status                  CellIntegrationRepairStatus @default(OPEN)
+  correlationId           String
+  reason                  String
+  createdAt               DateTime                    @default(now())
+  resolvedAt              DateTime?
+  resolvedBy              String?
+  resolutionReason        String?
+
+  @@index([cellId, status, createdAt])
+  @@index([cellId, destinationInstallation, stream, status])
+  @@index([correlationId])
+}
+
+model CellIntegrationCircuitBreaker {
+  id                      String                      @id @default(cuid())
+  cellId                  String
+  destinationInstallation String
+  state                   CellIntegrationCircuitState @default(CLOSED)
+  failureCount            Int                         @default(0)
+  windowStartedAt         DateTime?
+  lastFailureAt           DateTime?
+  openedAt                DateTime?
+  openUntil               DateTime?
+  probeLeaseOwner         String?
+  probeLeaseUntil         DateTime?
+  probeFenceToken         String?
+  createdAt               DateTime                    @default(now())
+  updatedAt               DateTime                    @updatedAt
+
+  @@unique([cellId, destinationInstallation])
+  @@index([cellId, state, openUntil])
+  @@index([probeLeaseUntil])
+}
+
 model SharedBusinessRecord {
   id                   String           @id @default(cuid())
   entityType           SharedRecordType

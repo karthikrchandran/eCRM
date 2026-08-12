@@ -5,7 +5,7 @@ import { updateProductServiceAction } from "@/server/products/actions";
 import { getProductServiceForAdmin } from "@/server/products/queries";
 
 export default async function EditProductServicePage({ params }: { params: Promise<{ productServiceId: string }> }) {
-  const user = await requireUser();
+  const user = await requireUser("production");
   const { productServiceId } = await params;
   const product = await getProductServiceForAdmin(user, productServiceId);
 

@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import { getReportsOverview } from "./queries";
 
 const admin = { id: "admin", email: "admin@example.com", name: "Admin User", role: "ADMIN" as const };
@@ -24,8 +24,11 @@ function createDatabase() {
         }
       ])
     },
-    businessSettings: {
+    cellConfiguration: {
       findUnique: vi.fn().mockResolvedValue({ defaultCurrency: "USD" })
+    },
+    businessSettings: {
+      findUnique: vi.fn().mockResolvedValue({ defaultCurrency: "INR" })
     },
     costComponent: {
       findMany: vi.fn().mockResolvedValue([
@@ -275,6 +278,10 @@ function createDatabase() {
 }
 
 describe("reports overview", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   test("allows Admin and Sales to load company-wide reports", async () => {
     await expect(getReportsOverview(admin, createDatabase())).resolves.toBeTruthy();
     await expect(getReportsOverview(sales, createDatabase())).resolves.toBeTruthy();
@@ -287,6 +294,9 @@ describe("reports overview", () => {
   });
 
   test("builds live dashboard and report summaries from landed models", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-01T12:00:00Z"));
+
     const overview = await getReportsOverview(admin, createDatabase());
 
     expect(overview.currency).toBe("USD");

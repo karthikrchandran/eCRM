@@ -122,6 +122,6 @@ export async function handleLeadImportActionForTest(
 export async function leadImportAction(_previousState: LeadImportActionState, formData: FormData): Promise<LeadImportActionState> {
   "use server";
 
-  const user = await requireUser();
+  const user = await requireUser("crm");
   return handleLeadImportActionForTest(user, formData);
 }

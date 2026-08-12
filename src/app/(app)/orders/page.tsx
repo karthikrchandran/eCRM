@@ -10,7 +10,7 @@ export default async function OrdersPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const user = await requireUser();
+  const user = await requireUser("orders");
   if (user.role === "SALES") {
     redirect("/performance");
   }

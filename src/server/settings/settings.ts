@@ -1,5 +1,7 @@
 import type { Prisma, UserRole } from "@prisma/client";
 import { canManageAdminSettings, canViewCompanyRecords } from "@/server/auth/permissions";
+import { getCellAdministrationService } from "@/server/cell-admin/runtime";
+import type { CellAdministrationService } from "@/server/cell-admin/service";
 import { db } from "@/server/db";
 
 export type SupportedCurrency = "INR" | "USD";
@@ -14,9 +16,11 @@ export type BusinessSettingsView = {
 };
 
 type SettingsDb = {
-  businessSettings: {
+  cellConfiguration?: {
+    findUnique?: (args: Prisma.CellConfigurationFindUniqueArgs) => Promise<BusinessSettingsView | null>;
+  };
+  businessSettings?: {
     findUnique?: (args: Prisma.BusinessSettingsFindUniqueArgs) => Promise<BusinessSettingsView | null>;
-    upsert?: (args: Prisma.BusinessSettingsUpsertArgs) => Promise<BusinessSettingsView>;
   };
 };
 
@@ -38,29 +42,31 @@ export async function getBusinessSettings(
 ): Promise<BusinessSettingsView> {
   assertCanViewSettings(user);
 
-  const settings = await database.businessSettings.findUnique?.({
+  const configuration = await database.cellConfiguration?.findUnique?.({
+    where: { id: "default" },
+    select: { defaultCurrency: true }
+  });
+  if (configuration) return configuration;
+
+  const legacySettings = await database.businessSettings?.findUnique?.({
     where: { id: "default" },
     select: { defaultCurrency: true }
   });
 
-  return { defaultCurrency: settings?.defaultCurrency ?? "INR" };
+  return { defaultCurrency: legacySettings?.defaultCurrency ?? "INR" };
 }
 
 export async function updateBusinessSettings(
   user: SettingsUser,
   input: BusinessSettingsView,
-  database: SettingsDb = db as unknown as SettingsDb
+  context: { correlationId: string; reason: string },
+  administration: Pick<CellAdministrationService, "updateConfiguration"> = getCellAdministrationService()
 ) {
   assertCanManageSettings(user);
-
-  if (!database.businessSettings.upsert) {
-    throw new Error("Business settings storage is not available.");
-  }
-
-  return database.businessSettings.upsert({
-    where: { id: "default" },
-    create: { id: "default", defaultCurrency: input.defaultCurrency },
-    update: { defaultCurrency: input.defaultCurrency },
-    select: { defaultCurrency: true }
-  });
+  const configuration = await administration.updateConfiguration(
+    { id: user.id, role: "ADMIN" },
+    { defaultCurrency: input.defaultCurrency },
+    context
+  );
+  return { defaultCurrency: configuration.defaultCurrency };
 }

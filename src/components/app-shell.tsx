@@ -10,39 +10,41 @@ type AppShellProps = {
     role: UserRole;
   };
   children: React.ReactNode;
+  enabledModules?: string[];
 };
 
 const salesNavItems = [
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/my-day", label: "My Day" },
-  { href: "/leads", label: "Leads" },
-  { href: "/contacts", label: "Contacts" },
-  { href: "/customer-360", label: "Customer 360" },
-  { href: "/opportunities", label: "Pipeline" },
-  { href: "/performance", label: "Performance" },
-  { href: "/finance", label: "Finance" },
-  { href: "/reports", label: "Reports" }
+  { href: "/dashboard", label: "Dashboard", module: "crm" },
+  { href: "/my-day", label: "My Day", module: "crm" },
+  { href: "/leads", label: "Leads", module: "crm" },
+  { href: "/contacts", label: "Contacts", module: "crm" },
+  { href: "/customer-360", label: "Customer 360", module: "crm" },
+  { href: "/opportunities", label: "Pipeline", module: "crm" },
+  { href: "/performance", label: "Performance", module: "reports" },
+  { href: "/finance", label: "Finance", module: "finance" },
+  { href: "/reports", label: "Reports", module: "reports" }
 ];
 
 const adminNavItems = [
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/customer-360", label: "Customer 360" },
-  { href: "/opportunities", label: "Pipeline" },
-  { href: "/orders", label: "Orders" },
-  { href: "/finance", label: "Finance" },
-  { href: "/incentives", label: "Incentives" },
-  { href: "/admin/performance", label: "Team performance" },
-  { href: "/reports", label: "Reports" }
+  { href: "/dashboard", label: "Dashboard", module: "crm" },
+  { href: "/customer-360", label: "Customer 360", module: "crm" },
+  { href: "/opportunities", label: "Pipeline", module: "crm" },
+  { href: "/orders", label: "Orders", module: "orders" },
+  { href: "/finance", label: "Finance", module: "finance" },
+  { href: "/incentives", label: "Incentives", module: "finance" },
+  { href: "/admin/performance", label: "Team performance", module: "reports" },
+  { href: "/reports", label: "Reports", module: "reports" }
 ];
 
 const adminSetupNavItems = [
-  { href: "/production", label: "Production" },
-  { href: "/admin/products", label: "Products" },
-  { href: "/admin/production-config", label: "Production config" },
-  { href: "/admin/settings", label: "Settings" }
+  { href: "/production", label: "Production", module: "production" },
+  { href: "/admin/products", label: "Products", module: "production" },
+  { href: "/admin/production-config", label: "Production config", module: "production" },
+  { href: "/admin/settings", label: "Settings", module: null }
 ];
 
-export function AppShell({ user, children }: AppShellProps) {
+export function AppShell({ user, children, enabledModules = ["crm", "proposals", "orders", "production", "finance", "reports"] }: AppShellProps) {
+  const isVisible = (item: { module: string | null }) => item.module === null || enabledModules.includes(item.module);
   if (user.role === "ADMIN") {
     return (
       <div className="min-h-screen bg-[var(--background)] md:grid md:grid-cols-[17rem_1fr]">
@@ -52,7 +54,7 @@ export function AppShell({ user, children }: AppShellProps) {
           </Link>
           <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Admin Console</p>
           <nav className="mt-6 grid gap-1 text-sm" aria-label="Admin navigation">
-            {adminNavItems.map((item) => (
+            {adminNavItems.filter(isVisible).map((item) => (
               <Link
                 className="rounded-md px-3 py-2 font-semibold text-slate-700 hover:bg-[var(--surface-muted)] hover:text-[var(--brand-navy)]"
                 href={item.href}
@@ -64,7 +66,7 @@ export function AppShell({ user, children }: AppShellProps) {
             <div className="mt-4 px-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Setup</p>
             </div>
-            {adminSetupNavItems.map((item) => (
+            {adminSetupNavItems.filter(isVisible).map((item) => (
               <Link
                 className="rounded-md px-3 py-2 font-semibold text-slate-700 hover:bg-[var(--surface-muted)] hover:text-[var(--brand-navy)]"
                 href={item.href}
@@ -140,7 +142,7 @@ export function AppShell({ user, children }: AppShellProps) {
             </div>
           </div>
           <nav className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1 text-sm md:mx-0 md:items-center md:overflow-visible md:px-0 md:pb-0">
-            {navItems.map((item) => (
+            {navItems.filter(isVisible).map((item) => (
               <Link
                 className="shrink-0 rounded-md px-3 py-2 font-medium text-[#dbeafe] hover:bg-white/12 hover:text-white"
                 href={item.href}

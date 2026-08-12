@@ -1,31 +1,20 @@
-import Image from "next/image";
 import { LoginForm } from "./login-form";
-
-const heroImageUrl = "https://araglobalinc.com/wp-content/uploads/2025/10/ARA-Global-banner-4-scaled.png";
 
 export function LoginLanding() {
   return (
     <main className="min-h-screen bg-[var(--brand-navy)] text-white">
       <section className="relative isolate grid min-h-screen overflow-hidden lg:grid-cols-[minmax(0,1fr)_28rem]">
-        <Image
-          fill
-          alt="ARA Global safety training and workforce development"
-          className="absolute inset-0 -z-20 h-full w-full object-cover"
-          priority
-          sizes="100vw"
-          src={heroImageUrl}
-        />
-        <div className="absolute inset-0 -z-10 bg-[linear-gradient(90deg,rgb(0_24_66_/_0.92),rgb(0_32_95_/_0.72),rgb(0_32_95_/_0.34))]" />
+        <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_top_left,rgb(37_99_235_/_0.42),transparent_48%),linear-gradient(135deg,#07152f,#0f2f68)]" />
 
         <div className="flex min-h-[34rem] flex-col justify-between px-6 py-8 sm:px-10 lg:px-14">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-wide text-[#c9dcff]">ARA Global eCRM</p>
+            <p className="text-sm font-semibold uppercase tracking-wide text-[#c9dcff]">Secure customer-cell workspace</p>
             <h1 className="mt-5 max-w-3xl text-4xl font-semibold leading-tight text-white sm:text-5xl">
               Lead-to-cash workspace for training, safety, software, and content delivery.
             </h1>
             <p className="mt-5 max-w-2xl text-base leading-7 text-[#e8f2ff]">
               Track leads, proposals, booked orders, production stages, invoices, collections, and sales follow-ups in one
-              operating view for ARA Global teams.
+              secure operating view for your team.
             </p>
           </div>
 

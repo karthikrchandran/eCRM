@@ -4,7 +4,7 @@ import { setProductServiceActiveAction } from "@/server/products/actions";
 import { listProductServicesForAdmin } from "@/server/products/queries";
 
 export default async function AdminProductsPage() {
-  const user = await requireUser();
+  const user = await requireUser("production");
   const products = await listProductServicesForAdmin(user);
 
   return <ProductServiceList products={products} toggleActiveAction={setProductServiceActiveAction} />;

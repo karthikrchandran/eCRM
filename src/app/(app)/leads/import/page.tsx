@@ -5,7 +5,7 @@ import { leadImportAction } from "@/server/crm/lead-import-actions";
 import { assertCanWriteCrmRecords } from "@/server/crm/permissions";
 
 export default async function LeadImportPage() {
-  const user = await requireUser();
+  const user = await requireUser("crm");
   assertCanWriteCrmRecords(user);
 
   return (

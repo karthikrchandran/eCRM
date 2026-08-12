@@ -9,7 +9,7 @@ import { listActiveProductServices } from "@/server/products/queries";
 import { getBusinessSettings } from "@/server/settings/settings";
 
 export default async function NewProposalPage({ params }: { params: Promise<{ opportunityId: string }> }) {
-  const user = await requireUser();
+  const user = await requireUser("proposals");
   const { opportunityId } = await params;
   const [opportunity, products, settings, proposals] = await Promise.all([
     getOpportunityDetail(user, opportunityId),

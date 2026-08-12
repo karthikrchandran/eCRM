@@ -99,4 +99,15 @@ describe("authenticateLogin", () => {
       }
     });
   });
+
+  it("denies a new session when the cell lifecycle is not ACTIVE", async () => {
+    const findUserByEmail = vi.fn().mockResolvedValue(activeUser);
+    const result = await authenticateLogin(
+      { email: "admin@example.com", password: "Admin@12345" },
+      { findUserByEmail, verifyPassword: vi.fn().mockResolvedValue(true), isCellActive: () => false }
+    );
+
+    expect(result).toEqual({ error: "Customer cell is not active." });
+    expect(findUserByEmail).not.toHaveBeenCalled();
+  });
 });

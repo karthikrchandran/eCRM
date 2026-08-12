@@ -111,7 +111,7 @@ export function parseSalesTargetFormForTest(formData: FormData): ParseResult<Sal
 export async function createOpportunityAction(_previousState: ActionState, formData: FormData): Promise<ActionState> {
   "use server";
 
-  const user = await requireUser();
+  const user = await requireUser("crm");
   const parsed = parseOpportunityFormForTest(formData);
 
   if (!parsed.ok) {
@@ -130,7 +130,7 @@ export async function updateOpportunityAction(
 ): Promise<ActionState> {
   "use server";
 
-  const user = await requireUser();
+  const user = await requireUser("crm");
   const parsed = parseOpportunityFormForTest(formData);
 
   if (!parsed.ok) {
@@ -146,7 +146,7 @@ export async function updateOpportunityAction(
 export async function moveOpportunityStageAction(opportunityId: string, formData: FormData) {
   "use server";
 
-  const user = await requireUser();
+  const user = await requireUser("crm");
   const stageId = formData.get("stageId")?.toString() ?? "";
   await moveOpportunityStage(user, opportunityId, stageId);
   revalidatePath("/opportunities");
@@ -156,7 +156,7 @@ export async function moveOpportunityStageAction(opportunityId: string, formData
 export async function upsertPipelineStageAction(_previousState: ActionState, formData: FormData): Promise<ActionState> {
   "use server";
 
-  const user = await requireUser();
+  const user = await requireUser("crm");
   const parsed = parsePipelineStageFormForTest(formData);
 
   if (!parsed.ok) {
@@ -172,7 +172,7 @@ export async function upsertPipelineStageAction(_previousState: ActionState, for
 export async function upsertSalesTargetAction(_previousState: ActionState, formData: FormData): Promise<ActionState> {
   "use server";
 
-  const user = await requireUser();
+  const user = await requireUser("crm");
   const parsed = parseSalesTargetFormForTest(formData);
 
   if (!parsed.ok) {

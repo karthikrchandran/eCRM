@@ -13,7 +13,7 @@ export default async function FinancePage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const user = await requireUser();
+  const user = await requireUser("finance");
   const rawSearchParams = await searchParams;
   const filters: ReportsFilters = {
     currency: getParam(rawSearchParams, "currency") as ReportsFilters["currency"],

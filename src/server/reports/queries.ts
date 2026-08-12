@@ -97,6 +97,7 @@ type ProductServiceRecord = { id: string; name: string };
 
 type ReportsQueryDb = {
   activity: { findMany: (args: unknown) => Promise<ActivityRecord[]> };
+  cellConfiguration?: { findUnique: (args: unknown) => Promise<{ defaultCurrency: ReportCurrency } | null> };
   businessSettings?: { findUnique: (args: unknown) => Promise<{ defaultCurrency: ReportCurrency } | null> };
   costComponent?: { findMany: (args: unknown) => Promise<CostRecord[]> };
   incentive?: { findMany: (args: unknown) => Promise<IncentiveRecord[]> };
@@ -481,9 +482,12 @@ export async function getReportsOverview(
 ): Promise<ReportsOverview> {
   assertCanViewReports(user);
 
-  const settings = database.businessSettings
-    ? await database.businessSettings.findUnique({ where: { id: "default" }, select: { defaultCurrency: true } })
+  const configuration = database.cellConfiguration
+    ? await database.cellConfiguration.findUnique({ where: { id: "default" }, select: { defaultCurrency: true } })
     : null;
+  const settings = configuration ?? (database.businessSettings
+    ? await database.businessSettings.findUnique({ where: { id: "default" }, select: { defaultCurrency: true } })
+    : null);
   const currency = filters.currency ?? settings?.defaultCurrency ?? "INR";
   const orderWhere = buildOrderWhere({ ...filters, currency });
   const opportunityWhere = buildOpportunityWhere(filters);

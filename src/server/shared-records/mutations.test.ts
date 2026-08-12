@@ -24,6 +24,7 @@ function sharedRecordRow(overrides: Partial<SharedBusinessRecordRow> = {}): Shar
     phone: null,
     companyName: null,
     searchText: "acme learning active lead_1",
+    headVersion: 1,
     data: {},
     archivedAt: null,
     createdAt: new Date("2026-06-24T12:00:00.000Z"),
@@ -282,5 +283,28 @@ describe("upsertSharedRecord", () => {
         searchText: "updated external order booked external:order:777"
       })
     });
+  });
+
+  it("returns the same source version for an identical retry and increments for a later change", async () => {
+    const existing = sharedRecordRow({ id: "shared_1", headVersion: 4, data: { tier: "gold" } });
+    const changed = sharedRecordRow({ id: "shared_1", headVersion: 5, displayName: "Acme Global", data: { tier: "gold" } });
+    const database = {
+      sharedBusinessRecord: {
+        create: vi.fn(),
+        findFirst: vi.fn().mockResolvedValueOnce(existing).mockResolvedValueOnce(existing),
+        update: vi.fn().mockResolvedValue(changed)
+      }
+    };
+    const base = { entityType: "CUSTOMER", status: "ACTIVE", sourceApp: "ecrm", ecrmLegacyId: "lead_1", data: { tier: "gold" } };
+
+    const retry = await upsertSharedRecord({ ...base, displayName: "Acme Learning" }, database as never);
+    expect(retry.record.headVersion).toBe(4);
+    expect(database.sharedBusinessRecord.update).not.toHaveBeenCalled();
+
+    const update = await upsertSharedRecord({ ...base, displayName: "Acme Global" }, database as never);
+    expect(update.record.headVersion).toBe(5);
+    expect(database.sharedBusinessRecord.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: "shared_1" }, data: expect.objectContaining({ headVersion: { increment: 1 } })
+    }));
   });
 });

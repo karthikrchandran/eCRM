@@ -6,7 +6,7 @@ import { updateContactAction } from "@/server/crm/actions";
 import { getContactDetail, getLeadCustomerDetail } from "@/server/crm/queries";
 
 export default async function EditContactPage({ params }: { params: Promise<{ contactId: string }> }) {
-  const user = await requireUser();
+  const user = await requireUser("crm");
   const { contactId } = await params;
   const contact = await getContactDetail(user, contactId);
   if (!contact) notFound();

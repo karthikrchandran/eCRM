@@ -7,6 +7,7 @@ browser-baseline-ecrm.yaml
 graphify-out/
 .local-storage/
 node_modules/
+src/generated/
 *.tsbuildinfo
 next-env.d.ts
 .next/

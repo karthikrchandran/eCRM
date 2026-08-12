@@ -107,4 +107,18 @@ describe("AppShell", () => {
     expect(screen.getByRole("link", { name: "Contacts" })).toHaveAttribute("href", "/contacts");
     expect(screen.getByRole("link", { name: "Pipeline" })).toHaveAttribute("href", "/opportunities");
   });
+
+  it("hides navigation for disabled customer-cell modules", () => {
+    render(
+      <AppShell enabledModules={["crm", "reports"]} user={{ name: "Kavya Iyer", email: "admin@example.com", role: "ADMIN" }}>
+        <p>Dashboard content</p>
+      </AppShell>
+    );
+
+    expect(screen.getByRole("link", { name: "Pipeline" })).toBeVisible();
+    expect(screen.getByRole("link", { name: "Reports" })).toBeVisible();
+    expect(screen.queryByRole("link", { name: "Orders" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Finance" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Production" })).not.toBeInTheDocument();
+  });
 });

@@ -1,8 +1,11 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
+import { notFound } from "next/navigation";
 import { z } from "zod";
 import { requireUser } from "@/server/auth/current-user";
+import { getServerEnv } from "@/server/env";
 import { updateBusinessSettings } from "./settings";
 
 type SettingsActionState = {
@@ -31,6 +34,7 @@ export async function updateBusinessSettingsAction(
   _previousState: SettingsActionState,
   formData: FormData
 ): Promise<SettingsActionState> {
+  if (getServerEnv().runtime.mode !== "cell") notFound();
   const user = await requireUser();
   const result = settingsSchema.safeParse({
     defaultCurrency: formData.get("defaultCurrency")
@@ -41,7 +45,10 @@ export async function updateBusinessSettingsAction(
   }
 
   try {
-    await updateBusinessSettings(user, result.data);
+    await updateBusinessSettings(user, result.data, {
+      correlationId: randomUUID(),
+      reason: "Customer administrator changed the default currency"
+    });
     revalidatePath("/admin/settings");
     revalidatePath("/opportunities");
     return { ok: true, message: "Business settings saved." };
