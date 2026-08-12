@@ -2,6 +2,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  CellControlBootstrapService,
   CellControlProjectionService,
   createInMemoryCellControlProjectionRepository,
   signControlProjection
@@ -11,6 +12,17 @@ const secret = "cell-control-projection-secret-at-least-32-bytes";
 const issuedAt = "2026-08-11T12:00:00.000Z";
 
 describe("cell control projections", () => {
+  it("bootstraps only this configured cell from a signed ACTIVE control-plane snapshot", async () => {
+    const repository = createInMemoryCellControlProjectionRepository();
+    const bootstrap = new CellControlBootstrapService({ cellId: "cell_ara", secret, repository });
+    const snapshot = lifecycle(1, "ACTIVE", "corr_bootstrap");
+
+    await expect(bootstrap.bootstrap(snapshot, signControlProjection(snapshot, secret))).resolves.toMatchObject({ version: 1 });
+    await expect(repository.getControl("cell_ara")).resolves.toMatchObject({ lifecycleStatus: "ACTIVE", version: 1 });
+
+    const wrongCell = { ...snapshot, cellId: "cell_other", idempotencyKey: "bootstrap:other" };
+    await expect(bootstrap.bootstrap(wrongCell, signControlProjection(wrongCell, secret))).rejects.toThrow("cell identity");
+  });
   it("durably applies a correctly signed lifecycle projection for this cell", async () => {
     const repository = createInMemoryCellControlProjectionRepository();
     const service = new CellControlProjectionService({

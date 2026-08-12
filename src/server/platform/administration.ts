@@ -47,10 +47,19 @@ export interface PlatformAdministrationRepository {
     deliveryId?: string
   ): Promise<SupportGrantRecord>;
   createSupportGrant(grant: SupportGrantRecord): Promise<SupportGrantRecord>;
+  getSupportGrantByCorrelation(cellId: string, correlationId: string): Promise<SupportGrantRecord | undefined>;
   stageProjectionDelivery(input: Omit<ControlProjectionDeliveryRecord, "id" | "version" | "status" | "attempts" | "createdAt" | "updatedAt">): Promise<ControlProjectionDeliveryRecord>;
+  stageLifecycleProjection(
+    expectedStatus: CustomerCellLifecycleStatus,
+    targetStatus: CustomerCellLifecycleStatus,
+    input: Omit<ControlProjectionDeliveryRecord, "id" | "version" | "status" | "attempts" | "createdAt" | "updatedAt">
+  ): Promise<ControlProjectionDeliveryRecord>;
+  finalizeLifecycleProjection(deliveryId: string, audit: ControlPlaneAuditEventRecord): Promise<CustomerCellRecord>;
+  finalizeSupportGrantProjection(grantId: string, deliveryId: string, audit: ControlPlaneAuditEventRecord): Promise<SupportGrantRecord>;
   beginProjectionDeliveryAttempt(deliveryId: string, attemptedAt: Date): Promise<ControlProjectionDeliveryRecord>;
   failProjectionDelivery(deliveryId: string, error: string, audit: ControlPlaneAuditEventRecord): Promise<void>;
   projectionDeliveriesForCell(cellId: string): Promise<ControlProjectionDeliveryRecord[]>;
+  pendingProjectionDeliveries(): Promise<ControlProjectionDeliveryRecord[]>;
 }
 
 export type CellControlProjectionClient = {
@@ -100,20 +109,26 @@ export class PlatformAdministrationService {
         throw new Error("Provisioning completion and health evidence are required");
       }
     }
-    if (!allowedTransitions[cell.lifecycleStatus]?.includes(status)) {
+    const continuing = cell.desiredLifecycleStatus === status;
+    if (!continuing && !allowedTransitions[cell.lifecycleStatus]?.includes(status)) {
       await this.repository.appendAuditEvent(this.audit(cellId, action, command, "FAILED", "INVALID_LIFECYCLE_TRANSITION"));
       throw new Error(`Cannot transition customer cell from ${cell.lifecycleStatus} to ${status}`);
     }
 
-    const delivery = await this.deliverProjection(cellId, "LIFECYCLE", command, {
+    const projectionInput = this.projectionInput(cellId, "LIFECYCLE", command, {
       lifecycleStatus: status,
       sourceEventId: `${action}:${command.correlationId}`
     }, `lifecycle:${cellId}:${status}:${command.correlationId}`);
-    const updated = await this.repository.transitionCellWithAudit(
-      cellId, cell.lifecycleStatus, status, this.audit(cellId, action, command, "SUCCEEDED"), delivery.id
-    );
-    if (!updated) throw new Error("Customer cell lifecycle changed concurrently");
-    return updated;
+    let delivery: ControlProjectionDeliveryRecord;
+    try {
+      delivery = await this.repository.stageLifecycleProjection(cell.lifecycleStatus, status, projectionInput);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Control projection staging failed";
+      await this.repository.appendAuditEvent(this.audit(cellId, "control-projection.lifecycle", command, "FAILED", message));
+      throw error;
+    }
+    await this.attemptDelivery(delivery, command);
+    return this.repository.finalizeLifecycleProjection(delivery.id, this.audit(cellId, action, command, "SUCCEEDED"));
   }
 
   public async deleteCell(
@@ -152,13 +167,14 @@ export class PlatformAdministrationService {
     expiresAt: Date;
   }): Promise<SupportGrantRecord & { accessToken: string }> {
     await this.requiredCell(input.cellId);
-    const startsAt = this.now();
+    const existing = await this.repository.getSupportGrantByCorrelation(input.cellId, input.correlationId);
+    const startsAt = existing?.startsAt ?? this.now();
     if (!input.operatorId.trim() || !input.caseReference.trim() || !input.reason.trim() || input.expiresAt <= startsAt
       || input.capabilities.length === 0 || input.capabilities.some((capability) => !["configuration:read", "users:read"].includes(capability))) {
       await this.repository.appendAuditEvent(this.audit(input.cellId, "support-grant.create", input, "FAILED", "INVALID_SUPPORT_GRANT"));
       throw new Error("Support grant requires operator, case, reason, and a future expiry");
     }
-    const grant: SupportGrantRecord = {
+    const grant: SupportGrantRecord = existing ?? {
       id: `grant_${createHash("sha256").update(`${input.cellId}:${input.correlationId}`).digest("hex").slice(0, 24)}`,
       cellId: input.cellId,
       operatorId: input.operatorId,
@@ -173,6 +189,7 @@ export class PlatformAdministrationService {
     };
     const projections = this.requiredProjectionDependencies();
     const accessToken = await projections.issueAccessToken(grant);
+    if (!existing) await this.repository.createSupportGrant(grant);
     const delivery = await this.deliverProjection(input.cellId, "SUPPORT_GRANT", input, {
       operation: "UPSERT",
       grant: {
@@ -180,10 +197,33 @@ export class PlatformAdministrationService {
         capabilities: grant.capabilities, startsAt: grant.startsAt.toISOString(), expiresAt: grant.expiresAt.toISOString()
       }
     }, `support-grant:create:${input.cellId}:${input.correlationId}`);
-    const created = await this.repository.createSupportGrantWithAudit(
-      grant, this.audit(input.cellId, "support-grant.create", input, "SUCCEEDED"), delivery.id
+    const created = await this.repository.finalizeSupportGrantProjection(
+      grant.id, delivery.id, this.audit(input.cellId, "support-grant.create", input, "SUCCEEDED")
     );
     return Object.assign(created, { accessToken });
+  }
+
+  public async reconcileControlProjections(): Promise<{ attempted: number; converged: number; failed: number }> {
+    const deliveries = await this.repository.pendingProjectionDeliveries();
+    let converged = 0;
+    let failed = 0;
+    for (const delivery of deliveries) {
+      const command = { actor: "system:projection-reconciler", correlationId: delivery.correlationId, reason: "Reconcile pending control projection" };
+      try {
+        await this.attemptDelivery(delivery, command);
+        if (delivery.type === "LIFECYCLE") {
+          await this.repository.finalizeLifecycleProjection(delivery.id, this.audit(delivery.cellId, "cell.lifecycle.reconciled", command, "SUCCEEDED"));
+        } else {
+          const grant = delivery.payload.grant as { id?: string } | undefined;
+          if (!grant?.id) throw new Error("Support grant reconciliation payload is invalid");
+          await this.repository.finalizeSupportGrantProjection(grant.id, delivery.id, this.audit(delivery.cellId, "support-grant.reconciled", command, "SUCCEEDED"));
+        }
+        converged += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+    return { attempted: deliveries.length, converged, failed };
   }
 
   public async revokeSupportGrant(grantId: string, command: PlatformAuditCommand): Promise<SupportGrantRecord> {
@@ -228,13 +268,10 @@ export class PlatformAdministrationService {
     payload: Record<string, unknown>,
     idempotencyKey: string
   ): Promise<ControlProjectionDeliveryRecord> {
-    const projections = this.requiredProjectionDependencies();
-    const issuedAt = this.now();
+    const input = this.projectionInput(cellId, type, command, payload, idempotencyKey);
     let delivery: ControlProjectionDeliveryRecord;
     try {
-      delivery = await this.repository.stageProjectionDelivery({
-        cellId, type, correlationId: command.correlationId, idempotencyKey, issuedAt, payload
-      });
+      delivery = await this.repository.stageProjectionDelivery(input);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Control projection staging failed";
       await this.repository.appendAuditEvent(
@@ -242,6 +279,22 @@ export class PlatformAdministrationService {
       );
       throw error;
     }
+    await this.attemptDelivery(delivery, command);
+    return delivery;
+  }
+
+  private projectionInput(
+    cellId: string,
+    type: "LIFECYCLE" | "SUPPORT_GRANT",
+    command: PlatformAuditCommand,
+    payload: Record<string, unknown>,
+    idempotencyKey: string
+  ) {
+    return { cellId, type, correlationId: command.correlationId, idempotencyKey, issuedAt: this.now(), payload };
+  }
+
+  private async attemptDelivery(delivery: ControlProjectionDeliveryRecord, command: PlatformAuditCommand): Promise<void> {
+    const projections = this.requiredProjectionDependencies();
     const envelope: CellControlProjectionEnvelope = {
       cellId: delivery.cellId, version: delivery.version, type: delivery.type,
       correlationId: delivery.correlationId, idempotencyKey: delivery.idempotencyKey,
@@ -256,13 +309,13 @@ export class PlatformAdministrationService {
       if (!acknowledgement.acknowledged || acknowledgement.version !== envelope.version) {
         throw new Error("Cell did not acknowledge the durable control projection");
       }
-      return delivery;
+      return;
     } catch (error) {
       const message = error instanceof Error ? error.message : "Control projection delivery failed";
       await this.repository.failProjectionDelivery(
         delivery.id,
         message,
-        this.audit(cellId, `control-projection.${type.toLowerCase()}`, command, "FAILED", message)
+        this.audit(delivery.cellId, `control-projection.${delivery.type.toLowerCase()}`, command, "FAILED", message)
       );
       throw error;
     }
@@ -325,6 +378,8 @@ export function createInMemoryPlatformAdministrationRepository(
     },
     auditEventsForCell: async (cellId) => auditEvents.filter((event) => event.cellId === cellId).map((event) => ({ ...event })),
     createSupportGrant: async (grant) => {
+      const existing = [...grants.values()].find((item) => item.cellId === grant.cellId && item.correlationId === grant.correlationId);
+      if (existing) return { ...existing };
       grants.set(grant.id, { ...grant });
       return { ...grant };
     },
@@ -336,6 +391,10 @@ export function createInMemoryPlatformAdministrationRepository(
     },
     getSupportGrant: async (grantId) => {
       const grant = grants.get(grantId);
+      return grant ? { ...grant } : undefined;
+    },
+    getSupportGrantByCorrelation: async (cellId, correlationId) => {
+      const grant = [...grants.values()].find((item) => item.cellId === cellId && item.correlationId === correlationId);
       return grant ? { ...grant } : undefined;
     },
     revokeSupportGrantWithAudit: async (grantId, revokedAt, revokedBy, revocationReason, audit, deliveryId) => {
@@ -362,6 +421,46 @@ export function createInMemoryPlatformAdministrationRepository(
       deliveries.set(delivery.id, delivery);
       return { ...delivery };
     },
+    stageLifecycleProjection: async (expectedStatus, targetStatus, input) => {
+      const existing = [...deliveries.values()].find((item) => item.idempotencyKey === input.idempotencyKey);
+      if (existing) return { ...existing };
+      const cell = cells.get(input.cellId);
+      if (!cell || cell.lifecycleStatus !== expectedStatus) throw new Error("Customer cell lifecycle changed concurrently");
+      if ([...deliveries.values()].some((item) => item.cellId === input.cellId && item.status !== "DELIVERED")) {
+        throw new Error("Another control projection delivery is pending reconciliation");
+      }
+      const now = new Date();
+      const delivery: ControlProjectionDeliveryRecord = {
+        ...input, id: `delivery_${randomUUID()}`,
+        version: Math.max(0, ...[...deliveries.values()].filter((item) => item.cellId === input.cellId).map((item) => item.version)) + 1,
+        status: "PENDING", attempts: 0, createdAt: now, updatedAt: now
+      };
+      deliveries.set(delivery.id, delivery);
+      const authorityStatus = targetStatus === "SUSPENDED" ? "SUSPENDING"
+        : targetStatus === "OFFBOARDING" || targetStatus === "DELETED" ? targetStatus
+          : cell.lifecycleStatus;
+      cells.set(cell.id, { ...cell, lifecycleStatus: authorityStatus, desiredLifecycleStatus: targetStatus, updatedAt: new Date() });
+      return delivery;
+    },
+    finalizeLifecycleProjection: async (deliveryId, audit) => {
+      const delivery = requiredDelivery(deliveries, deliveryId);
+      const cell = cells.get(delivery.cellId);
+      if (!cell) throw new Error("Customer cell was not found");
+      const targetStatus = String(delivery.payload.lifecycleStatus) as CustomerCellLifecycleStatus;
+      if (cell.desiredLifecycleStatus !== targetStatus) throw new Error("Customer cell lifecycle intent changed concurrently");
+      const updated = { ...cell, lifecycleStatus: targetStatus, desiredLifecycleStatus: undefined, updatedAt: new Date() };
+      cells.set(cell.id, updated);
+      markDelivered(deliveries, deliveryId);
+      auditEvents.push({ ...audit });
+      return { ...updated };
+    },
+    finalizeSupportGrantProjection: async (grantId, deliveryId, audit) => {
+      const grant = grants.get(grantId);
+      if (!grant) throw new Error("Support grant was not found");
+      markDelivered(deliveries, deliveryId);
+      auditEvents.push({ ...audit });
+      return { ...grant };
+    },
     beginProjectionDeliveryAttempt: async (deliveryId, attemptedAt) => {
       const delivery = requiredDelivery(deliveries, deliveryId);
       const updated = { ...delivery, status: "PENDING" as const, attempts: delivery.attempts + 1, lastAttemptAt: attemptedAt, lastError: undefined, updatedAt: attemptedAt };
@@ -376,6 +475,10 @@ export function createInMemoryPlatformAdministrationRepository(
     projectionDeliveriesForCell: async (cellId) => [...deliveries.values()]
       .filter((delivery) => delivery.cellId === cellId)
       .sort((left, right) => left.version - right.version)
+      .map((delivery) => ({ ...delivery })),
+    pendingProjectionDeliveries: async () => [...deliveries.values()]
+      .filter((delivery) => delivery.status !== "DELIVERED")
+      .sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime())
       .map((delivery) => ({ ...delivery }))
   };
 }

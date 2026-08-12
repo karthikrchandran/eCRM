@@ -155,14 +155,14 @@ export class PrismaPlatformRepository implements PlatformRepository {
     });
   }
 
-  public async finalizeProvisioningSuccess({ cellId, attemptId, leaseVersion, action, auditEvent }: ProvisioningFinalization): Promise<{
+  public async finalizeProvisioningSuccess({ cellId, attemptId, leaseVersion, action, auditEvent, keepCellProvisioning }: ProvisioningFinalization): Promise<{
     cell: CustomerCellRecord;
     attempt: ProvisioningAttemptRecord;
   }> {
     return this.transaction(async (repository) => {
       await repository.appendProvisioningAction(attemptId, leaseVersion, action);
       await repository.addAuditEvent(auditEvent);
-      const cell = await repository.updateCell(cellId, attemptId, leaseVersion, { lifecycleStatus: "ACTIVE" });
+      const cell = await repository.updateCell(cellId, attemptId, leaseVersion, keepCellProvisioning ? {} : { lifecycleStatus: "ACTIVE" });
       const attempt = await repository.setAttemptResult(attemptId, leaseVersion, "SUCCEEDED");
       return { cell, attempt };
     });

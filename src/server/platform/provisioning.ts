@@ -157,10 +157,10 @@ export function createInMemoryPlatformRepository(): InMemoryPlatformRepository {
       await transactionRepository.addAuditEvent(auditEvent);
       return attempt;
     }),
-    finalizeProvisioningSuccess: async ({ cellId, attemptId, leaseVersion, action, auditEvent }) => repository.transaction(async (transactionRepository) => {
+    finalizeProvisioningSuccess: async ({ cellId, attemptId, leaseVersion, action, auditEvent, keepCellProvisioning }) => repository.transaction(async (transactionRepository) => {
       await transactionRepository.appendProvisioningAction(attemptId, leaseVersion, action);
       await transactionRepository.addAuditEvent(auditEvent);
-      const cell = await transactionRepository.updateCell(cellId, attemptId, leaseVersion, { lifecycleStatus: "ACTIVE" });
+      const cell = await transactionRepository.updateCell(cellId, attemptId, leaseVersion, keepCellProvisioning ? {} : { lifecycleStatus: "ACTIVE" });
       const attempt = await transactionRepository.setAttemptResult(attemptId, leaseVersion, "SUCCEEDED");
       return { cell, attempt };
     }),
@@ -198,7 +198,10 @@ export function createInMemoryPlatformRepository(): InMemoryPlatformRepository {
 export class CustomerCellProvisioner {
   public constructor(
     private readonly repository: PlatformRepository,
-    private readonly provider: CellProvider
+    private readonly provider: CellProvider,
+    private readonly activation?: {
+      activate(cell: CustomerCellRecord, attempt: ProvisioningAttemptRecord, request: ProvisioningRequest): Promise<CustomerCellRecord>;
+    }
   ) {}
 
   public async provision(request: ProvisioningRequest): Promise<ProvisioningOutcome> {
@@ -328,7 +331,8 @@ export class CustomerCellProvisioner {
           cellId: reservation.cell.id,
           attemptId: reservation.attempt.id,
           leaseVersion: reservation.attempt.leaseVersion,
-          ...this.resultEvidence(reservation.cell.id, reservation.attempt.id, request, "health-check", "SUCCEEDED", undefined, undefined, undefined, secretReference)
+          ...this.resultEvidence(reservation.cell.id, reservation.attempt.id, request, "health-check", "SUCCEEDED", undefined, undefined, undefined, secretReference),
+          keepCellProvisioning: Boolean(this.activation)
         });
       } catch (error) {
         const committed = await this.committedFinalization(reservation.cell, reservation.attempt.id);
@@ -336,6 +340,10 @@ export class CustomerCellProvisioner {
         throw new ProvisioningFailure("health-check", "REPOSITORY_PERSISTENCE_FAILED", errorMessage(error));
       }
       reservation.attempt = finalization.attempt;
+      if (this.activation) {
+        const activated = await this.activation.activate(finalization.cell, finalization.attempt, request);
+        return this.outcome(activated, reservation.attempt);
+      }
       return this.outcome(finalization.cell, reservation.attempt);
     } catch (error) {
       if (error instanceof ProvisioningLeaseLostError) {
@@ -609,6 +617,7 @@ export interface ProvisioningResultEvidence {
 
 export interface ProvisioningFinalization extends ProvisioningResultEvidence {
   cellId: string;
+  keepCellProvisioning?: boolean;
 }
 
 class ProvisioningFailure extends Error {

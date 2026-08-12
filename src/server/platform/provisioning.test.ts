@@ -72,6 +72,25 @@ describe("CustomerCellProvisioner", () => {
     }]);
   });
 
+  it("delivers the durable ACTIVE control projection before reporting provisioning ACTIVE", async () => {
+    const repository = createInMemoryPlatformRepository();
+    let projected = false;
+    const provisioner = new CustomerCellProvisioner(repository, new LocalCellProvider(), {
+      activate: async (cell, attempt, activationRequest) => {
+        expect(cell.lifecycleStatus).toBe("PROVISIONING");
+        expect(attempt.result).toBe("SUCCEEDED");
+        expect(activationRequest.cellId).toBe(request.cellId);
+        projected = true;
+        return { ...cell, lifecycleStatus: "ACTIVE" };
+      }
+    });
+
+    const result = await provisioner.provision(request);
+
+    expect(projected).toBe(true);
+    expect(result.cell.lifecycleStatus).toBe("ACTIVE");
+  });
+
   it("reuses the same provider resource when recording its result fails", async () => {
     const repository = createInMemoryPlatformRepository();
     const appendProvisioningAction = repository.appendProvisioningAction.bind(repository);

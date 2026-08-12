@@ -141,6 +141,32 @@ export class CellControlProjectionService {
   }
 }
 
+/** Explicit one-time entry point for cells that predate durable control projections. */
+export class CellControlBootstrapService {
+  private readonly projection: CellControlProjectionService;
+
+  public constructor(private readonly dependencies: {
+    cellId: string;
+    secret: string;
+    repository: CellControlProjectionRepository;
+    now?: () => Date;
+  }) {
+    this.projection = new CellControlProjectionService(dependencies);
+  }
+
+  public async bootstrap(envelope: CellControlProjectionEnvelope, signature: string) {
+    if (envelope.cellId !== this.dependencies.cellId) {
+      throw new CellControlProjectionError("Projection cell identity does not match this runtime");
+    }
+    const current = await this.dependencies.repository.getControl(this.dependencies.cellId);
+    if (current) throw new CellControlProjectionError("Cell control projection is already initialized");
+    if (envelope.version !== 1 || envelope.type !== "LIFECYCLE" || envelope.payload.lifecycleStatus !== "ACTIVE") {
+      throw new CellControlProjectionError("Bootstrap requires an initial ACTIVE lifecycle snapshot");
+    }
+    return this.projection.apply(envelope, signature);
+  }
+}
+
 export function createInMemoryCellControlProjectionRepository(): CellControlProjectionRepository {
   const controls = new Map<string, CellControlRecord>();
   const grants = new Map<string, CellSupportGrantRecord>();

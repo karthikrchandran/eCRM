@@ -12,6 +12,7 @@ enum CustomerCellLifecycleStatus {
   PROVISIONING
   ACTIVE
   PROVISIONING_FAILED
+  SUSPENDING
   SUSPENDED
   OFFBOARDING
   DELETED
@@ -39,6 +40,7 @@ model CustomerCell {
   planCode                   String
   allowedModules             String[]
   lifecycleStatus            CustomerCellLifecycleStatus @default(PROVISIONING)
+  desiredLifecycleStatus     CustomerCellLifecycleStatus?
   databaseReference          String?
   storageReference           String?
   secretReference            String?
@@ -164,5 +166,5 @@ model SupportGrant {
   cell          CustomerCell @relation(fields: [cellId], references: [id], onDelete: Restrict)
 
   @@index([cellId, expiresAt])
-  @@index([correlationId])
+  @@unique([cellId, correlationId])
 }

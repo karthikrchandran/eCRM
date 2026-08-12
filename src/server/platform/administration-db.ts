@@ -74,7 +74,10 @@ export class PrismaPlatformAdministrationRepository implements PlatformAdministr
   }
 
   public async createSupportGrant(grant: SupportGrantRecord): Promise<SupportGrantRecord> {
-    return mapGrant(await this.client.supportGrant.create({ data: grantData(grant) }));
+    return mapGrant(await this.client.supportGrant.upsert({
+      where: { cellId_correlationId: { cellId: grant.cellId, correlationId: grant.correlationId } },
+      create: grantData(grant), update: {}
+    }));
   }
 
   public async createSupportGrantWithAudit(
@@ -92,6 +95,11 @@ export class PrismaPlatformAdministrationRepository implements PlatformAdministr
 
   public async getSupportGrant(grantId: string): Promise<SupportGrantRecord | undefined> {
     const grant = await this.client.supportGrant.findUnique({ where: { id: grantId } });
+    return grant ? mapGrant(grant) : undefined;
+  }
+
+  public async getSupportGrantByCorrelation(cellId: string, correlationId: string): Promise<SupportGrantRecord | undefined> {
+    const grant = await this.client.supportGrant.findUnique({ where: { cellId_correlationId: { cellId, correlationId } } });
     return grant ? mapGrant(grant) : undefined;
   }
 
@@ -140,6 +148,63 @@ export class PrismaPlatformAdministrationRepository implements PlatformAdministr
     }
   }
 
+  public async stageLifecycleProjection(
+    expectedStatus: CustomerCellRecord["lifecycleStatus"],
+    targetStatus: CustomerCellRecord["lifecycleStatus"],
+    input: Omit<ControlProjectionDeliveryRecord, "id" | "version" | "status" | "attempts" | "createdAt" | "updatedAt">
+  ): Promise<ControlProjectionDeliveryRecord> {
+    const existing = await this.client.controlProjectionDelivery.findUnique({ where: { idempotencyKey: input.idempotencyKey } });
+    if (existing) return mapDelivery(existing);
+    return this.client.$transaction(async (transaction) => {
+      await transaction.$queryRaw`SELECT "id" FROM "CustomerCell" WHERE "id" = ${input.cellId} FOR UPDATE`;
+      const retry = await transaction.controlProjectionDelivery.findUnique({ where: { idempotencyKey: input.idempotencyKey } });
+      if (retry) return mapDelivery(retry);
+      const outstanding = await transaction.controlProjectionDelivery.findFirst({
+        where: { cellId: input.cellId, status: { not: "DELIVERED" } }, select: { id: true }
+      });
+      if (outstanding) throw new Error("Another control projection delivery is pending reconciliation");
+      const latest = await transaction.controlProjectionDelivery.aggregate({ where: { cellId: input.cellId }, _max: { version: true } });
+      const authorityStatus = targetStatus === "SUSPENDED" ? "SUSPENDING"
+        : targetStatus === "OFFBOARDING" || targetStatus === "DELETED" ? targetStatus : expectedStatus;
+      const changed = await transaction.customerCell.updateMany({
+        where: { id: input.cellId, lifecycleStatus: expectedStatus },
+        data: { lifecycleStatus: authorityStatus, desiredLifecycleStatus: targetStatus }
+      });
+      if (changed.count !== 1) throw new Error("Customer cell lifecycle changed concurrently");
+      return mapDelivery(await transaction.controlProjectionDelivery.create({ data: {
+        ...input, version: (latest._max.version ?? 0) + 1, payload: input.payload as Prisma.InputJsonValue
+      }}));
+    });
+  }
+
+  public async finalizeLifecycleProjection(deliveryId: string, audit: ControlPlaneAuditEventRecord): Promise<CustomerCellRecord> {
+    return this.client.$transaction(async (transaction) => {
+      const delivery = await transaction.controlProjectionDelivery.findUniqueOrThrow({ where: { id: deliveryId } });
+      const targetStatus = String((delivery.payload as Record<string, unknown>).lifecycleStatus) as CustomerCellRecord["lifecycleStatus"];
+      const changed = await transaction.customerCell.updateMany({
+        where: { id: delivery.cellId, desiredLifecycleStatus: targetStatus },
+        data: { lifecycleStatus: targetStatus, desiredLifecycleStatus: null }
+      });
+      if (changed.count !== 1) throw new Error("Customer cell lifecycle intent changed concurrently");
+      await markDeliveryDelivered(transaction, deliveryId);
+      await transaction.controlPlaneAuditEvent.create({ data: auditData(audit) });
+      return mapCell(await transaction.customerCell.findUniqueOrThrow({ where: { id: delivery.cellId } }));
+    });
+  }
+
+  public async finalizeSupportGrantProjection(
+    grantId: string,
+    deliveryId: string,
+    audit: ControlPlaneAuditEventRecord
+  ): Promise<SupportGrantRecord> {
+    return this.client.$transaction(async (transaction) => {
+      const grant = await transaction.supportGrant.findUniqueOrThrow({ where: { id: grantId } });
+      await markDeliveryDelivered(transaction, deliveryId);
+      await transaction.controlPlaneAuditEvent.create({ data: auditData(audit) });
+      return mapGrant(grant);
+    });
+  }
+
   public async beginProjectionDeliveryAttempt(deliveryId: string, attemptedAt: Date): Promise<ControlProjectionDeliveryRecord> {
     return mapDelivery(await this.client.controlProjectionDelivery.update({
       where: { id: deliveryId },
@@ -163,6 +228,12 @@ export class PrismaPlatformAdministrationRepository implements PlatformAdministr
   public async projectionDeliveriesForCell(cellId: string): Promise<ControlProjectionDeliveryRecord[]> {
     return (await this.client.controlProjectionDelivery.findMany({
       where: { cellId }, orderBy: { version: "asc" }
+    })).map(mapDelivery);
+  }
+
+  public async pendingProjectionDeliveries(): Promise<ControlProjectionDeliveryRecord[]> {
+    return (await this.client.controlProjectionDelivery.findMany({
+      where: { status: { not: "DELIVERED" } }, orderBy: { createdAt: "asc" }
     })).map(mapDelivery);
   }
 }
@@ -228,12 +299,14 @@ function mapCell(cell: {
   id: string; cellKey: string; legalName: string; displayName: string; region: string; desiredSubdomain: string;
   planCode: string; allowedModules: string[];
   lifecycleStatus: string; databaseReference: string | null; storageReference: string | null; secretReference: string | null;
+  desiredLifecycleStatus: string | null;
   backupReference: string | null; applicationReference: string | null; applicationUrl: string | null;
   signalLoopWorkspaceReference: string | null; createdAt: Date; updatedAt: Date;
 }): CustomerCellRecord {
   return {
     ...cell,
     lifecycleStatus: cell.lifecycleStatus as CustomerCellRecord["lifecycleStatus"],
+    desiredLifecycleStatus: cell.desiredLifecycleStatus as CustomerCellRecord["desiredLifecycleStatus"] ?? undefined,
     databaseReference: cell.databaseReference ?? undefined,
     storageReference: cell.storageReference ?? undefined,
     secretReference: cell.secretReference ?? undefined,

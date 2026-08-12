@@ -1,4 +1,4 @@
-export type CustomerCellLifecycleStatus = "PROVISIONING" | "ACTIVE" | "PROVISIONING_FAILED" | "SUSPENDED" | "OFFBOARDING" | "DELETED";
+export type CustomerCellLifecycleStatus = "PROVISIONING" | "ACTIVE" | "PROVISIONING_FAILED" | "SUSPENDING" | "SUSPENDED" | "OFFBOARDING" | "DELETED";
 
 export type ProvisioningStep =
   | "database"
@@ -22,6 +22,7 @@ export interface CustomerCellRecord {
   planCode: string;
   allowedModules: string[];
   lifecycleStatus: CustomerCellLifecycleStatus;
+  desiredLifecycleStatus?: CustomerCellLifecycleStatus;
   databaseReference?: string;
   storageReference?: string;
   secretReference?: string;

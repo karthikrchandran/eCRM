@@ -58,7 +58,8 @@ describe("platform lifecycle administration", () => {
     const service = projectedService(repository, deliver);
 
     await expect(service.transitionCell(activeCell.id, "SUSPENDED", command)).rejects.toThrow("cell unavailable");
-    expect((await repository.getCell(activeCell.id))?.lifecycleStatus).toBe("ACTIVE");
+    expect((await repository.getCell(activeCell.id))?.lifecycleStatus).toBe("SUSPENDING");
+    expect((await repository.getCell(activeCell.id))?.desiredLifecycleStatus).toBe("SUSPENDED");
     await expect(repository.projectionDeliveriesForCell(activeCell.id)).resolves.toEqual([
       expect.objectContaining({ status: "FAILED", attempts: 1, lastError: "cell unavailable" })
     ]);
@@ -68,6 +69,33 @@ describe("platform lifecycle administration", () => {
     await expect(repository.projectionDeliveriesForCell(activeCell.id)).resolves.toEqual([
       expect.objectContaining({ status: "DELIVERED", attempts: 2 })
     ]);
+  });
+
+  it("keeps resume authority suspended until ACK finalization and reconciles a crash after ACK", async () => {
+    const repository = createInMemoryPlatformAdministrationRepository([{ ...activeCell, lifecycleStatus: "SUSPENDED" }]);
+    const finalize = repository.finalizeLifecycleProjection.bind(repository);
+    let crash = true;
+    repository.finalizeLifecycleProjection = async (...args) => {
+      if (crash) {
+        crash = false;
+        throw new Error("database unavailable after acknowledgement");
+      }
+      return finalize(...args);
+    };
+    const deliver = vi.fn(async (envelope) => ({ acknowledged: true as const, version: envelope.version }));
+    const service = projectedService(repository, deliver);
+
+    await expect(service.transitionCell(activeCell.id, "ACTIVE", command)).rejects.toThrow("database unavailable");
+    await expect(repository.getCell(activeCell.id)).resolves.toMatchObject({
+      lifecycleStatus: "SUSPENDED", desiredLifecycleStatus: "ACTIVE"
+    });
+
+    await expect(service.reconcileControlProjections()).resolves.toEqual({ attempted: 1, converged: 1, failed: 0 });
+    await expect(repository.getCell(activeCell.id)).resolves.toMatchObject({
+      lifecycleStatus: "ACTIVE", desiredLifecycleStatus: undefined
+    });
+    expect(deliver).toHaveBeenCalledTimes(2);
+    expect(deliver.mock.calls[0]?.[0]).toEqual(deliver.mock.calls[1]?.[0]);
   });
 
   it.each([
@@ -121,7 +149,7 @@ describe("platform lifecycle administration", () => {
     expect(results.filter((result) => result.status === "rejected")).toHaveLength(1);
     expect(await repository.auditEventsForCell(activeCell.id)).toEqual(expect.arrayContaining([
       expect.objectContaining({ result: "SUCCEEDED" }),
-      expect.objectContaining({ result: "FAILED", error: "Another control projection delivery is pending reconciliation" })
+      expect.objectContaining({ result: "FAILED", error: "Customer cell lifecycle changed concurrently" })
     ]));
   });
 
@@ -175,6 +203,36 @@ describe("platform lifecycle administration", () => {
 });
 
 describe("support grants", () => {
+  it("returns the same committed grant and deterministic token after an ambiguous ACK success", async () => {
+    const repository = createInMemoryPlatformAdministrationRepository([activeCell]);
+    const finalize = repository.finalizeSupportGrantProjection.bind(repository);
+    let crash = true;
+    repository.finalizeSupportGrantProjection = async (...args) => {
+      if (crash) {
+        crash = false;
+        throw new Error("lost response after cell acknowledgement");
+      }
+      return finalize(...args);
+    };
+    const deliver = vi.fn(async (envelope) => ({ acknowledged: true as const, version: envelope.version }));
+    const service = projectedService(repository, deliver);
+    const input = {
+      ...command, cellId: activeCell.id, operatorId: "support@example.com", caseReference: "CASE-101",
+      capabilities: ["configuration:read"], expiresAt: new Date("2026-08-11T13:00:00Z")
+    };
+
+    await expect(service.createSupportGrant(input)).rejects.toThrow("lost response");
+    const retry = await service.createSupportGrant(input);
+
+    expect(retry.id).toBe("grant_176d72e3a56132fb19ca57f3");
+    expect(retry.accessToken).toBe("support-token");
+    expect(deliver).toHaveBeenCalledTimes(2);
+    expect(deliver.mock.calls[0]?.[0]).toEqual(deliver.mock.calls[1]?.[0]);
+    await expect(repository.projectionDeliveriesForCell(activeCell.id)).resolves.toEqual([
+      expect.objectContaining({ status: "DELIVERED", attempts: 2 })
+    ]);
+  });
+
   it("does not create an active grant when token signing cannot succeed", async () => {
     const repository = createInMemoryPlatformAdministrationRepository([activeCell]);
     const deliver = vi.fn();

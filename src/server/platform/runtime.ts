@@ -17,6 +17,7 @@ export function getPlatformAdministrationService(): PlatformAdministrationServic
 
 export function getCustomerCellProvisioner(): CustomerCellProvisioner {
   const database = getPlatformDatabase();
+  const administration = getPlatformAdministrationService();
   return new CustomerCellProvisioner(
     new PrismaPlatformRepository(database),
     new ProductionCellProvider({
@@ -36,6 +37,14 @@ export function getCustomerCellProvisioner(): CustomerCellProvisioner {
       },
       adapters: {},
       safety: { idempotency: "provider-enforced", fencing: "provider-enforced", cancellation: "abort-signal" }
-    })
+    }),
+    {
+      activate: (cell, attempt, request) => administration.transitionCell(cell.id, "ACTIVE", {
+        actor: request.actor,
+        correlationId: request.correlationId,
+        reason: request.reason ?? "Provisioning activation",
+        provisioningAttemptId: attempt.id
+      })
+    }
   );
 }
