@@ -15,6 +15,8 @@ npm run prisma:seed
 npm run dev
 ```
 
+> `prisma/seed.ts` resets demo data. It is destructive and is not a customer-cell onboarding command. Use the [customer-cell onboarding runbook](operations/customer-cell-onboarding.md) for dedicated installations.
+
 Open `http://localhost:3000`.
 
 If Docker is unavailable, use a local PostgreSQL instance and set `DATABASE_URL` in `.env`. The default local database is PostgreSQL on port `54329`.
