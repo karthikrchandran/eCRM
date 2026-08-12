@@ -9,7 +9,7 @@ function badRequest(error: ZodError) {
 }
 
 export async function GET(request: Request) {
-  const authResponse = await requireSharedDataApiToken(request);
+  const authResponse = await requireSharedDataApiToken(request, "SHARED_RECORDS_READ");
   if (authResponse) {
     return authResponse;
   }
@@ -30,7 +30,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const authResponse = await requireSharedDataApiToken(request);
+  const authResponse = await requireSharedDataApiToken(request, "SHARED_RECORDS_WRITE");
   if (authResponse) {
     return authResponse;
   }

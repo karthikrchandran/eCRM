@@ -1,5 +1,8 @@
+import { randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { db } from "@/server/db";
+import { mutateWithCellOutbox } from "@/server/integration-delivery/source-outbox";
+import { parseRuntimeConfig } from "@/server/runtime/cell-config";
 
 export type WorkflowEventInput = {
   sourceApp: string;
@@ -39,6 +42,7 @@ type WorkflowEventDb = {
   salesTask?: {
     create: (args: Prisma.SalesTaskCreateArgs) => Promise<{ id: string }>;
   };
+  $transaction?: <T>(operation: (transaction: unknown) => Promise<T>) => Promise<T>;
 };
 
 function isLeadRelated(relatedRecordType?: string | null, relatedRecordId?: string | null) {
@@ -48,6 +52,27 @@ function isLeadRelated(relatedRecordType?: string | null, relatedRecordId?: stri
 export async function ingestWorkflowEvent(
   input: WorkflowEventInput,
   database: WorkflowEventDb = db as unknown as WorkflowEventDb
+): Promise<WorkflowEventRecord> {
+  const runtime = parseRuntimeConfig({ ...process.env, APP_MODE: process.env.APP_MODE ?? "platform" });
+  if (database.$transaction && runtime.mode === "cell") {
+    return mutateWithCellOutbox({
+      database: database as never,
+      runtime,
+      destinationInstallation: process.env.INTEGRATION_DESTINATION_INSTALLATION ?? "",
+      eventType: "workflow-event.ingested",
+      correlationId: input.sourceEventId ?? `corr_${randomUUID()}`,
+      idempotencyKey: input.sourceEventId ?? `workflow_${randomUUID()}`,
+      mutate: (transaction) => ingestWorkflowEventCore(input, transaction as unknown as WorkflowEventDb),
+      payload: (event) => ({ workflowEventId: event.id, sourceEventType: event.sourceEventType, entityType: event.entityType }),
+      payloadVersion: () => 1
+    });
+  }
+  return ingestWorkflowEventCore(input, database);
+}
+
+async function ingestWorkflowEventCore(
+  input: WorkflowEventInput,
+  database: WorkflowEventDb
 ): Promise<WorkflowEventRecord> {
   if (input.sourceEventId && database.workflowEvent.findFirst) {
     const existing = await database.workflowEvent.findFirst({

@@ -1,5 +1,8 @@
+import { randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { db } from "@/server/db";
+import { mutateWithCellOutbox } from "@/server/integration-delivery/source-outbox";
+import { parseRuntimeConfig } from "@/server/runtime/cell-config";
 import { buildSearchText, mapSharedRecordRow } from "./mappers";
 import { sharedRecordUpsertSchema } from "./validators";
 import type { SharedBusinessRecordRow, SharedRecordMutationResult, SharedRecordUpsertInput } from "./types";
@@ -10,6 +13,7 @@ type SharedRecordMutationDb = {
     findFirst: (args: Prisma.SharedBusinessRecordFindFirstArgs) => Promise<SharedBusinessRecordRow | null>;
     update: (args: Prisma.SharedBusinessRecordUpdateArgs) => Promise<SharedBusinessRecordRow>;
   };
+  $transaction?: <T>(operation: (transaction: unknown) => Promise<T>) => Promise<T>;
 };
 
 function toRecordData(input: SharedRecordUpsertInput) {
@@ -94,6 +98,29 @@ export async function upsertSharedRecord(
   database: SharedRecordMutationDb = db as unknown as SharedRecordMutationDb
 ): Promise<SharedRecordMutationResult> {
   const input = sharedRecordUpsertSchema.parse(rawInput) as SharedRecordUpsertInput;
+  const runtime = parseRuntimeConfig({ ...process.env, APP_MODE: process.env.APP_MODE ?? "platform" });
+  if (database.$transaction && runtime.mode === "cell") {
+    const identity = input.externalKey ?? input.ecrmLegacyId ?? input.emailVoiceLegacyId!;
+    const correlationId = `corr_${randomUUID()}`;
+    return mutateWithCellOutbox({
+      database: database as never,
+      runtime,
+      destinationInstallation: process.env.INTEGRATION_DESTINATION_INSTALLATION ?? "",
+      eventType: "shared-record.changed",
+      correlationId,
+      idempotencyKey: `${input.entityType}:${identity}:${correlationId}`,
+      mutate: (transaction) => upsertSharedRecordCore(input, transaction as unknown as SharedRecordMutationDb),
+      payload: (result) => ({ recordId: result.record.id, entityType: result.record.entityType }),
+      payloadVersion: () => 1
+    });
+  }
+  return upsertSharedRecordCore(input, database);
+}
+
+async function upsertSharedRecordCore(
+  input: SharedRecordUpsertInput,
+  database: SharedRecordMutationDb
+): Promise<SharedRecordMutationResult> {
   const existing = await findExistingSharedRecord(input, database);
   const data = toRecordData(input);
 

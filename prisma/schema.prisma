@@ -171,6 +171,26 @@ model BusinessSettings {
   updatedAt       DateTime     @updatedAt
 }
 
+enum IntegrationCredentialStatus {
+  ACTIVE
+  ROTATED
+  REVOKED
+}
+
+enum CellIntegrationOutboxStatus {
+  PENDING
+  CLAIMED
+  FAILED
+  DELIVERED
+  DEAD_LETTER
+}
+
+enum CellIntegrationRepairStatus {
+  OPEN
+  RESOLVED
+  DISMISSED
+}
+
 model CellConfiguration {
   id              String       @id @default("default")
   displayName     String       @default("eCRM")
@@ -248,6 +268,102 @@ model CellSupportGrantProjection {
   appliedAt         DateTime
 
   @@index([cellId, expiresAt])
+}
+
+model IntegrationCredential {
+  id           String                      @id
+  cellId       String
+  name         String
+  secretHash   String
+  capabilities String[]
+  status       IntegrationCredentialStatus @default(ACTIVE)
+  expiresAt    DateTime
+  rotatedAt    DateTime?
+  revokedAt    DateTime?
+  lastUsedAt   DateTime?
+  createdAt    DateTime                    @default(now())
+  updatedAt    DateTime                    @updatedAt
+
+  @@index([cellId, status, expiresAt])
+}
+
+model CellIntegrationOutbox {
+  id                      String                      @id @default(cuid())
+  cellId                  String
+  eventType               String
+  payloadVersion          Int
+  payload                 Json
+  correlationId           String
+  idempotencyKey          String
+  destinationInstallation String
+  status                  CellIntegrationOutboxStatus @default(PENDING)
+  attempts                Int                         @default(0)
+  leaseOwner              String?
+  leaseUntil              DateTime?
+  fenceToken              String?
+  nextAttemptAt           DateTime                    @default(now())
+  lastError               String?
+  errorCode               String?
+  acknowledgementId       String?
+  destinationCheckpoint   String?
+  createdAt               DateTime                    @default(now())
+  updatedAt               DateTime                    @updatedAt
+  deliveryAttempts        CellIntegrationDeliveryAttempt[]
+
+  @@unique([cellId, destinationInstallation, idempotencyKey])
+  @@index([cellId, status, nextAttemptAt])
+  @@index([leaseUntil])
+  @@index([correlationId])
+}
+
+model CellIntegrationDeliveryAttempt {
+  id                String   @id @default(cuid())
+  outboxId          String
+  attemptNumber     Int
+  workerId          String
+  fenceToken        String
+  startedAt         DateTime
+  completedAt       DateTime?
+  result            String
+  errorCode         String?
+  errorMessage      String?
+  acknowledgementId String?
+  outbox            CellIntegrationOutbox @relation(fields: [outboxId], references: [id], onDelete: Cascade)
+
+  @@unique([outboxId, attemptNumber])
+  @@index([result, startedAt])
+}
+
+model CellIntegrationProjectionCheckpoint {
+  id                      String   @id @default(cuid())
+  cellId                  String
+  destinationInstallation String
+  sourceCheckpoint        String?
+  destinationCheckpoint   String?
+  sourceCount             Int      @default(0)
+  destinationCount        Int      @default(0)
+  reconciledAt            DateTime
+  updatedAt               DateTime @updatedAt
+
+  @@unique([cellId, destinationInstallation])
+}
+
+model CellIntegrationRepairCandidate {
+  id                      String                      @id @default(cuid())
+  cellId                  String
+  destinationInstallation String
+  sourceCheckpoint        String?
+  destinationCheckpoint   String?
+  sourceCount             Int
+  destinationCount        Int
+  status                  CellIntegrationRepairStatus @default(OPEN)
+  correlationId           String
+  reason                  String
+  createdAt               DateTime                    @default(now())
+  resolvedAt              DateTime?
+
+  @@index([cellId, status, createdAt])
+  @@index([correlationId])
 }
 
 model SharedBusinessRecord {
