@@ -19,6 +19,16 @@ npm run worker:integration-delivery
 
 The worker claims one due record with a lease and fencing token. It commits `DELIVERED` only after a remote acknowledgement. Retry delay is bounded exponential backoff with jitter. Exhausted records become `DEAD_LETTER`; replay requires an Admin-supplied reason and creates audit evidence.
 
+For SignalLoop, configure `INTEGRATION_DESTINATION_URL` as its HTTPS origin,
+`INTEGRATION_DESTINATION_INSTALLATION` as the exact bound SignalLoop workspace
+ID, and `INTEGRATION_DESTINATION_TOKEN` as the credential resolved by that
+binding's allowlisted secret reference. The provider posts only to
+`/api/v1/ecrm-installations/deliveries`. It sends deployment-owned `CELL_ID` and
+`CELL_KEY`, the configured workspace, correlation ID, and idempotency key as
+headers; SignalLoop rejects any value that does not match the persisted binding.
+The checked-in example and ACK live at
+`docs/contracts/signalloop-ecrm-installation-delivery-v1.json`.
+
 Schedule the one-shot command in the deployment scheduler. This repository does not install a recurring schedule. Concurrent invocations are safe because claims and acknowledgements use compare-and-swap fencing.
 
 ## Reconcile projections
@@ -29,7 +39,12 @@ $env:INTEGRATION_RECONCILIATION_REASON="Daily checkpoint comparison"
 npm run reconcile:integration-delivery
 ```
 
-Reconciliation compares cell-local source counts/checkpoints with the destination provider response. It persists the checkpoint result. A mismatch creates an open repair candidate and audit event; it never changes a CRM record or destination projection.
+The SignalLoop delivery credential has no workspace-admin checkpoint authority.
+The HTTP provider therefore fails closed with
+`CHECKPOINT_CONTRACT_UNAVAILABLE`; run reconciliation through SignalLoop's
+authenticated workspace-admin operation until a separately authorized
+machine-to-machine checkpoint contract is introduced. It never falls back to a
+legacy or guessed route.
 
 ## Incident and replay procedure
 
