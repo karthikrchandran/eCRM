@@ -61,7 +61,7 @@ export async function ingestWorkflowEvent(
       destinationInstallation: process.env.INTEGRATION_DESTINATION_INSTALLATION ?? "",
       eventType: "workflow-event.ingested",
       correlationId: input.sourceEventId ?? `corr_${randomUUID()}`,
-      idempotencyKey: input.sourceEventId ?? `workflow_${randomUUID()}`,
+      idempotencyKey: (event) => `workflow-event:${event.sourceApp}:${event.sourceEventId ?? event.id}:1`,
       mutate: (transaction) => ingestWorkflowEventCore(input, transaction as unknown as WorkflowEventDb),
       payload: (event) => ({ workflowEventId: event.id, sourceEventType: event.sourceEventType, entityType: event.entityType }),
       payloadVersion: () => 1

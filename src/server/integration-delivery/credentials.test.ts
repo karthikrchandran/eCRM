@@ -99,4 +99,19 @@ describe("cell integration credentials", () => {
       await expect(productionSafe.authenticate("legacy", "SHARED_RECORDS_READ")).rejects.toThrow("Unauthorized integration credential");
     }
   });
+
+  it("rejects rotation with an expiry that is not in the future", async () => {
+    const repository = createInMemoryIntegrationCredentialRepository();
+    const now = new Date("2026-08-12T12:00:00Z");
+    const service = new IntegrationCredentialService(repository, { runtime, now: () => now, hashSecret: fastHash });
+    const first = await service.issue(actor, {
+      name: "SignalLoop", capabilities: ["WORKFLOW_EVENTS_WRITE"], expiresAt: new Date("2026-08-13T00:00:00Z"),
+      correlationId: "corr_issue", reason: "Initial binding"
+    });
+
+    await expect(service.rotate(actor, first.credential.id, {
+      expiresAt: now, correlationId: "corr_rotate", reason: "Invalid rotation"
+    })).rejects.toThrow("Invalid credential request");
+    expect((await repository.findById(first.credential.id))?.status).toBe("ACTIVE");
+  });
 });

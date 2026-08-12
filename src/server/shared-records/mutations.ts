@@ -100,7 +100,6 @@ export async function upsertSharedRecord(
   const input = sharedRecordUpsertSchema.parse(rawInput) as SharedRecordUpsertInput;
   const runtime = parseRuntimeConfig({ ...process.env, APP_MODE: process.env.APP_MODE ?? "platform" });
   if (database.$transaction && runtime.mode === "cell") {
-    const identity = input.externalKey ?? input.ecrmLegacyId ?? input.emailVoiceLegacyId!;
     const correlationId = `corr_${randomUUID()}`;
     return mutateWithCellOutbox({
       database: database as never,
@@ -108,10 +107,10 @@ export async function upsertSharedRecord(
       destinationInstallation: process.env.INTEGRATION_DESTINATION_INSTALLATION ?? "",
       eventType: "shared-record.changed",
       correlationId,
-      idempotencyKey: `${input.entityType}:${identity}:${correlationId}`,
+      idempotencyKey: (result) => `shared-record:${result.record.id}:${result.record.headVersion ?? 1}`,
       mutate: (transaction) => upsertSharedRecordCore(input, transaction as unknown as SharedRecordMutationDb),
       payload: (result) => ({ recordId: result.record.id, entityType: result.record.entityType }),
-      payloadVersion: () => 1
+      payloadVersion: (result) => result.record.headVersion ?? 1
     });
   }
   return upsertSharedRecordCore(input, database);
@@ -125,9 +124,10 @@ async function upsertSharedRecordCore(
   const data = toRecordData(input);
 
   if (existing) {
+    if (sameRecord(existing, data)) return { record: mapSharedRecordRow(existing), created: false };
     const row = await database.sharedBusinessRecord.update({
       where: { id: existing.id },
-      data
+      data: { ...data, headVersion: { increment: 1 } }
     });
 
     return { record: mapSharedRecordRow(row), created: false };
@@ -152,9 +152,19 @@ async function upsertSharedRecordCore(
 
     const row = await database.sharedBusinessRecord.update({
       where: { id: duplicate.id },
-      data
+      data: sameRecord(duplicate, data) ? {} : { ...data, headVersion: { increment: 1 } }
     });
 
     return { record: mapSharedRecordRow(row), created: false };
   }
+}
+
+function sameRecord(existing: SharedBusinessRecordRow, data: ReturnType<typeof toRecordData>): boolean {
+  const scalarKeys = [
+    "entityType", "displayName", "status", "ownerId", "parentId", "relatedLeadId", "relatedCustomerId",
+    "relatedContactId", "relatedOpportunityId", "sourceApp", "ecrmLegacyId", "emailVoiceLegacyId", "externalKey",
+    "email", "phone", "companyName", "searchText"
+  ] as const;
+  return scalarKeys.every((key) => (existing[key] ?? null) === (data[key] ?? null))
+    && JSON.stringify(existing.data) === JSON.stringify(data.data);
 }

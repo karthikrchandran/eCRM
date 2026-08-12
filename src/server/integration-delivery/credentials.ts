@@ -112,6 +112,7 @@ export class IntegrationCredentialService {
     const current = await this.owned(credentialId);
     if (!current || current.status !== "ACTIVE") throw new Error("Credential is unavailable for rotation");
     const now = this.now();
+    if (input.expiresAt <= now) throw new Error("Invalid credential request");
     const id = `cred_${randomUUID()}`;
     const secret = this.options.createSecret?.(id) ?? `ecrm_${id}.${randomBytes(32).toString("base64url")}`;
     const replacement: IntegrationCredentialRecord = {

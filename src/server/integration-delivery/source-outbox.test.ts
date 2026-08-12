@@ -15,7 +15,7 @@ describe("transactional source outbox", () => {
       destinationInstallation: "signalloop:workspace_ara",
       eventType: "shared-record.changed",
       correlationId: "corr_1",
-      idempotencyKey: "shared_1:2",
+      idempotencyKey: (record: { id: string; version: number }) => `${record.id}:${record.version}`,
       mutate: (tx) => (tx.source as typeof transaction.source).create({ data: { id: "source_1" } }),
       payload: (record: { id: string; version: number }) => ({ recordId: record.id }),
       payloadVersion: (record: { id: string; version: number }) => record.version
@@ -26,6 +26,23 @@ describe("transactional source outbox", () => {
     expect(outboxCreate).toHaveBeenCalledWith(expect.objectContaining({
       create: expect.objectContaining({ cellId: "cell_ara", destinationInstallation: "signalloop:workspace_ara", payloadVersion: 2 }),
       update: {}
+    }));
+  });
+
+  it("derives the idempotency key from the committed source identity and version", async () => {
+    const upsert = vi.fn().mockResolvedValue({ id: "outbox_1" });
+    const transaction = { source: { update: vi.fn().mockResolvedValue({ id: "shared_1", headVersion: 3 }) }, cellIntegrationOutbox: { upsert } };
+    const database = { $transaction: vi.fn(async (operation) => operation(transaction)) };
+    await mutateWithCellOutbox({
+      database,
+      runtime: { mode: "cell", cellId: "cell_ara", cellKey: "ara" },
+      destinationInstallation: "signalloop:workspace_ara", eventType: "shared-record.changed", correlationId: "corr_1",
+      idempotencyKey: (record: { id: string; headVersion: number }) => `shared-record:${record.id}:${record.headVersion}`,
+      mutate: (tx) => (tx.source as typeof transaction.source).update({ where: { id: "shared_1" } }),
+      payload: (record) => ({ recordId: record.id }), payloadVersion: (record) => record.headVersion
+    });
+    expect(upsert).toHaveBeenCalledWith(expect.objectContaining({
+      where: { cellId_destinationInstallation_idempotencyKey: expect.objectContaining({ idempotencyKey: "shared-record:shared_1:3" }) }
     }));
   });
 

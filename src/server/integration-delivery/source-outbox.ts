@@ -17,7 +17,7 @@ export async function mutateWithCellOutbox<T>(input: {
   destinationInstallation: string;
   eventType: string;
   correlationId: string;
-  idempotencyKey: string;
+  idempotencyKey: string | ((record: T) => string);
   mutate(transaction: OutboxTransaction): Promise<T>;
   payload(record: T): Record<string, unknown>;
   payloadVersion(record: T): number;
@@ -27,10 +27,11 @@ export async function mutateWithCellOutbox<T>(input: {
   const cellId = input.runtime.cellId;
   return input.database.$transaction(async (transaction) => {
     const record = await input.mutate(transaction);
+    const idempotencyKey = typeof input.idempotencyKey === "function" ? input.idempotencyKey(record) : input.idempotencyKey;
     const identity = {
       cellId,
       destinationInstallation: input.destinationInstallation,
-      idempotencyKey: input.idempotencyKey
+      idempotencyKey
     };
     await transaction.cellIntegrationOutbox.upsert({
       where: { cellId_destinationInstallation_idempotencyKey: identity },

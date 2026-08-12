@@ -50,4 +50,17 @@ describe("cell integration administration API", () => {
     const replay = await handlers.POST(new Request("http://cell/api/admin/integrations", { method: "POST", body: JSON.stringify({ action: "replay", outboxId: "outbox_1", reason: "" }) }));
     expect(replay.status).toBe(400);
   });
+
+  it("scopes replay to the authenticated cell id", async () => {
+    const replay = vi.fn();
+    const handlers = createIntegrationAdminHandlers({
+      authorize: vi.fn().mockResolvedValue(authorized), requireModule: vi.fn(), list: vi.fn(), issue: vi.fn(),
+      status: vi.fn(), deadLetters: vi.fn(), repairCandidates: vi.fn(), replay, reconcile: vi.fn()
+    });
+    const response = await handlers.POST(new Request("http://cell/api/admin/integrations", {
+      method: "POST", body: JSON.stringify({ action: "replay", outboxId: "outbox_other", reason: "Operator retry" })
+    }));
+    expect(response.status).toBe(200);
+    expect(replay).toHaveBeenCalledWith("cell_ara", "outbox_other", "admin_1", "Operator retry", expect.any(Date));
+  });
 });

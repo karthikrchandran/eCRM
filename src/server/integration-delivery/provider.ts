@@ -1,4 +1,4 @@
-import type { DestinationProvider } from "./outbox";
+import type { DestinationProvider, ProjectionStream } from "./outbox";
 
 export class HttpDestinationProvider implements DestinationProvider {
   public constructor(private readonly baseUrl: string, private readonly token: string, private readonly fetcher: typeof fetch = fetch) {}
@@ -16,8 +16,8 @@ export class HttpDestinationProvider implements DestinationProvider {
     return await response.json() as { acknowledgementId: string; checkpoint?: string };
   }
 
-  public checkpoint(destinationInstallation: string): Promise<{ count: number; checkpoint: string | null }> {
-    return this.request<{ count: number; checkpoint: string | null }>("/api/v1/installations/checkpoint", { destinationInstallation });
+  public checkpoint(destinationInstallation: string, stream: ProjectionStream): Promise<{ count: number; version: number; checkpoint: string | null }> {
+    return this.request<{ count: number; version: number; checkpoint: string | null }>("/api/v1/installations/checkpoint", { destinationInstallation, stream });
   }
 
   private async request<T>(path: string, body: Record<string, unknown>): Promise<T> {

@@ -1,6 +1,17 @@
 import { randomUUID } from "node:crypto";
 
 export type OutboxStatus = "PENDING" | "CLAIMED" | "FAILED" | "DELIVERED" | "DEAD_LETTER";
+export type ProjectionStream = "SHARED_RECORD" | "WORKFLOW_EVENT";
+export type ProjectionState = { count: number; version: number; checkpoint: string | null };
+export type CircuitState = "CLOSED" | "OPEN" | "HALF_OPEN";
+export type CircuitBreakerRecord = {
+  id: string; cellId: string; destinationInstallation: string; state: CircuitState; failureCount: number;
+  windowStartedAt: Date | null; lastFailureAt: Date | null; openedAt: Date | null; openUntil: Date | null;
+  probeLeaseOwner: string | null; probeLeaseUntil: Date | null; probeFenceToken: string | null;
+  createdAt: Date; updatedAt: Date;
+};
+export type CircuitOptions = { failureThreshold: number; failureWindowMs: number; circuitOpenMs: number };
+export type CircuitPermit = { allowed: boolean; probe: boolean; probeFenceToken?: string; deferUntil?: Date };
 export type OutboxInput = {
   cellId: string;
   eventType: string;
@@ -32,12 +43,13 @@ export type DeliveryAudit = {
 };
 export type RepairCandidate = {
   id: string; cellId: string; destinationInstallation: string; sourceCount: number; destinationCount: number;
-  sourceCheckpoint: string | null; destinationCheckpoint: string | null; status: "OPEN"; correlationId: string;
-  reason: string; createdAt: Date;
+  stream: ProjectionStream; sourceVersion: number; destinationVersion: number;
+  sourceCheckpoint: string | null; destinationCheckpoint: string | null; status: "OPEN" | "RESOLVED" | "DISMISSED"; correlationId: string;
+  reason: string; createdAt: Date; resolvedAt?: Date | null; resolvedBy?: string | null; resolutionReason?: string | null;
 };
 export type DeliveryStatus = {
   pending: number; claimed: number; failed: number; delivered: number; deadLetter: number;
-  sourceCount: number; checkpoint: string | null; degraded: boolean;
+  sourceCount: number; checkpoint: string | null; degraded: boolean; circuits: CircuitBreakerRecord[];
 };
 
 export interface SourceMutationTransaction {
@@ -52,33 +64,43 @@ export interface IntegrationDeliveryRepository {
   heartbeat(id: string, fenceToken: string, now: Date, leaseMs: number): Promise<OutboxRecord>;
   ack(id: string, fenceToken: string, now: Date, acknowledgementId?: string, checkpoint?: string): Promise<void>;
   fail(id: string, fenceToken: string, now: Date, nextAttemptAt: Date, error: string, errorCode: string, maxAttempts: number): Promise<void>;
-  replay(id: string, actorId: string, reason: string, now: Date): Promise<void>;
+  defer(id: string, fenceToken: string, nextAttemptAt: Date): Promise<void>;
+  replay(cellId: string, id: string, actorId: string, reason: string, now: Date): Promise<void>;
   status(cellId: string): Promise<DeliveryStatus>;
   deadLetters(cellId: string): Promise<OutboxRecord[]>;
   auditEvents(): Promise<DeliveryAudit[]>;
-  sourceState(cellId: string): Promise<{ count: number; checkpoint: string | null }>;
-  saveReconciliation(cellId: string, destinationInstallation: string, source: { count: number; checkpoint: string | null }, destination: { count: number; checkpoint: string | null }, reconciledAt: Date): Promise<void>;
+  sourceState(cellId: string, stream: ProjectionStream): Promise<ProjectionState>;
+  saveReconciliation(cellId: string, destinationInstallation: string, stream: ProjectionStream, source: ProjectionState, destination: ProjectionState, reconciledAt: Date): Promise<void>;
   saveRepairCandidate(candidate: RepairCandidate, audit: DeliveryAudit): Promise<void>;
+  resolveRepairCandidates(cellId: string, destinationInstallation: string, stream: ProjectionStream, audit: DeliveryAudit): Promise<void>;
   repairCandidates(cellId: string): Promise<RepairCandidate[]>;
+  acquireCircuitPermit(cellId: string, destinationInstallation: string, workerId: string, now: Date, probeLeaseMs: number): Promise<CircuitPermit>;
+  recordCircuitSuccess(cellId: string, destinationInstallation: string, now: Date, probeFenceToken?: string): Promise<void>;
+  recordCircuitFailure(cellId: string, destinationInstallation: string, now: Date, options: CircuitOptions, probeFenceToken?: string): Promise<void>;
 }
 
 export interface DestinationProvider {
   deliver(destinationInstallation: string, message: { eventType: string; payloadVersion: number; payload: Record<string, unknown>; correlationId: string; idempotencyKey: string }): Promise<{ acknowledgementId: string; checkpoint?: string }>;
   reconcileIdempotency(destinationInstallation: string, idempotencyKey: string): Promise<{ acknowledgementId: string; checkpoint?: string } | undefined>;
-  checkpoint(destinationInstallation: string): Promise<{ count: number; checkpoint: string | null }>;
+  checkpoint(destinationInstallation: string, stream: ProjectionStream): Promise<ProjectionState>;
 }
 
 export class CellIntegrationDeliveryService {
   public constructor(
     private readonly repository: IntegrationDeliveryRepository,
     private readonly provider: DestinationProvider,
-    private readonly options: { now?: () => Date; random?: () => number; maxAttempts: number; baseDelayMs: number; maxDelayMs: number; leaseMs: number }
+    private readonly options: { now?: () => Date; random?: () => number; maxAttempts: number; baseDelayMs: number; maxDelayMs: number; leaseMs: number; failureThreshold?: number; failureWindowMs?: number; circuitOpenMs?: number }
   ) {}
 
   public async runOnce(cellId: string, workerId: string, at?: Date): Promise<boolean> {
     const now = at ?? this.options.now?.() ?? new Date();
     const record = await this.repository.claim(cellId, workerId, now, this.options.leaseMs);
     if (!record || !record.fenceToken) return false;
+    const permit = await this.repository.acquireCircuitPermit(cellId, record.destinationInstallation, workerId, now, this.options.leaseMs);
+    if (!permit.allowed) {
+      await this.repository.defer(record.id, record.fenceToken, permit.deferUntil ?? new Date(now.getTime() + (this.options.circuitOpenMs ?? 30_000)));
+      return true;
+    }
     try {
       let acknowledgement: { acknowledgementId: string; checkpoint?: string } | undefined;
       if (record.errorCode === "AMBIGUOUS_ACK") {
@@ -88,12 +110,14 @@ export class CellIntegrationDeliveryService {
         eventType: record.eventType, payloadVersion: record.payloadVersion, payload: record.payload,
         correlationId: record.correlationId, idempotencyKey: record.idempotencyKey
       });
+      await this.repository.recordCircuitSuccess(cellId, record.destinationInstallation, now, permit.probeFenceToken);
       await this.repository.ack(record.id, record.fenceToken, now, acknowledgement.acknowledgementId, acknowledgement.checkpoint);
     } catch (error) {
       const typed = error as Error & { code?: string };
       if (typed.code === "AMBIGUOUS_ACK") {
         const reconciled = await this.provider.reconcileIdempotency(record.destinationInstallation, record.idempotencyKey);
         if (reconciled) {
+          await this.repository.recordCircuitSuccess(cellId, record.destinationInstallation, now, permit.probeFenceToken);
           await this.repository.ack(record.id, record.fenceToken, now, reconciled.acknowledgementId, reconciled.checkpoint);
           return true;
         }
@@ -105,6 +129,11 @@ export class CellIntegrationDeliveryService {
         record.id, record.fenceToken, now, new Date(now.getTime() + exponential + jitter),
         typed.message.slice(0, 500), typed.code ?? "DELIVERY_FAILED", this.options.maxAttempts
       );
+      await this.repository.recordCircuitFailure(cellId, record.destinationInstallation, now, {
+        failureThreshold: this.options.failureThreshold ?? 5,
+        failureWindowMs: this.options.failureWindowMs ?? 60_000,
+        circuitOpenMs: this.options.circuitOpenMs ?? 30_000
+      }, permit.probeFenceToken);
     }
     return true;
   }
@@ -115,7 +144,8 @@ export function createInMemoryIntegrationDeliveryRepository(): IntegrationDelive
   let sources = new Map<string, Record<string, unknown>>();
   const audits: DeliveryAudit[] = [];
   const repairs: RepairCandidate[] = [];
-  let checkpoint: string | null = null;
+  const circuits = new Map<string, CircuitBreakerRecord>();
+  const checkpoints = new Map<string, string | null>();
   let lock = Promise.resolve();
   const exclusive = async <T>(operation: () => Promise<T>): Promise<T> => {
     const result = lock.then(operation, operation);
@@ -169,7 +199,7 @@ export function createInMemoryIntegrationDeliveryRepository(): IntegrationDelive
       const record = records.get(id);
       if (!record || record.status !== "CLAIMED" || record.fenceToken !== fenceToken) throw new Error("Lease fence rejected");
       records.set(id, { ...record, status: "DELIVERED", acknowledgementId, destinationCheckpoint: destinationCheckpoint ?? null, leaseOwner: null, leaseUntil: null, fenceToken: null, updatedAt: now });
-      checkpoint = destinationCheckpoint ?? checkpoint;
+      if (destinationCheckpoint) checkpoints.set(`${record.cellId}:SHARED_RECORD`, destinationCheckpoint);
     }),
     fail: async (id, fenceToken, now, nextAttemptAt, error, errorCode, maxAttempts) => exclusive(async () => {
       const record = records.get(id);
@@ -183,10 +213,15 @@ export function createInMemoryIntegrationDeliveryRepository(): IntegrationDelive
         result: "FAILED", error: errorCode, occurredAt: now
       });
     }),
-    replay: async (id, actorId, reason, now) => exclusive(async () => {
+    defer: async (id, fenceToken, nextAttemptAt) => exclusive(async () => {
+      const record = records.get(id);
+      if (!record || record.status !== "CLAIMED" || record.fenceToken !== fenceToken) throw new Error("Lease fence rejected");
+      records.set(id, { ...record, status: record.attempts > 0 ? "FAILED" : "PENDING", nextAttemptAt, leaseOwner: null, leaseUntil: null, fenceToken: null, updatedAt: nextAttemptAt });
+    }),
+    replay: async (cellId, id, actorId, reason, now) => exclusive(async () => {
       if (!reason.trim()) throw new Error("Replay reason is required");
       const record = records.get(id);
-      if (!record || record.status !== "DEAD_LETTER") throw new Error("Dead letter not found");
+      if (!record || record.cellId !== cellId || record.status !== "DEAD_LETTER") throw new Error("Dead letter not found");
       records.set(id, { ...record, status: "PENDING", attempts: 0, nextAttemptAt: now, lastError: null, errorCode: null, updatedAt: now });
       audits.push({ id: `audit_${randomUUID()}`, actorId, action: "integration-outbox.replay", targetId: id, correlationId: record.correlationId, reason, result: "SUCCEEDED", occurredAt: now });
     }),
@@ -194,16 +229,88 @@ export function createInMemoryIntegrationDeliveryRepository(): IntegrationDelive
       const scoped = [...records.values()].filter((record) => record.cellId === cellId);
       const count = (status: OutboxStatus) => scoped.filter((record) => record.status === status).length;
       const deadLetter = count("DEAD_LETTER");
-      return { pending: count("PENDING"), claimed: count("CLAIMED"), failed: count("FAILED"), delivered: count("DELIVERED"), deadLetter, sourceCount: sources.size, checkpoint, degraded: deadLetter > 0 || count("FAILED") > 0 };
+      const cellCircuits = [...circuits.values()].filter((circuit) => circuit.cellId === cellId).map((circuit) => structuredClone(circuit));
+      return { pending: count("PENDING"), claimed: count("CLAIMED"), failed: count("FAILED"), delivered: count("DELIVERED"), deadLetter, sourceCount: sources.size, checkpoint: checkpoints.get(`${cellId}:SHARED_RECORD`) ?? null, degraded: deadLetter > 0 || count("FAILED") > 0 || cellCircuits.some((circuit) => circuit.state !== "CLOSED"), circuits: cellCircuits };
     },
     deadLetters: async (cellId) => [...records.values()].filter((record) => record.cellId === cellId && record.status === "DEAD_LETTER").map(clone),
     auditEvents: async () => structuredClone(audits),
-    sourceState: async () => ({ count: sources.size, checkpoint: sources.size ? `source:${sources.size}` : null }),
-    saveReconciliation: async (_cellId, _destinationInstallation, source, destination) => {
-      checkpoint = destination.checkpoint ?? checkpoint;
-      void source;
+    sourceState: async (_cellId, stream) => {
+      const scoped = [...sources.entries()].filter(([, value]) => (value.stream ?? "SHARED_RECORD") === stream);
+      const version = scoped.reduce((sum, [, value]) => sum + (typeof value.version === "number" ? value.version : 1), 0);
+      return { count: scoped.length, version, checkpoint: scoped.length ? `source:${stream}:${scoped.length}:${version}` : null };
     },
-    saveRepairCandidate: async (candidate, audit) => { repairs.push(structuredClone(candidate)); audits.push(structuredClone(audit)); },
-    repairCandidates: async (cellId) => repairs.filter((candidate) => candidate.cellId === cellId).map((candidate) => structuredClone(candidate))
+    saveReconciliation: async (cellId, _destinationInstallation, stream, _source, destination) => {
+      checkpoints.set(`${cellId}:${stream}`, destination.checkpoint);
+    },
+    saveRepairCandidate: async (candidate, audit) => exclusive(async () => {
+      const existing = repairs.find((item) => item.cellId === candidate.cellId && item.destinationInstallation === candidate.destinationInstallation && item.stream === candidate.stream && item.status === "OPEN");
+      if (existing) Object.assign(existing, structuredClone(candidate), { id: existing.id, createdAt: existing.createdAt });
+      else repairs.push(structuredClone(candidate));
+      audits.push(structuredClone(audit));
+    }),
+    resolveRepairCandidates: async (cellId, destinationInstallation, stream, audit) => exclusive(async () => {
+      let resolved = false;
+      for (const candidate of repairs) {
+        if (candidate.cellId === cellId && candidate.destinationInstallation === destinationInstallation && candidate.stream === stream && candidate.status === "OPEN") {
+          candidate.status = "RESOLVED";
+          candidate.resolvedAt = audit.occurredAt;
+          candidate.resolvedBy = audit.actorId;
+          candidate.resolutionReason = audit.reason;
+          resolved = true;
+        }
+      }
+      if (resolved) audits.push(structuredClone(audit));
+    }),
+    repairCandidates: async (cellId) => repairs.filter((candidate) => candidate.cellId === cellId).map((candidate) => structuredClone(candidate)),
+    acquireCircuitPermit: async (cellId, destinationInstallation, workerId, now, probeLeaseMs) => exclusive(async () => {
+      const key = `${cellId}:${destinationInstallation}`;
+      let circuit = circuits.get(key);
+      if (!circuit) {
+        circuit = blankCircuit(cellId, destinationInstallation, now);
+        circuits.set(key, circuit);
+      }
+      if (circuit.state === "CLOSED") return { allowed: true, probe: false };
+      if (circuit.state === "OPEN" && circuit.openUntil && circuit.openUntil > now) return { allowed: false, probe: false, deferUntil: new Date(circuit.openUntil) };
+      if (circuit.state === "HALF_OPEN" && circuit.probeLeaseUntil && circuit.probeLeaseUntil > now) return { allowed: false, probe: false, deferUntil: new Date(circuit.probeLeaseUntil) };
+      const probeFenceToken = randomUUID();
+      Object.assign(circuit, { state: "HALF_OPEN", probeLeaseOwner: workerId, probeLeaseUntil: new Date(now.getTime() + probeLeaseMs), probeFenceToken, updatedAt: now });
+      audits.push(circuitAudit(circuit, workerId, "half-open", "Open interval elapsed; one probe leased", "SUCCEEDED", now, probeFenceToken));
+      return { allowed: true, probe: true, probeFenceToken };
+    }),
+    recordCircuitSuccess: async (cellId, destinationInstallation, now, probeFenceToken) => exclusive(async () => {
+      const circuit = circuits.get(`${cellId}:${destinationInstallation}`);
+      if (!circuit) return;
+      if (circuit.state === "HALF_OPEN" && circuit.probeFenceToken !== probeFenceToken) throw new Error("Circuit probe fence rejected");
+      const wasOpen = circuit.state !== "CLOSED";
+      Object.assign(circuit, { state: "CLOSED", failureCount: 0, windowStartedAt: null, openUntil: null, probeLeaseOwner: null, probeLeaseUntil: null, probeFenceToken: null, updatedAt: now });
+      if (wasOpen) audits.push(circuitAudit(circuit, "integration-worker", "close", "Destination probe succeeded", "SUCCEEDED", now, probeFenceToken));
+    }),
+    recordCircuitFailure: async (cellId, destinationInstallation, now, options, probeFenceToken) => exclusive(async () => {
+      const key = `${cellId}:${destinationInstallation}`;
+      let circuit = circuits.get(key);
+      if (!circuit) {
+        circuit = blankCircuit(cellId, destinationInstallation, now);
+        circuits.set(key, circuit);
+      }
+      if (circuit.state === "HALF_OPEN") {
+        if (circuit.probeFenceToken !== probeFenceToken) throw new Error("Circuit probe fence rejected");
+        Object.assign(circuit, { state: "OPEN", failureCount: Math.max(1, circuit.failureCount), lastFailureAt: now, openedAt: now, openUntil: new Date(now.getTime() + options.circuitOpenMs), probeLeaseOwner: null, probeLeaseUntil: null, probeFenceToken: null, updatedAt: now });
+        audits.push(circuitAudit(circuit, "integration-worker", "reopen", "Half-open destination probe failed", "FAILED", now, probeFenceToken, "DESTINATION_FAILURE"));
+        return;
+      }
+      const insideWindow = Boolean(circuit.windowStartedAt && now.getTime() - circuit.windowStartedAt.getTime() <= options.failureWindowMs);
+      const failureCount = insideWindow ? circuit.failureCount + 1 : 1;
+      const opens = failureCount >= options.failureThreshold;
+      Object.assign(circuit, { failureCount, windowStartedAt: insideWindow ? circuit.windowStartedAt : now, lastFailureAt: now, state: opens ? "OPEN" : "CLOSED", openedAt: opens ? now : circuit.openedAt, openUntil: opens ? new Date(now.getTime() + options.circuitOpenMs) : null, updatedAt: now });
+      if (opens) audits.push(circuitAudit(circuit, "integration-worker", "open", "Destination failure threshold reached", "FAILED", now, undefined, "DESTINATION_FAILURE"));
+    })
   };
+}
+
+function blankCircuit(cellId: string, destinationInstallation: string, now: Date): CircuitBreakerRecord {
+  return { id: `circuit_${randomUUID()}`, cellId, destinationInstallation, state: "CLOSED", failureCount: 0, windowStartedAt: null, lastFailureAt: null, openedAt: null, openUntil: null, probeLeaseOwner: null, probeLeaseUntil: null, probeFenceToken: null, createdAt: now, updatedAt: now };
+}
+
+function circuitAudit(circuit: CircuitBreakerRecord, actorId: string, verb: string, reason: string, result: "SUCCEEDED" | "FAILED", occurredAt: Date, correlationId?: string, error?: string): DeliveryAudit {
+  return { id: `audit_${randomUUID()}`, actorId, action: `integration-circuit.${verb}`, targetId: circuit.id, correlationId: correlationId ?? circuit.id, reason, result, error, occurredAt };
 }

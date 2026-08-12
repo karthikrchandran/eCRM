@@ -5,7 +5,7 @@ import { requireCellModule } from "@/server/cell-admin/module-access";
 import { getServerEnv } from "@/server/env";
 import { integrationCapabilities, type IntegrationCapability } from "@/server/integration-delivery/credentials";
 import { configuredDestinationProvider } from "@/server/integration-delivery/provider";
-import { reconcileCellProjection } from "@/server/integration-delivery/reconciliation";
+import { reconcileCellProjectionStreams } from "@/server/integration-delivery/reconciliation";
 import { getIntegrationCredentialService, getIntegrationDeliveryRepository } from "@/server/integration-delivery/runtime";
 
 type Actor = { id: string; role: "ADMIN" | "SALES" };
@@ -32,7 +32,7 @@ type Dependencies = {
   status(cellId: string): Promise<unknown>;
   deadLetters(cellId: string): Promise<Array<{ id: string; attempts: number; errorCode: string | null; updatedAt?: Date }>>;
   repairCandidates(cellId: string): Promise<Array<Record<string, unknown>>>;
-  replay(id: string, actorId: string, reason: string, now: Date): Promise<void>;
+  replay(cellId: string, id: string, actorId: string, reason: string, now: Date): Promise<void>;
   reconcile(authorization: Authorization, context: { correlationId: string; reason: string }): Promise<unknown>;
 };
 
@@ -76,7 +76,7 @@ export function createIntegrationAdminHandlers(dependencies: Dependencies) {
           return new Response(null, { status: 204 });
         }
         if (input.action === "replay") {
-          await dependencies.replay(input.outboxId, authorization.user.id, input.reason, new Date());
+          await dependencies.replay(authorization.cellId, input.outboxId, authorization.user.id, input.reason, new Date());
           return Response.json({ replayed: true });
         }
         return Response.json(await dependencies.reconcile(authorization, input));
@@ -98,8 +98,8 @@ const handlers = createIntegrationAdminHandlers({
   status: (cellId) => getIntegrationDeliveryRepository().status(cellId),
   deadLetters: (cellId) => getIntegrationDeliveryRepository().deadLetters(cellId),
   repairCandidates: (cellId) => getIntegrationDeliveryRepository().repairCandidates(cellId),
-  replay: (id, actorId, reason, now) => getIntegrationDeliveryRepository().replay(id, actorId, reason, now),
-  reconcile: (authorization, context) => reconcileCellProjection(
+  replay: (cellId, id, actorId, reason, now) => getIntegrationDeliveryRepository().replay(cellId, id, actorId, reason, now),
+  reconcile: (authorization, context) => reconcileCellProjectionStreams(
     authorization.cellId,
     process.env.INTEGRATION_DESTINATION_INSTALLATION ?? "",
     getIntegrationDeliveryRepository(),
