@@ -21,15 +21,13 @@ describe("LoginLanding", () => {
     vi.mocked(useActionState).mockReturnValue([{}, vi.fn(), false]);
   });
 
-  it("presents eCRM context with a real ARA visual and the sign-in form", () => {
+  it("presents neutral eCRM branding without assuming a customer identity", () => {
     render(<LoginLanding />);
 
     expect(screen.getByRole("heading", { name: /Lead-to-cash workspace/ })).toBeVisible();
     expect(screen.getByText(/Track leads, proposals, booked orders, production stages/)).toBeVisible();
-    expect(screen.getByRole("img", { name: /ARA Global safety training/ })).toHaveAttribute(
-      "src",
-      expect.stringContaining("araglobalinc.com")
-    );
+    expect(screen.queryByText(/ARA Global/i)).not.toBeInTheDocument();
+    expect(screen.getByText("Secure customer-cell workspace")).toBeVisible();
     expect(screen.getByRole("button", { name: "Sign in" })).toBeVisible();
   });
 });

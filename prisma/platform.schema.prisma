@@ -122,8 +122,13 @@ model SupportGrant {
   startsAt      DateTime
   expiresAt     DateTime
   revokedAt     DateTime?
+  revokedBy     String?
+  revocationReason String?
+  actor         String
+  correlationId String
   createdAt     DateTime     @default(now())
   cell          CustomerCell @relation(fields: [cellId], references: [id], onDelete: Restrict)
 
   @@index([cellId, expiresAt])
+  @@index([correlationId])
 }

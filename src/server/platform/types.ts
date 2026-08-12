@@ -75,7 +75,7 @@ export interface ControlPlaneAuditEventRecord {
   id: string;
   cellId: string;
   correlationId: string;
-  action: ProvisioningStep;
+  action: string;
   result: ProvisioningResult;
   actor: string;
   reason?: string;
@@ -83,4 +83,20 @@ export interface ControlPlaneAuditEventRecord {
   errorCode?: string;
   secretReference?: string;
   occurredAt: Date;
+}
+
+export interface SupportGrantRecord {
+  id: string;
+  cellId: string;
+  operatorId: string;
+  caseReference: string;
+  reason: string;
+  startsAt: Date;
+  expiresAt: Date;
+  revokedAt?: Date;
+  revokedBy?: string;
+  revocationReason?: string;
+  actor: string;
+  correlationId: string;
+  createdAt: Date;
 }
