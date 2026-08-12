@@ -194,6 +194,8 @@ model CellAuditEvent {
   targetId      String
   correlationId String
   reason        String
+  before        Json?
+  after         Json?
   result        String
   error         String?
   occurredAt    DateTime @default(now())

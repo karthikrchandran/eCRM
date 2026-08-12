@@ -1,5 +1,7 @@
 import type { Prisma, UserRole } from "@prisma/client";
 import { canManageAdminSettings, canViewCompanyRecords } from "@/server/auth/permissions";
+import { getCellAdministrationService } from "@/server/cell-admin/runtime";
+import type { CellAdministrationService } from "@/server/cell-admin/service";
 import { db } from "@/server/db";
 
 export type SupportedCurrency = "INR" | "USD";
@@ -16,7 +18,6 @@ export type BusinessSettingsView = {
 type SettingsDb = {
   cellConfiguration?: {
     findUnique?: (args: Prisma.CellConfigurationFindUniqueArgs) => Promise<BusinessSettingsView | null>;
-    upsert?: (args: Prisma.CellConfigurationUpsertArgs) => Promise<BusinessSettingsView>;
   };
   businessSettings?: {
     findUnique?: (args: Prisma.BusinessSettingsFindUniqueArgs) => Promise<BusinessSettingsView | null>;
@@ -58,18 +59,14 @@ export async function getBusinessSettings(
 export async function updateBusinessSettings(
   user: SettingsUser,
   input: BusinessSettingsView,
-  database: SettingsDb = db as unknown as SettingsDb
+  context: { correlationId: string; reason: string },
+  administration: Pick<CellAdministrationService, "updateConfiguration"> = getCellAdministrationService()
 ) {
   assertCanManageSettings(user);
-
-  if (!database.cellConfiguration?.upsert) {
-    throw new Error("Cell configuration storage is not available.");
-  }
-
-  return database.cellConfiguration.upsert({
-    where: { id: "default" },
-    create: { id: "default", defaultCurrency: input.defaultCurrency },
-    update: { defaultCurrency: input.defaultCurrency },
-    select: { defaultCurrency: true }
-  });
+  const configuration = await administration.updateConfiguration(
+    { id: user.id, role: "ADMIN" },
+    { defaultCurrency: input.defaultCurrency },
+    context
+  );
+  return { defaultCurrency: configuration.defaultCurrency };
 }

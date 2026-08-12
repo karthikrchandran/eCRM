@@ -1,10 +1,11 @@
-import type { PrismaClient } from "@prisma/client";
+import { Prisma, type PrismaClient } from "@prisma/client";
 
 import { FinalActiveAdminError } from "./service";
 
 import type {
   CellAdministrationRepository,
   CellAuditEventRecord,
+  CellAuditSnapshot,
   CellConfigurationRecord,
   LocalUserRecord,
   SupportedCurrency
@@ -25,7 +26,7 @@ export class PrismaCellAdministrationRepository implements CellAdministrationRep
         create: configurationData(configuration),
         update: configurationData(configuration)
       });
-      await transaction.cellAuditEvent.create({ data: audit });
+      await transaction.cellAuditEvent.create({ data: auditData(audit) });
       return mapConfiguration(stored);
     });
   }
@@ -36,13 +37,15 @@ export class PrismaCellAdministrationRepository implements CellAdministrationRep
   }
 
   public async appendAuditEvent(event: CellAuditEventRecord): Promise<void> {
-    await this.client.cellAuditEvent.create({ data: event });
+    await this.client.cellAuditEvent.create({ data: auditData(event) });
   }
 
   public async auditEvents(): Promise<CellAuditEventRecord[]> {
     return (await this.client.cellAuditEvent.findMany({ orderBy: { occurredAt: "asc" } })).map((event) => ({
       ...event,
       result: event.result as CellAuditEventRecord["result"],
+      before: event.before as CellAuditSnapshot | null,
+      after: event.after as CellAuditSnapshot | null,
       error: event.error ?? undefined
     }));
   }
@@ -62,7 +65,7 @@ export class PrismaCellAdministrationRepository implements CellAdministrationRep
   public async createUserWithAudit(user: LocalUserRecord, passwordHash: string, audit: CellAuditEventRecord): Promise<LocalUserRecord> {
     return this.client.$transaction(async (transaction) => {
       const created = await transaction.user.create({ data: { ...user, passwordHash }, select: userSelection });
-      await transaction.cellAuditEvent.create({ data: audit });
+      await transaction.cellAuditEvent.create({ data: auditData(audit) });
       return created;
     });
   }
@@ -83,13 +86,21 @@ export class PrismaCellAdministrationRepository implements CellAdministrationRep
         if (activeAdmins <= 1) throw new FinalActiveAdminError();
       }
       const updated = await transaction.user.update({ where: { id: userId }, data: update, select: userSelection });
-      await transaction.cellAuditEvent.create({ data: audit });
+      await transaction.cellAuditEvent.create({ data: auditData(audit) });
       return updated;
     });
   }
 }
 
 const userSelection = { id: true, name: true, email: true, role: true, active: true } as const;
+
+function auditData(event: CellAuditEventRecord): Prisma.CellAuditEventUncheckedCreateInput {
+  return {
+    ...event,
+    before: event.before === null ? Prisma.DbNull : event.before,
+    after: event.after === null ? Prisma.DbNull : event.after
+  };
+}
 
 function configurationData(configuration: CellConfigurationRecord) {
   return {

@@ -4,6 +4,7 @@ import { hashPassword } from "@/server/auth/password";
 
 export type CellAdminActor = { id: string; role: "ADMIN" | "SALES" };
 export type SupportedCurrency = "INR" | "USD";
+export type CellAuditSnapshot = Record<string, string | string[] | boolean | number | null>;
 
 export type CellConfigurationRecord = {
   id: "default";
@@ -36,6 +37,8 @@ export type CellAuditEventRecord = {
   targetId: string;
   correlationId: string;
   reason: string;
+  before?: CellAuditSnapshot | null;
+  after?: CellAuditSnapshot | null;
   result: "SUCCEEDED" | "FAILED";
   error?: string;
   occurredAt: Date;
@@ -98,7 +101,16 @@ export class CellAdministrationService {
     if (user.role !== "ADMIN") return this.reject(user, action, "default", context, "ADMIN_REQUIRED", "Only Admin can manage customer-cell administration");
     const existing = await this.getConfiguration(user);
     const excluded = update.enabledModules?.find((module) => !existing.allowedModules.includes(module));
-    if (excluded) return this.reject(user, action, "default", context, "PLAN_MODULE_EXCLUDED", `Module ${excluded} is not included in this plan`);
+    if (excluded) return this.reject(
+      user,
+      action,
+      "default",
+      context,
+      "PLAN_MODULE_EXCLUDED",
+      `Module ${excluded} is not included in this plan`,
+      configurationAuditSnapshot(existing),
+      configurationAuditSnapshot({ ...existing, ...update })
+    );
     const configuration: CellConfigurationRecord = {
       ...existing,
       ...update,
@@ -108,7 +120,20 @@ export class CellAdministrationService {
       planCode: existing.planCode,
       updatedAt: this.now()
     };
-    return this.repository.updateConfigurationWithAudit(configuration, this.audit(user, action, "CellConfiguration", "default", context, "SUCCEEDED"));
+    return this.repository.updateConfigurationWithAudit(
+      configuration,
+      this.audit(
+        user,
+        action,
+        "CellConfiguration",
+        "default",
+        context,
+        "SUCCEEDED",
+        undefined,
+        configurationAuditSnapshot(existing),
+        configurationAuditSnapshot(configuration)
+      )
+    );
   }
 
   public listUsers(user: CellAdminActor): Promise<LocalUserRecord[]> {
@@ -131,7 +156,11 @@ export class CellAdministrationService {
       role: input.role,
       active: true
     };
-    return this.repository.createUserWithAudit(record, await this.hash(input.password), this.audit(user, action, "User", record.id, context, "SUCCEEDED"));
+    return this.repository.createUserWithAudit(
+      record,
+      await this.hash(input.password),
+      this.audit(user, action, "User", record.id, context, "SUCCEEDED", undefined, null, userAuditSnapshot(record))
+    );
   }
 
   public async updateUser(
@@ -145,10 +174,33 @@ export class CellAdministrationService {
     const target = await this.repository.getUser(userId);
     if (!target) return this.reject(user, action, userId, context, "USER_NOT_FOUND", "Local user was not found");
     try {
-      return await this.repository.updateUserWithAudit(userId, update, this.audit(user, action, "User", userId, context, "SUCCEEDED"));
+      return await this.repository.updateUserWithAudit(
+        userId,
+        update,
+        this.audit(
+          user,
+          action,
+          "User",
+          userId,
+          context,
+          "SUCCEEDED",
+          undefined,
+          userAuditSnapshot(target),
+          userAuditSnapshot({ ...target, ...update })
+        )
+      );
     } catch (error) {
       if (error instanceof FinalActiveAdminError) {
-        return this.reject(user, action, userId, context, "FINAL_ACTIVE_ADMIN", error.message);
+        return this.reject(
+          user,
+          action,
+          userId,
+          context,
+          "FINAL_ACTIVE_ADMIN",
+          error.message,
+          userAuditSnapshot(target),
+          userAuditSnapshot(target)
+        );
       }
       throw error;
     }
@@ -164,9 +216,21 @@ export class CellAdministrationService {
     targetId: string,
     context: { correlationId: string; reason: string },
     error: string,
-    message: string
+    message: string,
+    before: CellAuditSnapshot | null = null,
+    after: CellAuditSnapshot | null = null
   ): Promise<T> {
-    await this.repository.appendAuditEvent(this.audit(user, action, action.startsWith("local-user") ? "User" : "CellConfiguration", targetId, context, "FAILED", error));
+    await this.repository.appendAuditEvent(this.audit(
+      user,
+      action,
+      action.startsWith("local-user") ? "User" : "CellConfiguration",
+      targetId,
+      context,
+      "FAILED",
+      error,
+      before,
+      after
+    ));
     throw new Error(message);
   }
 
@@ -177,7 +241,9 @@ export class CellAdministrationService {
     targetId: string,
     context: { correlationId: string; reason: string },
     result: "SUCCEEDED" | "FAILED",
-    error?: string
+    error?: string,
+    before: CellAuditSnapshot | null = null,
+    after: CellAuditSnapshot | null = null
   ): CellAuditEventRecord {
     return {
       id: `audit_${randomUUID()}`,
@@ -187,11 +253,31 @@ export class CellAdministrationService {
       targetId,
       correlationId: context.correlationId,
       reason: context.reason,
+      before,
+      after,
       result,
       error,
       occurredAt: this.now()
     };
   }
+}
+
+function configurationAuditSnapshot(configuration: Partial<CellConfigurationRecord>): CellAuditSnapshot {
+  return {
+    displayName: configuration.displayName ?? null,
+    logoUrl: configuration.logoUrl ?? null,
+    primaryColor: configuration.primaryColor ?? null,
+    locale: configuration.locale ?? null,
+    timezone: configuration.timezone ?? null,
+    defaultCurrency: configuration.defaultCurrency ?? null,
+    enabledModules: configuration.enabledModules ? [...configuration.enabledModules] : [],
+    allowedModules: configuration.allowedModules ? [...configuration.allowedModules] : [],
+    planCode: configuration.planCode ?? null
+  };
+}
+
+function userAuditSnapshot(user: LocalUserRecord): CellAuditSnapshot {
+  return { id: user.id, name: user.name, email: user.email, role: user.role, active: user.active };
 }
 
 export interface InMemoryCellAdministrationRepository extends CellAdministrationRepository {
