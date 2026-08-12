@@ -11,11 +11,19 @@ export type PlatformAuditCommand = {
   actor: string;
   correlationId: string;
   reason: string;
+  provisioningAttemptId?: string;
+};
+
+export type ProvisioningActivationEvidence = {
+  provisioningAttemptId: string;
+  provisioningComplete: boolean;
+  healthCheckPassed: boolean;
 };
 
 export interface PlatformAdministrationRepository {
   listCells(): Promise<CustomerCellRecord[]>;
   getCell(cellId: string): Promise<CustomerCellRecord | undefined>;
+  getProvisioningActivationEvidence(cellId: string): Promise<ProvisioningActivationEvidence | undefined>;
   transitionCellWithAudit(cellId: string, status: CustomerCellLifecycleStatus, audit: ControlPlaneAuditEventRecord): Promise<CustomerCellRecord>;
   appendAuditEvent(event: ControlPlaneAuditEventRecord): Promise<void>;
   auditEventsForCell(cellId: string): Promise<ControlPlaneAuditEventRecord[]>;
@@ -32,6 +40,7 @@ export interface PlatformAdministrationRepository {
 }
 
 const allowedTransitions: Partial<Record<CustomerCellLifecycleStatus, CustomerCellLifecycleStatus[]>> = {
+  PROVISIONING: ["ACTIVE"],
   ACTIVE: ["SUSPENDED", "OFFBOARDING"],
   SUSPENDED: ["ACTIVE", "OFFBOARDING"]
 };
@@ -53,6 +62,19 @@ export class PlatformAdministrationService {
   ): Promise<CustomerCellRecord> {
     const cell = await this.requiredCell(cellId);
     const action = `cell.lifecycle.${status.toLowerCase()}`;
+    if (cell.lifecycleStatus === "PROVISIONING" && status === "ACTIVE") {
+      const evidence = await this.repository.getProvisioningActivationEvidence(cellId);
+      const validEvidence = Boolean(
+        command.provisioningAttemptId
+        && evidence?.provisioningAttemptId === command.provisioningAttemptId
+        && evidence.provisioningComplete
+        && evidence.healthCheckPassed
+      );
+      if (!validEvidence) {
+        await this.repository.appendAuditEvent(this.audit(cellId, action, command, "FAILED", "MISSING_PROVISIONING_EVIDENCE"));
+        throw new Error("Provisioning completion and health evidence are required");
+      }
+    }
     if (!allowedTransitions[cell.lifecycleStatus]?.includes(status)) {
       await this.repository.appendAuditEvent(this.audit(cellId, action, command, "FAILED", "INVALID_LIFECYCLE_TRANSITION"));
       throw new Error(`Cannot transition customer cell from ${cell.lifecycleStatus} to ${status}`);
@@ -166,7 +188,8 @@ export class PlatformAdministrationService {
 export type InMemoryPlatformAdministrationRepository = PlatformAdministrationRepository;
 
 export function createInMemoryPlatformAdministrationRepository(
-  initialCells: CustomerCellRecord[] = []
+  initialCells: CustomerCellRecord[] = [],
+  activationEvidence: Record<string, ProvisioningActivationEvidence> = {}
 ): InMemoryPlatformAdministrationRepository {
   const cells = new Map(initialCells.map((cell) => [cell.id, { ...cell }]));
   const auditEvents: ControlPlaneAuditEventRecord[] = [];
@@ -178,6 +201,7 @@ export function createInMemoryPlatformAdministrationRepository(
       const cell = cells.get(cellId);
       return cell ? { ...cell } : undefined;
     },
+    getProvisioningActivationEvidence: async (cellId) => activationEvidence[cellId],
     transitionCellWithAudit: async (cellId, status, audit) => {
       const cell = cells.get(cellId);
       if (!cell) throw new Error("Customer cell was not found");

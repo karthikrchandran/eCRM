@@ -14,9 +14,12 @@ export type BusinessSettingsView = {
 };
 
 type SettingsDb = {
-  businessSettings: {
+  cellConfiguration?: {
+    findUnique?: (args: Prisma.CellConfigurationFindUniqueArgs) => Promise<BusinessSettingsView | null>;
+    upsert?: (args: Prisma.CellConfigurationUpsertArgs) => Promise<BusinessSettingsView>;
+  };
+  businessSettings?: {
     findUnique?: (args: Prisma.BusinessSettingsFindUniqueArgs) => Promise<BusinessSettingsView | null>;
-    upsert?: (args: Prisma.BusinessSettingsUpsertArgs) => Promise<BusinessSettingsView>;
   };
 };
 
@@ -38,12 +41,18 @@ export async function getBusinessSettings(
 ): Promise<BusinessSettingsView> {
   assertCanViewSettings(user);
 
-  const settings = await database.businessSettings.findUnique?.({
+  const configuration = await database.cellConfiguration?.findUnique?.({
+    where: { id: "default" },
+    select: { defaultCurrency: true }
+  });
+  if (configuration) return configuration;
+
+  const legacySettings = await database.businessSettings?.findUnique?.({
     where: { id: "default" },
     select: { defaultCurrency: true }
   });
 
-  return { defaultCurrency: settings?.defaultCurrency ?? "INR" };
+  return { defaultCurrency: legacySettings?.defaultCurrency ?? "INR" };
 }
 
 export async function updateBusinessSettings(
@@ -53,11 +62,11 @@ export async function updateBusinessSettings(
 ) {
   assertCanManageSettings(user);
 
-  if (!database.businessSettings.upsert) {
-    throw new Error("Business settings storage is not available.");
+  if (!database.cellConfiguration?.upsert) {
+    throw new Error("Cell configuration storage is not available.");
   }
 
-  return database.businessSettings.upsert({
+  return database.cellConfiguration.upsert({
     where: { id: "default" },
     create: { id: "default", defaultCurrency: input.defaultCurrency },
     update: { defaultCurrency: input.defaultCurrency },

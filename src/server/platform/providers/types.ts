@@ -24,12 +24,20 @@ export interface CellHealth {
   detail?: string;
 }
 
+export interface CellConfigurationProjection {
+  displayName: string;
+  planCode: string;
+  allowedModules: string[];
+  initialAdminEmail: string;
+}
+
 export interface CellProvider {
   createDatabase(context: CellProviderContext): Promise<ProviderReference>;
   createStoragePrefix(context: CellProviderContext): Promise<ProviderReference>;
   createSecretReference(context: CellProviderContext): Promise<ProviderReference>;
   applyBackupPolicy(context: CellProviderContext): Promise<ProviderReference>;
   deployApplication(context: CellProviderContext): Promise<ApplicationProviderResult>;
+  initializeCellConfiguration(context: CellProviderContext, projection: CellConfigurationProjection): Promise<ProviderReference>;
   bindSignalLoopInstallation(context: CellProviderContext): Promise<ProviderReference>;
   healthCheck(context: CellProviderContext): Promise<CellHealth>;
   destroy(context: CellProviderContext): Promise<void>;

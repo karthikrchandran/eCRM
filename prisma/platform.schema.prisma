@@ -30,6 +30,8 @@ model CustomerCell {
   displayName                String
   region                     String
   desiredSubdomain           String                      @unique
+  planCode                   String
+  allowedModules             String[]
   lifecycleStatus            CustomerCellLifecycleStatus @default(PROVISIONING)
   databaseReference          String?
   storageReference           String?

@@ -16,6 +16,9 @@ type ProductSnapshot = {
 };
 
 type ProposalCreateDb = {
+  cellConfiguration?: {
+    findUnique: (args: Prisma.CellConfigurationFindUniqueArgs) => Promise<{ defaultCurrency: SupportedCurrency } | null>;
+  };
   businessSettings?: {
     findUnique: (args: Prisma.BusinessSettingsFindUniqueArgs) => Promise<{ defaultCurrency: SupportedCurrency } | null>;
   };
@@ -75,6 +78,12 @@ async function assertOpenOpportunity(database: ProposalCreateDb, opportunityId: 
 }
 
 async function loadDefaultCurrency(database: ProposalCreateDb): Promise<SupportedCurrency> {
+  const configuration = await database.cellConfiguration?.findUnique({
+    where: { id: "default" },
+    select: { defaultCurrency: true }
+  });
+  if (configuration) return configuration.defaultCurrency;
+
   const settings = await database.businessSettings?.findUnique({
     where: { id: "default" },
     select: { defaultCurrency: true }

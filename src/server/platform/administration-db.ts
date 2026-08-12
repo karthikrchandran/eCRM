@@ -19,6 +19,19 @@ export class PrismaPlatformAdministrationRepository implements PlatformAdministr
     return cell ? mapCell(cell) : undefined;
   }
 
+  public async getProvisioningActivationEvidence(cellId: string) {
+    const attempt = await this.client.provisioningAttempt.findFirst({
+      where: { cellId, result: "SUCCEEDED" },
+      orderBy: { createdAt: "desc" },
+      include: { actions: { where: { step: "health-check", result: "SUCCEEDED" }, select: { id: true } } }
+    });
+    return attempt ? {
+      provisioningAttemptId: attempt.id,
+      provisioningComplete: attempt.result === "SUCCEEDED",
+      healthCheckPassed: attempt.actions.length > 0
+    } : undefined;
+  }
+
   public async transitionCellWithAudit(
     cellId: string,
     status: CustomerCellRecord["lifecycleStatus"],
@@ -132,6 +145,7 @@ function mapGrant(grant: {
 
 function mapCell(cell: {
   id: string; cellKey: string; legalName: string; displayName: string; region: string; desiredSubdomain: string;
+  planCode: string; allowedModules: string[];
   lifecycleStatus: string; databaseReference: string | null; storageReference: string | null; secretReference: string | null;
   backupReference: string | null; applicationReference: string | null; applicationUrl: string | null;
   signalLoopWorkspaceReference: string | null; createdAt: Date; updatedAt: Date;

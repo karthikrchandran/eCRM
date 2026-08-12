@@ -1,5 +1,5 @@
 import { assertProviderContextActive } from "./types";
-import type { ApplicationProviderResult, CellHealth, CellProvider, CellProviderContext, ProviderReference } from "./types";
+import type { ApplicationProviderResult, CellConfigurationProjection, CellHealth, CellProvider, CellProviderContext, ProviderReference } from "./types";
 
 export class LocalCellProvider implements CellProvider {
   private readonly health: "healthy" | "unhealthy";
@@ -33,6 +33,14 @@ export class LocalCellProvider implements CellProvider {
       ...this.reference("application", context),
       applicationUrl: `http://${context.cellKey}.localhost`
     };
+  }
+
+  public async initializeCellConfiguration(
+    context: CellProviderContext,
+    projection: CellConfigurationProjection
+  ): Promise<ProviderReference> {
+    void projection;
+    return this.reference("cell-configuration", context);
   }
 
   public async bindSignalLoopInstallation(context: CellProviderContext): Promise<ProviderReference> {

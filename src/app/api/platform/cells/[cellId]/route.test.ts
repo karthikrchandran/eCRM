@@ -35,6 +35,36 @@ describe("platform cell lifecycle API", () => {
     expect(response.status).toBe(409);
   });
 
+  it("passes provisioning evidence for a controlled activation", async () => {
+    const transitionCell = vi.fn().mockResolvedValue({ id: "cell_ara", lifecycleStatus: "ACTIVE" });
+    const handlers = createCellItemHandlers({
+      authorize: () => ({ actor: "platform-admin@example.com" }),
+      transitionCell,
+      deleteCell: vi.fn()
+    });
+    const response = await handlers.PATCH(
+      new Request("http://localhost/api/platform/cells/cell_ara", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          status: "ACTIVE",
+          correlationId: "corr_activation",
+          reason: "Provisioning checks completed",
+          provisioningAttemptId: "attempt_1"
+        })
+      }),
+      { params: Promise.resolve({ cellId: "cell_ara" }) }
+    );
+
+    expect(response.status).toBe(200);
+    expect(transitionCell).toHaveBeenCalledWith("cell_ara", "ACTIVE", {
+      actor: "platform-admin@example.com",
+      correlationId: "corr_activation",
+      reason: "Provisioning checks completed",
+      provisioningAttemptId: "attempt_1"
+    });
+  });
+
   it("requires evidence and returns 200 for guarded deletion", async () => {
     const deleteCell = vi.fn().mockResolvedValue({ id: "cell_ara", lifecycleStatus: "DELETED" });
     const handlers = createCellItemHandlers({

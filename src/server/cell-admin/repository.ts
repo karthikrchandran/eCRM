@@ -1,5 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
 
+import { FinalActiveAdminError } from "./service";
+
 import type {
   CellAdministrationRepository,
   CellAuditEventRecord,
@@ -22,11 +24,6 @@ export class PrismaCellAdministrationRepository implements CellAdministrationRep
         where: { id: "default" },
         create: configurationData(configuration),
         update: configurationData(configuration)
-      });
-      await transaction.businessSettings.upsert({
-        where: { id: "default" },
-        create: { id: "default", defaultCurrency: configuration.defaultCurrency },
-        update: { defaultCurrency: configuration.defaultCurrency }
       });
       await transaction.cellAuditEvent.create({ data: audit });
       return mapConfiguration(stored);
@@ -76,6 +73,15 @@ export class PrismaCellAdministrationRepository implements CellAdministrationRep
     audit: CellAuditEventRecord
   ): Promise<LocalUserRecord> {
     return this.client.$transaction(async (transaction) => {
+      await transaction.$queryRaw`SELECT "id" FROM "User" WHERE "role" = 'ADMIN'::"UserRole" AND "active" = TRUE ORDER BY "id" FOR UPDATE`;
+      const current = await transaction.user.findUnique({ where: { id: userId }, select: userSelection });
+      if (!current) throw new Error("Local user was not found");
+      const removesActiveAdmin = current.role === "ADMIN" && current.active
+        && (update.active === false || update.role === "SALES");
+      if (removesActiveAdmin) {
+        const activeAdmins = await transaction.user.count({ where: { role: "ADMIN", active: true } });
+        if (activeAdmins <= 1) throw new FinalActiveAdminError();
+      }
       const updated = await transaction.user.update({ where: { id: userId }, data: update, select: userSelection });
       await transaction.cellAuditEvent.create({ data: audit });
       return updated;

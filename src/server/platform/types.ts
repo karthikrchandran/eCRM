@@ -6,6 +6,7 @@ export type ProvisioningStep =
   | "secret-reference"
   | "backup-policy"
   | "application"
+  | "cell-initialization"
   | "signalloop-binding"
   | "health-check";
 
@@ -18,6 +19,8 @@ export interface CustomerCellRecord {
   displayName: string;
   region: string;
   desiredSubdomain: string;
+  planCode: string;
+  allowedModules: string[];
   lifecycleStatus: CustomerCellLifecycleStatus;
   databaseReference?: string;
   storageReference?: string;
@@ -37,6 +40,8 @@ export interface ProvisioningRequest {
   displayName: string;
   region: string;
   desiredSubdomain: string;
+  planCode: string;
+  allowedModules: string[];
   initialAdminEmail: string;
   idempotencyKey: string;
   correlationId: string;

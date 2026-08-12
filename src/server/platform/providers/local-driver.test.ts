@@ -15,6 +15,12 @@ describe("LocalCellProvider", () => {
       reference: "local://application/ara-global",
       applicationUrl: "http://ara-global.localhost"
     });
+    await expect(provider.initializeCellConfiguration(context, {
+      displayName: "ARA Global",
+      planCode: "ENTERPRISE",
+      allowedModules: ["crm", "finance"],
+      initialAdminEmail: "admin@ara.example"
+    })).resolves.toEqual({ reference: "local://cell-configuration/ara-global" });
     await expect(provider.healthCheck(context)).resolves.toEqual({ healthy: true });
   });
 

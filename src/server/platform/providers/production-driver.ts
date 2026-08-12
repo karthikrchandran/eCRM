@@ -1,5 +1,12 @@
 import { assertProviderContextActive } from "./types";
-import type { ApplicationProviderResult, CellHealth, CellProvider, CellProviderContext, ProviderReference } from "./types";
+import type {
+  ApplicationProviderResult,
+  CellConfigurationProjection,
+  CellHealth,
+  CellProvider,
+  CellProviderContext,
+  ProviderReference
+} from "./types";
 
 export interface ProductionProviderConfig {
   databaseEndpoint?: string;
@@ -39,6 +46,10 @@ export interface ProductionProviderAdapters {
   createSecretReference?: (context: ProductionProviderAdapterContext) => Promise<ProviderReference>;
   applyBackupPolicy?: (context: ProductionProviderAdapterContext) => Promise<ProviderReference>;
   deployApplication?: (context: ProductionProviderAdapterContext) => Promise<ApplicationProviderResult>;
+  initializeCellConfiguration?: (
+    context: ProductionProviderAdapterContext,
+    projection: CellConfigurationProjection
+  ) => Promise<ProviderReference>;
   bindSignalLoopInstallation?: (context: ProductionProviderAdapterContext) => Promise<ProviderReference>;
   healthCheck?: (context: ProductionProviderAdapterContext) => Promise<CellHealth>;
   destroy?: (context: ProductionProviderAdapterContext) => Promise<void>;
@@ -87,6 +98,18 @@ export class ProductionCellProvider implements CellProvider {
 
   public async bindSignalLoopInstallation(context: CellProviderContext): Promise<ProviderReference> {
     return this.call("bindSignalLoopInstallation", "signalLoop", context);
+  }
+
+  public async initializeCellConfiguration(
+    context: CellProviderContext,
+    projection: CellConfigurationProjection
+  ): Promise<ProviderReference> {
+    this.assertConfigured();
+    const operation = this.adapters.initializeCellConfiguration;
+    if (!operation) {
+      throw new Error("Production provider adapter initializeCellConfiguration is not configured");
+    }
+    return operation(this.withScope(context, "application"), projection);
   }
 
   public async healthCheck(context: CellProviderContext): Promise<CellHealth> {

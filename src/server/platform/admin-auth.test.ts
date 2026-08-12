@@ -11,7 +11,7 @@ describe("platform administrator authorization", () => {
       new Request("http://localhost/api/platform/cells", {
         headers: { authorization: `Bearer ${token}`, "x-platform-actor": "operator@example.com" }
       }),
-      { APP_MODE: "cell", PLATFORM_ADMIN_TOKEN: token },
+      { APP_MODE: "cell", PLATFORM_ADMIN_TOKEN: token, PLATFORM_ADMIN_ACTOR: "configured@example.com" },
       compare
     );
 
@@ -30,7 +30,7 @@ describe("platform administrator authorization", () => {
 
     const result = authorizePlatformAdmin(
       new Request("http://localhost/api/platform/cells", { headers }),
-      { APP_MODE: "platform", PLATFORM_ADMIN_TOKEN: token },
+      { APP_MODE: "platform", PLATFORM_ADMIN_TOKEN: token, PLATFORM_ADMIN_ACTOR: "configured@example.com" },
       compare
     );
 
@@ -41,15 +41,27 @@ describe("platform administrator authorization", () => {
     expect(compare.mock.calls[0][1]).toHaveLength(32);
   });
 
-  it("accepts the configured secure token and returns the authenticated actor", () => {
+  it("accepts the configured secure token and binds the configured actor", () => {
     const result = authorizePlatformAdmin(
       new Request("http://localhost/api/platform/cells", {
-        headers: { authorization: `Bearer ${token}`, "x-platform-actor": "operator@example.com" }
+        headers: { authorization: `Bearer ${token}`, "x-platform-actor": "spoofed@example.com" }
+      }),
+      { APP_MODE: "platform", PLATFORM_ADMIN_TOKEN: token, PLATFORM_ADMIN_ACTOR: "configured@example.com" }
+    );
+
+    expect(result).toEqual({ actor: "configured@example.com" });
+  });
+
+  it("rejects a valid token when its credential has no configured actor", () => {
+    const result = authorizePlatformAdmin(
+      new Request("http://localhost/api/platform/cells", {
+        headers: { authorization: `Bearer ${token}`, "x-platform-actor": "spoofed@example.com" }
       }),
       { APP_MODE: "platform", PLATFORM_ADMIN_TOKEN: token }
     );
 
-    expect(result).toEqual({ actor: "operator@example.com" });
+    expect(result).toBeInstanceOf(Response);
+    expect((result as Response).status).toBe(401);
   });
 
   it("rejects an insecurely short configured token", () => {
@@ -57,7 +69,7 @@ describe("platform administrator authorization", () => {
       new Request("http://localhost/api/platform/cells", {
         headers: { authorization: "Bearer short", "x-platform-actor": "operator@example.com" }
       }),
-      { APP_MODE: "platform", PLATFORM_ADMIN_TOKEN: "short" }
+      { APP_MODE: "platform", PLATFORM_ADMIN_TOKEN: "short", PLATFORM_ADMIN_ACTOR: "configured@example.com" }
     );
 
     expect(result).toBeInstanceOf(Response);

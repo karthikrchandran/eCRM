@@ -10,6 +10,8 @@ const validBody = {
   displayName: "ARA Global",
   region: "us-east-1",
   desiredSubdomain: "ara",
+  planCode: "ENTERPRISE",
+  allowedModules: ["crm", "finance"],
   initialAdminEmail: "admin@ara.example",
   idempotencyKey: "idem_1",
   correlationId: "corr_1",
@@ -58,6 +60,24 @@ describe("platform cell collection API", () => {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ cellKey: "Not Valid" })
+    }));
+
+    expect(response.status).toBe(400);
+    expect(provision).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [{ ...validBody, planCode: "enterprise" }],
+    [{ ...validBody, allowedModules: Array.from({ length: 51 }, (_, index) => `module-${index}`) }],
+    [{ ...validBody, allowedModules: ["crm", "crm"] }],
+    [{ ...validBody, allowedModules: ["CRM"] }]
+  ])("rejects invalid plan entitlement input", async (body) => {
+    const provision = vi.fn();
+    const handlers = createCellCollectionHandlers({ authorize: () => admin, listCells: vi.fn(), provision });
+    const response = await handlers.POST(new Request("http://localhost/api/platform/cells", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body)
     }));
 
     expect(response.status).toBe(400);

@@ -67,6 +67,8 @@ export class PrismaPlatformRepository implements PlatformRepository {
         displayName: request.displayName,
         region: request.region,
         desiredSubdomain: request.desiredSubdomain,
+        planCode: request.planCode,
+        allowedModules: request.allowedModules,
         lifecycleStatus: "PROVISIONING"
       },
       skipDuplicates: true
@@ -311,6 +313,8 @@ function mapCell(cell: {
   displayName: string;
   region: string;
   desiredSubdomain: string;
+  planCode: string;
+  allowedModules: string[];
   lifecycleStatus: string;
   databaseReference: string | null;
   storageReference: string | null;

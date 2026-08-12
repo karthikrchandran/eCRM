@@ -3,6 +3,7 @@ import { createHash, timingSafeEqual } from "node:crypto";
 type PlatformAuthEnvironment = {
   APP_MODE?: string;
   PLATFORM_ADMIN_TOKEN?: string;
+  PLATFORM_ADMIN_ACTOR?: string;
 };
 
 type ConstantTimeCompare = (left: Uint8Array, right: Uint8Array) => boolean;
@@ -26,7 +27,7 @@ export function authorizePlatformAdmin(
   const authorization = request.headers.get("authorization") ?? "";
   const candidate = authorization.startsWith("Bearer ") ? authorization.slice(7) : "";
   const matches = compare(digest(candidate), digest(configuredToken));
-  const actor = request.headers.get("x-platform-actor")?.trim();
+  const actor = environment.PLATFORM_ADMIN_ACTOR?.trim() ?? "";
 
   if (configuredToken.length < 32 || !matches || !actor) {
     return Response.json({ error: "Unauthorized." }, { status: 401 });

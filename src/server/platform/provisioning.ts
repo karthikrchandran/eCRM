@@ -97,6 +97,8 @@ export function createInMemoryPlatformRepository(): InMemoryPlatformRepository {
         displayName: request.displayName,
         region: request.region,
         desiredSubdomain: request.desiredSubdomain,
+        planCode: request.planCode,
+        allowedModules: [...request.allowedModules],
         lifecycleStatus: "PROVISIONING",
         createdAt: now,
         updatedAt: now
@@ -289,6 +291,15 @@ export class CustomerCellProvisioner {
         applicationUrl: application.applicationUrl
         }
       ));
+      currentStep = "cell-initialization";
+      await this.resourceFor(reservation, context, request, "cell-initialization", (stepContext) =>
+        this.provider.initializeCellConfiguration(stepContext, {
+          displayName: request.displayName,
+          planCode: request.planCode,
+          allowedModules: [...request.allowedModules],
+          initialAdminEmail: request.initialAdminEmail
+        })
+      );
       currentStep = "signalloop-binding";
       const signalLoop = await this.resourceFor(reservation, context, request, "signalloop-binding", (stepContext) => this.provider.bindSignalLoopInstallation(stepContext));
       await this.persist("signalloop-binding", () => this.repository.updateCell(

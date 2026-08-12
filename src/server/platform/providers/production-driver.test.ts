@@ -21,6 +21,7 @@ describe("ProductionCellProvider", () => {
       createSecretReference: vi.fn(async () => ({ reference: "secret" })),
       applyBackupPolicy: vi.fn(async () => ({ reference: "backup" })),
       deployApplication: vi.fn(async () => ({ reference: "application", applicationUrl: "https://example.test" })),
+      initializeCellConfiguration: vi.fn(async () => ({ reference: "cell-configuration" })),
       bindSignalLoopInstallation: vi.fn(async () => ({ reference: "signalloop" })),
       healthCheck: vi.fn(async () => ({ healthy: true })),
       destroy: vi.fn(async () => undefined),
@@ -40,6 +41,7 @@ describe("ProductionCellProvider", () => {
     await expect(provider.createSecretReference(context)).rejects.toThrow(/missing configuration/i);
     await expect(provider.applyBackupPolicy(context)).rejects.toThrow(/missing configuration/i);
     await expect(provider.deployApplication(context)).rejects.toThrow(/missing configuration/i);
+    await expect(provider.initializeCellConfiguration(context, projection())).rejects.toThrow(/missing configuration/i);
     await expect(provider.bindSignalLoopInstallation(context)).rejects.toThrow(/missing configuration/i);
     await expect(provider.healthCheck(context)).rejects.toThrow(/missing configuration/i);
     await expect(provider.destroy(context)).rejects.toThrow(/missing configuration/i);
@@ -57,6 +59,7 @@ describe("ProductionCellProvider", () => {
       createSecretReference: vi.fn(async () => ({ reference: "secret-ref" })),
       applyBackupPolicy: vi.fn(async () => ({ reference: "backup-ref" })),
       deployApplication: vi.fn(async () => ({ reference: "application-ref", applicationUrl: "https://ara.example.test" })),
+      initializeCellConfiguration: vi.fn(async () => ({ reference: "cell-configuration-ref" })),
       bindSignalLoopInstallation: vi.fn(async () => ({ reference: "signalloop-ref" })),
       healthCheck: vi.fn(async () => ({ healthy: true })),
       destroy: vi.fn(async () => undefined),
@@ -70,6 +73,7 @@ describe("ProductionCellProvider", () => {
     await provider.createSecretReference(context);
     await provider.applyBackupPolicy(context);
     await provider.deployApplication(context);
+    await provider.initializeCellConfiguration(context, projection());
     await provider.bindSignalLoopInstallation(context);
     await provider.healthCheck(context);
     await provider.destroy(context);
@@ -80,6 +84,7 @@ describe("ProductionCellProvider", () => {
       serviceScope("storage"),
       serviceScope("secret"),
       serviceScope("backup"),
+      serviceScope("application"),
       serviceScope("application"),
       serviceScope("signalLoop"),
       serviceScope("application"),
@@ -94,6 +99,10 @@ describe("ProductionCellProvider", () => {
     });
     expect(receivedContexts[0]).not.toHaveProperty("databaseCredentialValue");
     expect(receivedContexts[0]).not.toHaveProperty("storageEndpoint");
+    expect(adapters.initializeCellConfiguration).toHaveBeenCalledWith(
+      { ...context, providerScope: serviceScope("application") },
+      projection()
+    );
   });
 });
 
@@ -111,6 +120,15 @@ function completeConfig() {
     applicationCredentialReference: "vault://platform/application",
     signalLoopEndpoint: "https://signalloop.example.test",
     signalLoopCredentialReference: "vault://platform/signalloop"
+  };
+}
+
+function projection() {
+  return {
+    displayName: "ARA Global",
+    planCode: "ENTERPRISE",
+    allowedModules: ["crm", "finance"],
+    initialAdminEmail: "admin@ara.example"
   };
 }
 

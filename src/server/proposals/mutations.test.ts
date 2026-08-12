@@ -87,8 +87,11 @@ describe("proposal mutations", () => {
       proposalInput,
       [{ ...proposalLines[0], gstRateBps: 0, manualTaxPaisa: 8_875, gstOverrideReason: "Manual USD tax" }],
       {
-        businessSettings: {
+        cellConfiguration: {
           findUnique: vi.fn().mockResolvedValue({ defaultCurrency: "USD" })
+        },
+        businessSettings: {
+          findUnique: vi.fn().mockResolvedValue({ defaultCurrency: "INR" })
         },
         opportunity: {
           findUnique: vi.fn().mockResolvedValue({

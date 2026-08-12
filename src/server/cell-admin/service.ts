@@ -41,6 +41,13 @@ export type CellAuditEventRecord = {
   occurredAt: Date;
 };
 
+export class FinalActiveAdminError extends Error {
+  public constructor() {
+    super("The final active Admin cannot be deactivated or changed to Sales");
+    this.name = "FinalActiveAdminError";
+  }
+}
+
 export interface CellAdministrationRepository {
   getConfiguration(): Promise<CellConfigurationRecord | undefined>;
   updateConfigurationWithAudit(configuration: CellConfigurationRecord, audit: CellAuditEventRecord): Promise<CellConfigurationRecord>;
@@ -137,11 +144,14 @@ export class CellAdministrationService {
     if (user.role !== "ADMIN") return this.reject(user, action, userId, context, "ADMIN_REQUIRED", "Only Admin can manage customer-cell administration");
     const target = await this.repository.getUser(userId);
     if (!target) return this.reject(user, action, userId, context, "USER_NOT_FOUND", "Local user was not found");
-    const removesActiveAdmin = target.role === "ADMIN" && target.active && (update.active === false || update.role === "SALES");
-    if (removesActiveAdmin && (await this.repository.countActiveAdmins()) <= 1) {
-      return this.reject(user, action, userId, context, "FINAL_ACTIVE_ADMIN", "The final active Admin cannot be deactivated or changed to Sales");
+    try {
+      return await this.repository.updateUserWithAudit(userId, update, this.audit(user, action, "User", userId, context, "SUCCEEDED"));
+    } catch (error) {
+      if (error instanceof FinalActiveAdminError) {
+        return this.reject(user, action, userId, context, "FINAL_ACTIVE_ADMIN", error.message);
+      }
+      throw error;
     }
-    return this.repository.updateUserWithAudit(userId, update, this.audit(user, action, "User", userId, context, "SUCCEEDED"));
   }
 
   private assertKnownRole(user: CellAdminActor) {
@@ -200,7 +210,8 @@ export function createInMemoryCellAdministrationRepository(options: {
   const users = new Map((options.users ?? []).map((user) => [user.id, { ...user }]));
   const passwordHashes = new Map<string, string>();
   const audits: CellAuditEventRecord[] = [];
-  let businessCurrency: SupportedCurrency = configuration?.defaultCurrency ?? "INR";
+  const businessCurrency: SupportedCurrency = configuration?.defaultCurrency ?? "INR";
+  let userUpdateQueue = Promise.resolve();
 
   return {
     getConfiguration: async () => configuration
@@ -214,7 +225,6 @@ export function createInMemoryCellAdministrationRepository(options: {
         : undefined,
     updateConfigurationWithAudit: async (next, audit) => {
       configuration = { ...next, enabledModules: [...next.enabledModules], allowedModules: [...next.allowedModules] };
-      businessCurrency = next.defaultCurrency;
       audits.push({ ...audit });
       return { ...configuration, enabledModules: [...configuration.enabledModules], allowedModules: [...configuration.allowedModules] };
     },
@@ -235,12 +245,21 @@ export function createInMemoryCellAdministrationRepository(options: {
       return { ...newUser };
     },
     updateUserWithAudit: async (userId, update, audit) => {
-      const current = users.get(userId);
-      if (!current) throw new Error("Local user was not found");
-      const updated = { ...current, ...update };
-      users.set(userId, updated);
-      audits.push({ ...audit });
-      return { ...updated };
+      const execute = async () => {
+        const current = users.get(userId);
+        if (!current) throw new Error("Local user was not found");
+        const removesActiveAdmin = current.role === "ADMIN" && current.active
+          && (update.active === false || update.role === "SALES");
+        const activeAdmins = [...users.values()].filter((entry) => entry.active && entry.role === "ADMIN").length;
+        if (removesActiveAdmin && activeAdmins <= 1) throw new FinalActiveAdminError();
+        const updated = { ...current, ...update };
+        users.set(userId, updated);
+        audits.push({ ...audit });
+        return { ...updated };
+      };
+      const result = userUpdateQueue.then(execute, execute);
+      userUpdateQueue = result.then(() => undefined, () => undefined);
+      return result;
     },
     passwordHashFor: (userId) => passwordHashes.get(userId)
   };

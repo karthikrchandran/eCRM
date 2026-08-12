@@ -16,6 +16,8 @@ const request = {
   displayName: "ARA Global",
   region: "us-east-1",
   desiredSubdomain: "ara-global",
+  planCode: "ENTERPRISE",
+  allowedModules: ["crm", "finance"],
   initialAdminEmail: "admin@ara.example",
   idempotencyKey: "onboard-ara-global-1",
   correlationId: "corr-ara-1",
@@ -37,7 +39,12 @@ describe("CustomerCellProvisioner", () => {
     const second = await provisioner.provision(request);
 
     expect(second.cell.id).toBe(first.cell.id);
-    expect(first.cell).toMatchObject({ id: request.cellId, cellKey: request.cellKey });
+    expect(first.cell).toMatchObject({
+      id: request.cellId,
+      cellKey: request.cellKey,
+      planCode: request.planCode,
+      allowedModules: request.allowedModules
+    });
     expect(second.cell.lifecycleStatus).toBe("ACTIVE");
     expect(second.attempt.result).toBe("SUCCEEDED");
     expect(second.attempt.actions).toEqual(
@@ -53,9 +60,16 @@ describe("CustomerCellProvisioner", () => {
       secretReference: 1,
       backup: 1,
       application: 1,
+      cellInitialization: 1,
       signalLoop: 1,
       health: 1
     });
+    expect(provider.initializations).toEqual([{
+      displayName: request.displayName,
+      planCode: request.planCode,
+      allowedModules: request.allowedModules,
+      initialAdminEmail: request.initialAdminEmail
+    }]);
   });
 
   it("reuses the same provider resource when recording its result fails", async () => {
@@ -124,6 +138,7 @@ describe("CustomerCellProvisioner", () => {
           createSecretReference: async () => ({ reference: "vault://ara/credential" }),
           applyBackupPolicy: async () => ({ reference: "backup://ara" }),
           deployApplication: async () => ({ reference: "application://ara", applicationUrl: "https://ara.example.test" }),
+          initializeCellConfiguration: async () => ({ reference: "cell-configuration://ara" }),
           bindSignalLoopInstallation: async () => ({ reference: "signalloop://ara" }),
           healthCheck: async () => ({ healthy: true })
         },
@@ -196,6 +211,7 @@ describe("CustomerCellProvisioner", () => {
       secretReference: 1,
       backup: 1,
       application: 1,
+      cellInitialization: 1,
       signalLoop: 1,
       health: 2
     });
@@ -516,6 +532,7 @@ describe("CustomerCellProvisioner", () => {
       secretReference: 0,
       backup: 0,
       application: 0,
+      cellInitialization: 0,
       signalLoop: 0,
       health: 0
     });
@@ -523,12 +540,14 @@ describe("CustomerCellProvisioner", () => {
 });
 
 class CountingLocalCellProvider extends LocalCellProvider {
+  public readonly initializations: Array<Parameters<LocalCellProvider["initializeCellConfiguration"]>[1]> = [];
   public operationCalls = {
     database: 0,
     storage: 0,
     secretReference: 0,
     backup: 0,
     application: 0,
+    cellInitialization: 0,
     signalLoop: 0,
     health: 0
   };
@@ -561,6 +580,15 @@ class CountingLocalCellProvider extends LocalCellProvider {
   public override async bindSignalLoopInstallation(context: Parameters<LocalCellProvider["bindSignalLoopInstallation"]>[0]) {
     this.operationCalls.signalLoop += 1;
     return super.bindSignalLoopInstallation(context);
+  }
+
+  public override async initializeCellConfiguration(
+    context: Parameters<LocalCellProvider["initializeCellConfiguration"]>[0],
+    projection: Parameters<LocalCellProvider["initializeCellConfiguration"]>[1]
+  ) {
+    this.operationCalls.cellInitialization += 1;
+    this.initializations.push({ ...projection, allowedModules: [...projection.allowedModules] });
+    return super.initializeCellConfiguration(context, projection);
   }
 
   public override async healthCheck(context: Parameters<LocalCellProvider["healthCheck"]>[0]) {

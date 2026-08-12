@@ -12,6 +12,9 @@ const provisioningSchema = z.object({
   displayName: z.string().trim().min(1),
   region: z.string().trim().min(1),
   desiredSubdomain: z.string().regex(/^[a-z0-9-]+$/),
+  planCode: z.string().regex(/^[A-Z][A-Z0-9_-]{1,31}$/),
+  allowedModules: z.array(z.string().regex(/^[a-z][a-z0-9-]{0,31}$/)).max(50)
+    .refine((modules) => new Set(modules).size === modules.length),
   initialAdminEmail: z.string().email(),
   idempotencyKey: z.string().trim().min(1),
   correlationId: z.string().trim().min(1),

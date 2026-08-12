@@ -24,8 +24,11 @@ function createDatabase() {
         }
       ])
     },
-    businessSettings: {
+    cellConfiguration: {
       findUnique: vi.fn().mockResolvedValue({ defaultCurrency: "USD" })
+    },
+    businessSettings: {
+      findUnique: vi.fn().mockResolvedValue({ defaultCurrency: "INR" })
     },
     costComponent: {
       findMany: vi.fn().mockResolvedValue([

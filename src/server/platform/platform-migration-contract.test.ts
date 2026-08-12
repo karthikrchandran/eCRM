@@ -7,6 +7,7 @@ const projectRoot = process.cwd();
 const migrationDirectory = join(projectRoot, "prisma", "platform", "migrations");
 const initialMigrationDirectory = join(migrationDirectory, "20260811000000_init_platform");
 const leaseFenceMigrationDirectory = join(migrationDirectory, "20260811190000_fence_provisioning_leases");
+const planEntitlementMigrationDirectory = join(migrationDirectory, "20260811210000_add_cell_plan_entitlements");
 
 describe("platform Prisma migration contract", () => {
   it("uses an isolated migration history when deploying the platform schema", () => {
@@ -61,5 +62,17 @@ describe("platform Prisma migration contract", () => {
     expect(schema).toContain("leaseVersion");
     expect(existsSync(migrationPath)).toBe(true);
     expect(readFileSync(migrationPath, "utf8")).toContain('ADD COLUMN "leaseVersion" INTEGER NOT NULL DEFAULT 1');
+  });
+
+  it("persists commercial plan metadata in the control plane", () => {
+    const schema = readFileSync(join(projectRoot, "prisma", "platform.schema.prisma"), "utf8");
+    const migrationPath = join(planEntitlementMigrationDirectory, "migration.sql");
+
+    expect(schema).toContain("planCode");
+    expect(schema).toContain("allowedModules");
+    expect(existsSync(migrationPath)).toBe(true);
+    const migrationSql = readFileSync(migrationPath, "utf8");
+    expect(migrationSql).toContain('ADD COLUMN "planCode"');
+    expect(migrationSql).toContain('ADD COLUMN "allowedModules"');
   });
 });

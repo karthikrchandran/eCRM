@@ -13,6 +13,8 @@ const activeCell: CustomerCellRecord = {
   displayName: "ARA Global",
   region: "us-east-1",
   desiredSubdomain: "ara",
+  planCode: "ENTERPRISE",
+  allowedModules: ["crm", "finance"],
   lifecycleStatus: "ACTIVE",
   backupReference: "backup://ara/daily",
   createdAt: new Date("2026-08-11T12:00:00Z"),
@@ -62,6 +64,38 @@ describe("platform lifecycle administration", () => {
     expect(await repository.auditEventsForCell(activeCell.id)).toEqual([
       expect.objectContaining({ result: "FAILED", error: "INVALID_LIFECYCLE_TRANSITION" })
     ]);
+  });
+
+  it("activates a provisioning cell only with persisted completion and health evidence", async () => {
+    const provisioningCell = { ...activeCell, lifecycleStatus: "PROVISIONING" as const };
+    const repository = createInMemoryPlatformAdministrationRepository([provisioningCell], {
+      [activeCell.id]: { provisioningAttemptId: "attempt_1", provisioningComplete: true, healthCheckPassed: true }
+    });
+    const service = new PlatformAdministrationService(repository);
+
+    const activated = await service.transitionCell(activeCell.id, "ACTIVE", {
+      ...command,
+      provisioningAttemptId: "attempt_1"
+    });
+
+    expect(activated.lifecycleStatus).toBe("ACTIVE");
+    expect(await repository.auditEventsForCell(activeCell.id)).toContainEqual(
+      expect.objectContaining({ action: "cell.lifecycle.active", result: "SUCCEEDED", reason: command.reason })
+    );
+  });
+
+  it("rejects provisioning activation without completion and health evidence", async () => {
+    const provisioningCell = { ...activeCell, lifecycleStatus: "PROVISIONING" as const };
+    const repository = createInMemoryPlatformAdministrationRepository([provisioningCell]);
+    const service = new PlatformAdministrationService(repository);
+
+    await expect(service.transitionCell(activeCell.id, "ACTIVE", command)).rejects.toThrow(
+      "Provisioning completion and health evidence are required"
+    );
+    expect((await repository.getCell(activeCell.id))?.lifecycleStatus).toBe("PROVISIONING");
+    expect(await repository.auditEventsForCell(activeCell.id)).toContainEqual(
+      expect.objectContaining({ result: "FAILED", error: "MISSING_PROVISIONING_EVIDENCE" })
+    );
   });
 
   it("requires backup and retention evidence before terminal deletion", async () => {

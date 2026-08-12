@@ -8,7 +8,8 @@ import type { CustomerCellRecord } from "@/server/platform/types";
 const transitionSchema = z.object({
   status: z.enum(["ACTIVE", "SUSPENDED", "OFFBOARDING"]),
   correlationId: z.string().trim().min(1),
-  reason: z.string().trim().min(1)
+  reason: z.string().trim().min(1),
+  provisioningAttemptId: z.string().trim().min(1).optional()
 });
 
 const deletionSchema = z.object({
@@ -33,7 +34,8 @@ export function createCellItemHandlers(dependencies: Dependencies) {
       try {
         const body = transitionSchema.parse(await request.json());
         const { cellId } = await context.params;
-        const cell = await dependencies.transitionCell(cellId, body.status, { ...body, actor: administrator.actor });
+        const { status, ...command } = body;
+        const cell = await dependencies.transitionCell(cellId, status, { ...command, actor: administrator.actor });
         return Response.json({ cell });
       } catch (error) {
         if (error instanceof z.ZodError || error instanceof SyntaxError) return Response.json({ error: "Invalid lifecycle request." }, { status: 400 });

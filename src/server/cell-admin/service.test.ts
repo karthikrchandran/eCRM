@@ -54,8 +54,50 @@ describe("cell-local administration", () => {
     }, audit);
 
     expect(configuration).toMatchObject({ planCode: "ENTERPRISE", allowedModules: ["crm", "finance"], enabledModules: ["crm", "finance"] });
-    expect(await repository.getBusinessCurrency()).toBe("USD");
+    expect((await repository.getConfiguration())?.defaultCurrency).toBe("USD");
     expect(await repository.auditEvents()).toContainEqual(expect.objectContaining({ actorId: admin.id, action: "cell-configuration.update", result: "SUCCEEDED" }));
+  });
+
+  it("does not revert a settings currency update when branding and modules are saved later", async () => {
+    const repository = createInMemoryCellAdministrationRepository({
+      configuration: {
+        id: "default",
+        displayName: "eCRM",
+        logoUrl: null,
+        primaryColor: "#1e3a5f",
+        locale: "en-US",
+        timezone: "UTC",
+        defaultCurrency: "INR",
+        enabledModules: ["crm"],
+        allowedModules: ["crm", "finance"],
+        planCode: "ENTERPRISE",
+        createdAt: new Date("2026-08-11T12:00:00Z"),
+        updatedAt: new Date("2026-08-11T12:00:00Z")
+      }
+    });
+    await repository.updateConfigurationWithAudit(
+      { ...(await repository.getConfiguration())!, defaultCurrency: "USD" },
+      {
+        id: "audit_settings",
+        actorId: admin.id,
+        action: "business-settings.update",
+        targetType: "CellConfiguration",
+        targetId: "default",
+        correlationId: "corr_settings",
+        reason: "Set commercial currency",
+        result: "SUCCEEDED",
+        occurredAt: new Date()
+      }
+    );
+    const service = new CellAdministrationService(repository);
+
+    const updated = await service.updateConfiguration(admin, {
+      displayName: "Acme CRM",
+      enabledModules: ["crm", "finance"]
+    }, audit);
+
+    expect(updated.defaultCurrency).toBe("USD");
+    expect((await repository.getConfiguration())?.defaultCurrency).toBe("USD");
   });
 
   it("rejects excluded modules and Sales updates, recording failed audit", async () => {
@@ -105,5 +147,26 @@ describe("cell-local administration", () => {
       "The final active Admin cannot be deactivated or changed to Sales"
     );
     expect((await repository.listUsers()).find((user) => user.id === "admin_1")?.active).toBe(true);
+  });
+
+  it("atomically prevents concurrent updates from removing both active Admins", async () => {
+    const repository = createInMemoryCellAdministrationRepository({
+      users: [
+        { id: "admin_1", name: "Admin One", email: "one@example.com", role: "ADMIN", active: true },
+        { id: "admin_2", name: "Admin Two", email: "two@example.com", role: "ADMIN", active: true }
+      ]
+    });
+    const service = new CellAdministrationService(repository);
+
+    const results = await Promise.allSettled([
+      service.updateUser(admin, "admin_1", { role: "SALES" }, { ...audit, correlationId: "corr_1" }),
+      service.updateUser(admin, "admin_2", { active: false }, { ...audit, correlationId: "corr_2" })
+    ]);
+
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect((await repository.listUsers()).filter((user) => user.role === "ADMIN" && user.active)).toHaveLength(1);
+    expect(await repository.auditEvents()).toContainEqual(
+      expect.objectContaining({ result: "FAILED", error: "FINAL_ACTIVE_ADMIN" })
+    );
   });
 });
