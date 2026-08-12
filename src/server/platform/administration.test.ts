@@ -90,7 +90,7 @@ describe("platform lifecycle administration", () => {
       lifecycleStatus: "SUSPENDED", desiredLifecycleStatus: "ACTIVE"
     });
 
-    await expect(service.reconcileControlProjections()).resolves.toEqual({ attempted: 1, converged: 1, failed: 0 });
+    await expect(service.reconcileControlProjections()).resolves.toEqual({ attempted: 1, converged: 1, failed: 0, deadLettered: 0 });
     await expect(repository.getCell(activeCell.id)).resolves.toMatchObject({
       lifecycleStatus: "ACTIVE", desiredLifecycleStatus: undefined
     });
@@ -200,6 +200,40 @@ describe("platform lifecycle administration", () => {
     });
     expect(deleted.lifecycleStatus).toBe("DELETED");
   });
+
+  it("stages deletion intent before delivery and reconciles a crash after the cell ACK", async () => {
+    const repository = createInMemoryPlatformAdministrationRepository([{ ...activeCell, lifecycleStatus: "OFFBOARDING" }]);
+    const finalize = repository.finalizeLifecycleProjection.bind(repository);
+    let crash = true;
+    repository.finalizeLifecycleProjection = async (...args) => {
+      if (crash) {
+        crash = false;
+        throw new Error("platform unavailable after delete acknowledgement");
+      }
+      return finalize(...args);
+    };
+    const deliver = vi.fn(async (envelope) => ({ acknowledged: true as const, version: envelope.version }));
+    const service = projectedService(repository, deliver);
+    const deletion = {
+      ...command,
+      retentionEvidence: "retention-complete://CASE-101",
+      backupEvidence: "backup-verified://ara/2026-08-11"
+    };
+
+    await expect(service.deleteCell(activeCell.id, deletion)).rejects.toThrow("platform unavailable");
+    await expect(repository.getCell(activeCell.id)).resolves.toMatchObject({
+      lifecycleStatus: "DELETING", desiredLifecycleStatus: "DELETED"
+    });
+
+    await expect(service.reconcileControlProjections({ workerId: "worker-delete" })).resolves.toMatchObject({
+      attempted: 1, converged: 1, failed: 0
+    });
+    await expect(repository.getCell(activeCell.id)).resolves.toMatchObject({
+      lifecycleStatus: "DELETED", desiredLifecycleStatus: undefined
+    });
+    expect(deliver).toHaveBeenCalledTimes(2);
+    expect(deliver.mock.calls[0]?.[0]).toEqual(deliver.mock.calls[1]?.[0]);
+  });
 });
 
 describe("support grants", () => {
@@ -295,6 +329,82 @@ describe("support grants", () => {
     expect(service.isSupportGrantActive((await repository.getSupportGrant(active.id))!)).toBe(false);
     expect(await repository.auditEventsForCell(activeCell.id)).toContainEqual(
       expect.objectContaining({ action: "support-grant.revoke", reason: "Case closed", result: "SUCCEEDED" })
+    );
+  });
+
+  it("reconciles a REVOKE delivery after the cell ACKs and platform finalization crashes", async () => {
+    const repository = createInMemoryPlatformAdministrationRepository([activeCell]);
+    const grant = await repository.createSupportGrant({
+      id: "grant_revoke_crash",
+      cellId: activeCell.id,
+      operatorId: "support@example.com",
+      caseReference: "CASE-101",
+      reason: command.reason,
+      capabilities: ["configuration:read"],
+      startsAt: new Date("2026-08-11T12:00:00Z"),
+      expiresAt: new Date("2026-08-11T15:00:00Z"),
+      actor: command.actor,
+      correlationId: "corr_create_grant",
+      createdAt: new Date("2026-08-11T12:00:00Z")
+    });
+    const finalize = repository.revokeSupportGrantWithAudit.bind(repository);
+    let crash = true;
+    repository.revokeSupportGrantWithAudit = async (...args) => {
+      if (crash) {
+        crash = false;
+        throw new Error("platform unavailable after revoke acknowledgement");
+      }
+      return finalize(...args);
+    };
+    const deliver = vi.fn(async (envelope) => ({ acknowledged: true as const, version: envelope.version }));
+    const service = projectedService(repository, deliver);
+
+    await expect(service.revokeSupportGrant(grant.id, { ...command, reason: "Case closed" })).rejects.toThrow("platform unavailable");
+    expect(await repository.getSupportGrant(grant.id)).not.toHaveProperty("revokedAt");
+
+    await expect(service.reconcileControlProjections({ workerId: "worker-revoke" })).resolves.toMatchObject({
+      attempted: 1, converged: 1, failed: 0
+    });
+    await expect(repository.getSupportGrant(grant.id)).resolves.toMatchObject({
+      revokedAt: new Date("2026-08-11T12:00:00Z"),
+      revokedBy: command.actor,
+      revocationReason: "Case closed"
+    });
+    expect(deliver).toHaveBeenCalledTimes(2);
+  });
+
+  it("claims a due projection once across concurrent reconcilers", async () => {
+    const repository = createInMemoryPlatformAdministrationRepository([activeCell]);
+    const deliver = vi.fn()
+      .mockRejectedValueOnce(new Error("cell unavailable"))
+      .mockResolvedValue({ acknowledged: true, version: 1 });
+    const service = projectedService(repository, deliver);
+    await expect(service.transitionCell(activeCell.id, "SUSPENDED", command)).rejects.toThrow("cell unavailable");
+
+    const [first, second] = await Promise.all([
+      service.reconcileControlProjections({ workerId: "worker-a", batchSize: 1 }),
+      service.reconcileControlProjections({ workerId: "worker-b", batchSize: 1 })
+    ]);
+
+    expect(first.attempted + second.attempted).toBe(1);
+    expect(first.converged + second.converged).toBe(1);
+    expect(deliver).toHaveBeenCalledTimes(2);
+  });
+
+  it("dead-letters a delivery after the bounded maximum and audits the terminal failure", async () => {
+    const repository = createInMemoryPlatformAdministrationRepository([activeCell]);
+    const deliver = vi.fn().mockRejectedValue(new Error("cell unavailable"));
+    const service = projectedService(repository, deliver);
+    await expect(service.transitionCell(activeCell.id, "SUSPENDED", command)).rejects.toThrow("cell unavailable");
+
+    await expect(service.reconcileControlProjections({
+      workerId: "worker-dead-letter", maxAttempts: 2, baseBackoffMs: 1_000
+    })).resolves.toMatchObject({ attempted: 1, converged: 0, failed: 1, deadLettered: 1 });
+    await expect(repository.projectionDeliveriesForCell(activeCell.id)).resolves.toEqual([
+      expect.objectContaining({ status: "DEAD_LETTER", attempts: 2, deadLetteredAt: expect.any(Date) })
+    ]);
+    await expect(repository.auditEventsForCell(activeCell.id)).resolves.toContainEqual(
+      expect.objectContaining({ action: "control-projection.dead-lettered", result: "FAILED" })
     );
   });
 });

@@ -8,6 +8,7 @@ const migrationDirectory = join(projectRoot, "prisma", "platform", "migrations")
 const initialMigrationDirectory = join(migrationDirectory, "20260811000000_init_platform");
 const leaseFenceMigrationDirectory = join(migrationDirectory, "20260811190000_fence_provisioning_leases");
 const planEntitlementMigrationDirectory = join(migrationDirectory, "20260811210000_add_cell_plan_entitlements");
+const controlReconciliationMigrationDirectory = join(migrationDirectory, "20260812120000_operationalize_control_projection_reconciliation");
 
 describe("platform Prisma migration contract", () => {
   it("uses an isolated migration history when deploying the platform schema", () => {
@@ -74,5 +75,24 @@ describe("platform Prisma migration contract", () => {
     const migrationSql = readFileSync(migrationPath, "utf8");
     expect(migrationSql).toContain('ADD COLUMN "planCode"');
     expect(migrationSql).toContain('ADD COLUMN "allowedModules"');
+  });
+
+  it("persists deletion staging and leased retry/dead-letter reconciliation state", () => {
+    const schema = readFileSync(join(projectRoot, "prisma", "platform.schema.prisma"), "utf8");
+    const migrationPath = join(controlReconciliationMigrationDirectory, "migration.sql");
+
+    expect(schema).toContain("DELETING");
+    expect(schema).toContain("DEAD_LETTER");
+    expect(schema).toContain("nextAttemptAt");
+    expect(schema).toContain("leaseOwner");
+    expect(schema).toContain("leaseExpiresAt");
+    expect(schema).toContain("deadLetteredAt");
+    expect(existsSync(migrationPath)).toBe(true);
+    expect(readFileSync(migrationPath, "utf8")).toContain("DEAD_LETTER");
+
+    const packageJson = JSON.parse(readFileSync(join(projectRoot, "package.json"), "utf8")) as {
+      scripts: Record<string, string>;
+    };
+    expect(packageJson.scripts["worker:control-projections"]).toBe("tsx src/server/platform/control-projection-worker.ts");
   });
 });

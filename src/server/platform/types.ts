@@ -1,4 +1,4 @@
-export type CustomerCellLifecycleStatus = "PROVISIONING" | "ACTIVE" | "PROVISIONING_FAILED" | "SUSPENDING" | "SUSPENDED" | "OFFBOARDING" | "DELETED";
+export type CustomerCellLifecycleStatus = "PROVISIONING" | "ACTIVE" | "PROVISIONING_FAILED" | "SUSPENDING" | "SUSPENDED" | "OFFBOARDING" | "DELETING" | "DELETED";
 
 export type ProvisioningStep =
   | "database"
@@ -108,7 +108,7 @@ export interface SupportGrantRecord {
   createdAt: Date;
 }
 
-export type ControlProjectionDeliveryStatus = "PENDING" | "FAILED" | "DELIVERED";
+export type ControlProjectionDeliveryStatus = "PENDING" | "FAILED" | "DELIVERED" | "DEAD_LETTER";
 
 export interface ControlProjectionDeliveryRecord {
   id: string;
@@ -122,7 +122,11 @@ export interface ControlProjectionDeliveryRecord {
   status: ControlProjectionDeliveryStatus;
   attempts: number;
   lastAttemptAt?: Date;
+  nextAttemptAt: Date;
+  leaseOwner?: string;
+  leaseExpiresAt?: Date;
   deliveredAt?: Date;
+  deadLetteredAt?: Date;
   lastError?: string;
   createdAt: Date;
   updatedAt: Date;

@@ -165,7 +165,9 @@ export class PrismaPlatformAdministrationRepository implements PlatformAdministr
       if (outstanding) throw new Error("Another control projection delivery is pending reconciliation");
       const latest = await transaction.controlProjectionDelivery.aggregate({ where: { cellId: input.cellId }, _max: { version: true } });
       const authorityStatus = targetStatus === "SUSPENDED" ? "SUSPENDING"
-        : targetStatus === "OFFBOARDING" || targetStatus === "DELETED" ? targetStatus : expectedStatus;
+        : targetStatus === "OFFBOARDING" ? targetStatus
+          : targetStatus === "DELETED" ? "DELETING"
+            : expectedStatus;
       const changed = await transaction.customerCell.updateMany({
         where: { id: input.cellId, lifecycleStatus: expectedStatus },
         data: { lifecycleStatus: authorityStatus, desiredLifecycleStatus: targetStatus }
@@ -206,10 +208,19 @@ export class PrismaPlatformAdministrationRepository implements PlatformAdministr
   }
 
   public async beginProjectionDeliveryAttempt(deliveryId: string, attemptedAt: Date): Promise<ControlProjectionDeliveryRecord> {
-    return mapDelivery(await this.client.controlProjectionDelivery.update({
-      where: { id: deliveryId },
-      data: { status: "PENDING", attempts: { increment: 1 }, lastAttemptAt: attemptedAt, lastError: null }
-    }));
+    const claimed = await this.client.controlProjectionDelivery.updateMany({
+      where: {
+        id: deliveryId,
+        status: { in: ["PENDING", "FAILED"] },
+        OR: [{ leaseExpiresAt: null }, { leaseExpiresAt: { lte: attemptedAt } }]
+      },
+      data: {
+        status: "PENDING", attempts: { increment: 1 }, lastAttemptAt: attemptedAt,
+        lastError: null, leaseOwner: null, leaseExpiresAt: null
+      }
+    });
+    if (claimed.count !== 1) throw new Error("Control projection delivery is already leased");
+    return mapDelivery(await this.client.controlProjectionDelivery.findUniqueOrThrow({ where: { id: deliveryId } }));
   }
 
   public async failProjectionDelivery(
@@ -219,9 +230,84 @@ export class PrismaPlatformAdministrationRepository implements PlatformAdministr
   ): Promise<void> {
     await this.client.$transaction(async (transaction) => {
       await transaction.controlProjectionDelivery.update({
-        where: { id: deliveryId }, data: { status: "FAILED", lastError: error }
+        where: { id: deliveryId },
+        data: {
+          status: "FAILED", lastError: error, nextAttemptAt: audit.occurredAt,
+          leaseOwner: null, leaseExpiresAt: null
+        }
       });
       await transaction.controlPlaneAuditEvent.create({ data: auditData(audit) });
+    });
+  }
+
+  public async claimDueProjectionDeliveries(input: {
+    workerId: string;
+    attemptedAt: Date;
+    leaseExpiresAt: Date;
+    limit: number;
+    maxAttempts: number;
+  }): Promise<ControlProjectionDeliveryRecord[]> {
+    const candidates = await this.client.controlProjectionDelivery.findMany({
+      where: {
+        status: { in: ["PENDING", "FAILED"] },
+        nextAttemptAt: { lte: input.attemptedAt },
+        attempts: { lt: input.maxAttempts },
+        OR: [{ leaseExpiresAt: null }, { leaseExpiresAt: { lte: input.attemptedAt } }]
+      },
+      orderBy: [{ nextAttemptAt: "asc" }, { createdAt: "asc" }],
+      take: input.limit
+    });
+    const claimed: ControlProjectionDeliveryRecord[] = [];
+    for (const candidate of candidates) {
+      const result = await this.client.controlProjectionDelivery.updateMany({
+        where: {
+          id: candidate.id,
+          status: { in: ["PENDING", "FAILED"] },
+          nextAttemptAt: { lte: input.attemptedAt },
+          attempts: { lt: input.maxAttempts },
+          OR: [{ leaseExpiresAt: null }, { leaseExpiresAt: { lte: input.attemptedAt } }]
+        },
+        data: {
+          status: "PENDING",
+          attempts: { increment: 1 },
+          lastAttemptAt: input.attemptedAt,
+          lastError: null,
+          leaseOwner: input.workerId,
+          leaseExpiresAt: input.leaseExpiresAt
+        }
+      });
+      if (result.count !== 1) continue;
+      claimed.push(mapDelivery(await this.client.controlProjectionDelivery.findUniqueOrThrow({ where: { id: candidate.id } })));
+    }
+    return claimed;
+  }
+
+  public async rescheduleProjectionDelivery(input: {
+    deliveryId: string;
+    workerId: string;
+    failedAt: Date;
+    nextAttemptAt: Date;
+    maxAttempts: number;
+    error: string;
+    audit: ControlPlaneAuditEventRecord;
+  }): Promise<{ deadLettered: boolean }> {
+    return this.client.$transaction(async (transaction) => {
+      const delivery = await transaction.controlProjectionDelivery.findUniqueOrThrow({ where: { id: input.deliveryId } });
+      const deadLettered = delivery.attempts >= input.maxAttempts;
+      const changed = await transaction.controlProjectionDelivery.updateMany({
+        where: { id: input.deliveryId, leaseOwner: input.workerId, status: "PENDING" },
+        data: {
+          status: deadLettered ? "DEAD_LETTER" : "FAILED",
+          nextAttemptAt: input.nextAttemptAt,
+          deadLetteredAt: deadLettered ? input.failedAt : null,
+          lastError: input.error,
+          leaseOwner: null,
+          leaseExpiresAt: null
+        }
+      });
+      if (changed.count !== 1) throw new Error("Control projection reconciliation lease was lost");
+      await transaction.controlPlaneAuditEvent.create({ data: auditData(input.audit) });
+      return { deadLettered };
     });
   }
 
@@ -233,7 +319,7 @@ export class PrismaPlatformAdministrationRepository implements PlatformAdministr
 
   public async pendingProjectionDeliveries(): Promise<ControlProjectionDeliveryRecord[]> {
     return (await this.client.controlProjectionDelivery.findMany({
-      where: { status: { not: "DELIVERED" } }, orderBy: { createdAt: "asc" }
+      where: { status: { in: ["PENDING", "FAILED"] } }, orderBy: { createdAt: "asc" }
     })).map(mapDelivery);
   }
 }
@@ -244,7 +330,10 @@ async function markDeliveryDelivered(
 ) {
   await transaction.controlProjectionDelivery.update({
     where: { id: deliveryId },
-    data: { status: "DELIVERED", deliveredAt: new Date(), lastError: null }
+    data: {
+      status: "DELIVERED", deliveredAt: new Date(), lastError: null,
+      leaseOwner: null, leaseExpiresAt: null
+    }
   });
 }
 
@@ -319,8 +408,9 @@ function mapCell(cell: {
 
 function mapDelivery(delivery: {
   id: string; cellId: string; version: number; type: string; correlationId: string; idempotencyKey: string;
-  issuedAt: Date; payload: unknown; status: string; attempts: number; lastAttemptAt: Date | null;
-  deliveredAt: Date | null; lastError: string | null; createdAt: Date; updatedAt: Date;
+  issuedAt: Date; payload: unknown; status: string; attempts: number; lastAttemptAt: Date | null; nextAttemptAt: Date;
+  leaseOwner: string | null; leaseExpiresAt: Date | null; deliveredAt: Date | null; deadLetteredAt: Date | null;
+  lastError: string | null; createdAt: Date; updatedAt: Date;
 }): ControlProjectionDeliveryRecord {
   return {
     ...delivery,
@@ -328,7 +418,10 @@ function mapDelivery(delivery: {
     payload: delivery.payload as Record<string, unknown>,
     status: delivery.status as ControlProjectionDeliveryRecord["status"],
     lastAttemptAt: delivery.lastAttemptAt ?? undefined,
+    leaseOwner: delivery.leaseOwner ?? undefined,
+    leaseExpiresAt: delivery.leaseExpiresAt ?? undefined,
     deliveredAt: delivery.deliveredAt ?? undefined,
+    deadLetteredAt: delivery.deadLetteredAt ?? undefined,
     lastError: delivery.lastError ?? undefined
   };
 }

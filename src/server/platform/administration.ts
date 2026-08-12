@@ -23,6 +23,28 @@ export type ProvisioningActivationEvidence = {
   healthCheckPassed: boolean;
 };
 
+type NewControlProjectionDelivery = Omit<
+  ControlProjectionDeliveryRecord,
+  | "id" | "version" | "status" | "attempts" | "lastAttemptAt" | "nextAttemptAt"
+  | "leaseOwner" | "leaseExpiresAt" | "deliveredAt" | "deadLetteredAt" | "lastError"
+  | "createdAt" | "updatedAt"
+>;
+
+export type ControlProjectionReconciliationOptions = {
+  workerId?: string;
+  batchSize?: number;
+  maxAttempts?: number;
+  leaseDurationMs?: number;
+  baseBackoffMs?: number;
+};
+
+export type ControlProjectionReconciliationResult = {
+  attempted: number;
+  converged: number;
+  failed: number;
+  deadLettered: number;
+};
+
 export interface PlatformAdministrationRepository {
   listCells(): Promise<CustomerCellRecord[]>;
   getCell(cellId: string): Promise<CustomerCellRecord | undefined>;
@@ -48,16 +70,32 @@ export interface PlatformAdministrationRepository {
   ): Promise<SupportGrantRecord>;
   createSupportGrant(grant: SupportGrantRecord): Promise<SupportGrantRecord>;
   getSupportGrantByCorrelation(cellId: string, correlationId: string): Promise<SupportGrantRecord | undefined>;
-  stageProjectionDelivery(input: Omit<ControlProjectionDeliveryRecord, "id" | "version" | "status" | "attempts" | "createdAt" | "updatedAt">): Promise<ControlProjectionDeliveryRecord>;
+  stageProjectionDelivery(input: NewControlProjectionDelivery): Promise<ControlProjectionDeliveryRecord>;
   stageLifecycleProjection(
     expectedStatus: CustomerCellLifecycleStatus,
     targetStatus: CustomerCellLifecycleStatus,
-    input: Omit<ControlProjectionDeliveryRecord, "id" | "version" | "status" | "attempts" | "createdAt" | "updatedAt">
+    input: NewControlProjectionDelivery
   ): Promise<ControlProjectionDeliveryRecord>;
   finalizeLifecycleProjection(deliveryId: string, audit: ControlPlaneAuditEventRecord): Promise<CustomerCellRecord>;
   finalizeSupportGrantProjection(grantId: string, deliveryId: string, audit: ControlPlaneAuditEventRecord): Promise<SupportGrantRecord>;
   beginProjectionDeliveryAttempt(deliveryId: string, attemptedAt: Date): Promise<ControlProjectionDeliveryRecord>;
   failProjectionDelivery(deliveryId: string, error: string, audit: ControlPlaneAuditEventRecord): Promise<void>;
+  claimDueProjectionDeliveries(input: {
+    workerId: string;
+    attemptedAt: Date;
+    leaseExpiresAt: Date;
+    limit: number;
+    maxAttempts: number;
+  }): Promise<ControlProjectionDeliveryRecord[]>;
+  rescheduleProjectionDelivery(input: {
+    deliveryId: string;
+    workerId: string;
+    failedAt: Date;
+    nextAttemptAt: Date;
+    maxAttempts: number;
+    error: string;
+    audit: ControlPlaneAuditEventRecord;
+  }): Promise<{ deadLettered: boolean }>;
   projectionDeliveriesForCell(cellId: string): Promise<ControlProjectionDeliveryRecord[]>;
   pendingProjectionDeliveries(): Promise<ControlProjectionDeliveryRecord[]>;
 }
@@ -137,26 +175,29 @@ export class PlatformAdministrationService {
   ): Promise<CustomerCellRecord> {
     const cell = await this.requiredCell(cellId);
     const validEvidence = Boolean(command.retentionEvidence.trim() && command.backupEvidence.trim());
-    if (cell.lifecycleStatus !== "OFFBOARDING" || !validEvidence) {
-      const error = cell.lifecycleStatus !== "OFFBOARDING" ? "CELL_NOT_OFFBOARDING" : "MISSING_DELETION_EVIDENCE";
+    const continuing = cell.lifecycleStatus === "DELETING" && cell.desiredLifecycleStatus === "DELETED";
+    if ((!continuing && cell.lifecycleStatus !== "OFFBOARDING") || !validEvidence) {
+      const error = !continuing && cell.lifecycleStatus !== "OFFBOARDING" ? "CELL_NOT_OFFBOARDING" : "MISSING_DELETION_EVIDENCE";
       await this.repository.appendAuditEvent(this.audit(cellId, "cell.lifecycle.deleted", command, "FAILED", error));
       throw new Error(
-        cell.lifecycleStatus !== "OFFBOARDING"
+        !continuing && cell.lifecycleStatus !== "OFFBOARDING"
           ? "Customer cell must be OFFBOARDING before deletion"
           : "Retention and backup evidence are required"
       );
     }
     const reason = `${command.reason}; retention=${command.retentionEvidence}; backup=${command.backupEvidence}`;
-    const delivery = await this.deliverProjection(cellId, "LIFECYCLE", command, {
+    const projectionInput = this.projectionInput(cellId, "LIFECYCLE", command, {
       lifecycleStatus: "DELETED",
-      sourceEventId: `cell.lifecycle.deleted:${command.correlationId}`
+      sourceEventId: `cell.lifecycle.deleted:${command.correlationId}`,
+      retentionEvidence: command.retentionEvidence,
+      backupEvidence: command.backupEvidence
     }, `lifecycle:${cellId}:DELETED:${command.correlationId}`);
-    const updated = await this.repository.transitionCellWithAudit(
-      cellId, cell.lifecycleStatus, "DELETED",
-      this.audit(cellId, "cell.lifecycle.deleted", { ...command, reason }, "SUCCEEDED"), delivery.id
+    const delivery = await this.repository.stageLifecycleProjection(cell.lifecycleStatus, "DELETED", projectionInput);
+    await this.attemptDelivery(delivery, command);
+    return this.repository.finalizeLifecycleProjection(
+      delivery.id,
+      this.audit(cellId, "cell.lifecycle.deleted", { ...command, reason }, "SUCCEEDED")
     );
-    if (!updated) throw new Error("Customer cell lifecycle changed concurrently");
-    return updated;
   }
 
   public async createSupportGrant(input: PlatformAuditCommand & {
@@ -203,27 +244,55 @@ export class PlatformAdministrationService {
     return Object.assign(created, { accessToken });
   }
 
-  public async reconcileControlProjections(): Promise<{ attempted: number; converged: number; failed: number }> {
-    const deliveries = await this.repository.pendingProjectionDeliveries();
+  public async reconcileControlProjections(
+    options: ControlProjectionReconciliationOptions = {}
+  ): Promise<ControlProjectionReconciliationResult> {
+    const attemptedAt = this.now();
+    const workerId = options.workerId?.trim() || `projection-worker-${randomUUID()}`;
+    const batchSize = boundedInteger(options.batchSize, 25, 1, 100);
+    const maxAttempts = boundedInteger(options.maxAttempts, 8, 1, 100);
+    const leaseDurationMs = boundedInteger(options.leaseDurationMs, 30_000, 1_000, 300_000);
+    const baseBackoffMs = boundedInteger(options.baseBackoffMs, 1_000, 1, 3_600_000);
+    const deliveries = await this.repository.claimDueProjectionDeliveries({
+      workerId,
+      attemptedAt,
+      leaseExpiresAt: new Date(attemptedAt.getTime() + leaseDurationMs),
+      limit: batchSize,
+      maxAttempts
+    });
     let converged = 0;
     let failed = 0;
+    let deadLettered = 0;
     for (const delivery of deliveries) {
       const command = { actor: "system:projection-reconciler", correlationId: delivery.correlationId, reason: "Reconcile pending control projection" };
       try {
-        await this.attemptDelivery(delivery, command);
-        if (delivery.type === "LIFECYCLE") {
-          await this.repository.finalizeLifecycleProjection(delivery.id, this.audit(delivery.cellId, "cell.lifecycle.reconciled", command, "SUCCEEDED"));
-        } else {
-          const grant = delivery.payload.grant as { id?: string } | undefined;
-          if (!grant?.id) throw new Error("Support grant reconciliation payload is invalid");
-          await this.repository.finalizeSupportGrantProjection(grant.id, delivery.id, this.audit(delivery.cellId, "support-grant.reconciled", command, "SUCCEEDED"));
-        }
+        await this.deliverProjectionEnvelope(delivery);
+        await this.finalizeReconciledProjection(delivery, command);
         converged += 1;
-      } catch {
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Control projection reconciliation failed";
+        const delay = Math.min(baseBackoffMs * (2 ** Math.max(0, delivery.attempts - 1)), 3_600_000);
+        const terminal = delivery.attempts >= maxAttempts;
+        const outcome = await this.repository.rescheduleProjectionDelivery({
+          deliveryId: delivery.id,
+          workerId,
+          failedAt: this.now(),
+          nextAttemptAt: new Date(this.now().getTime() + delay),
+          maxAttempts,
+          error: message,
+          audit: this.audit(
+            delivery.cellId,
+            terminal ? "control-projection.dead-lettered" : "control-projection.retry-failed",
+            command,
+            "FAILED",
+            message
+          )
+        });
+        if (outcome.deadLettered) deadLettered += 1;
         failed += 1;
       }
     }
-    return { attempted: deliveries.length, converged, failed };
+    return { attempted: deliveries.length, converged, failed, deadLettered };
   }
 
   public async revokeSupportGrant(grantId: string, command: PlatformAuditCommand): Promise<SupportGrantRecord> {
@@ -232,7 +301,8 @@ export class PlatformAdministrationService {
     if (grant.revokedAt) return grant;
     const revokedAt = this.now();
     const delivery = await this.deliverProjection(grant.cellId, "SUPPORT_GRANT", command, {
-      operation: "REVOKE", grantId, revokedAt: revokedAt.toISOString()
+      operation: "REVOKE", grantId, revokedAt: revokedAt.toISOString(),
+      revokedBy: command.actor, revocationReason: command.reason
     }, `support-grant:revoke:${grantId}:${command.correlationId}`);
     const projectedRevokedAt = new Date(String(delivery.payload.revokedAt));
     return this.repository.revokeSupportGrantWithAudit(
@@ -294,22 +364,9 @@ export class PlatformAdministrationService {
   }
 
   private async attemptDelivery(delivery: ControlProjectionDeliveryRecord, command: PlatformAuditCommand): Promise<void> {
-    const projections = this.requiredProjectionDependencies();
-    const envelope: CellControlProjectionEnvelope = {
-      cellId: delivery.cellId, version: delivery.version, type: delivery.type,
-      correlationId: delivery.correlationId, idempotencyKey: delivery.idempotencyKey,
-      issuedAt: delivery.issuedAt.toISOString(), payload: delivery.payload
-    };
     try {
       await this.repository.beginProjectionDeliveryAttempt(delivery.id, this.now());
-      const acknowledgement = await projections.projectionClient.deliver(
-        envelope,
-        signControlProjection(envelope, projections.projectionSecret)
-      );
-      if (!acknowledgement.acknowledged || acknowledgement.version !== envelope.version) {
-        throw new Error("Cell did not acknowledge the durable control projection");
-      }
-      return;
+      await this.deliverProjectionEnvelope(delivery);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Control projection delivery failed";
       await this.repository.failProjectionDelivery(
@@ -319,6 +376,57 @@ export class PlatformAdministrationService {
       );
       throw error;
     }
+  }
+
+  private async deliverProjectionEnvelope(delivery: ControlProjectionDeliveryRecord): Promise<void> {
+    const projections = this.requiredProjectionDependencies();
+    const envelope: CellControlProjectionEnvelope = {
+      cellId: delivery.cellId, version: delivery.version, type: delivery.type,
+      correlationId: delivery.correlationId, idempotencyKey: delivery.idempotencyKey,
+      issuedAt: delivery.issuedAt.toISOString(), payload: delivery.payload
+    };
+    const acknowledgement = await projections.projectionClient.deliver(
+      envelope,
+      signControlProjection(envelope, projections.projectionSecret)
+    );
+    if (!acknowledgement.acknowledged || acknowledgement.version !== envelope.version) {
+      throw new Error("Cell did not acknowledge the durable control projection");
+    }
+  }
+
+  private async finalizeReconciledProjection(
+    delivery: ControlProjectionDeliveryRecord,
+    command: PlatformAuditCommand
+  ): Promise<void> {
+    if (delivery.type === "LIFECYCLE") {
+      await this.repository.finalizeLifecycleProjection(
+        delivery.id,
+        this.audit(delivery.cellId, "cell.lifecycle.reconciled", command, "SUCCEEDED")
+      );
+      return;
+    }
+    if (delivery.payload.operation === "REVOKE") {
+      const grantId = requiredString(delivery.payload.grantId, "Support grant revocation grantId is invalid");
+      const revokedAt = new Date(requiredString(delivery.payload.revokedAt, "Support grant revocation time is invalid"));
+      const revokedBy = requiredString(delivery.payload.revokedBy, "Support grant revocation actor is invalid");
+      const revocationReason = requiredString(delivery.payload.revocationReason, "Support grant revocation reason is invalid");
+      await this.repository.revokeSupportGrantWithAudit(
+        grantId,
+        revokedAt,
+        revokedBy,
+        revocationReason,
+        this.audit(delivery.cellId, "support-grant.revoke.reconciled", { ...command, reason: revocationReason }, "SUCCEEDED"),
+        delivery.id
+      );
+      return;
+    }
+    const grant = delivery.payload.grant as { id?: string } | undefined;
+    if (!grant?.id) throw new Error("Support grant reconciliation payload is invalid");
+    await this.repository.finalizeSupportGrantProjection(
+      grant.id,
+      delivery.id,
+      this.audit(delivery.cellId, "support-grant.reconciled", command, "SUCCEEDED")
+    );
   }
 
   private audit(
@@ -412,11 +520,11 @@ export function createInMemoryPlatformAdministrationRepository(
       if ([...deliveries.values()].some((item) => item.cellId === input.cellId && item.status !== "DELIVERED")) {
         throw new Error("Another control projection delivery is pending reconciliation");
       }
-      const now = new Date();
+      const now = input.issuedAt;
       const delivery: ControlProjectionDeliveryRecord = {
         ...input, id: `delivery_${randomUUID()}`,
         version: Math.max(0, ...[...deliveries.values()].filter((item) => item.cellId === input.cellId).map((item) => item.version)) + 1,
-        status: "PENDING", attempts: 0, createdAt: now, updatedAt: now
+        status: "PENDING", attempts: 0, nextAttemptAt: now, createdAt: now, updatedAt: now
       };
       deliveries.set(delivery.id, delivery);
       return { ...delivery };
@@ -429,15 +537,16 @@ export function createInMemoryPlatformAdministrationRepository(
       if ([...deliveries.values()].some((item) => item.cellId === input.cellId && item.status !== "DELIVERED")) {
         throw new Error("Another control projection delivery is pending reconciliation");
       }
-      const now = new Date();
+      const now = input.issuedAt;
       const delivery: ControlProjectionDeliveryRecord = {
         ...input, id: `delivery_${randomUUID()}`,
         version: Math.max(0, ...[...deliveries.values()].filter((item) => item.cellId === input.cellId).map((item) => item.version)) + 1,
-        status: "PENDING", attempts: 0, createdAt: now, updatedAt: now
+        status: "PENDING", attempts: 0, nextAttemptAt: now, createdAt: now, updatedAt: now
       };
       deliveries.set(delivery.id, delivery);
       const authorityStatus = targetStatus === "SUSPENDED" ? "SUSPENDING"
-        : targetStatus === "OFFBOARDING" || targetStatus === "DELETED" ? targetStatus
+        : targetStatus === "OFFBOARDING" ? targetStatus
+          : targetStatus === "DELETED" ? "DELETING"
           : cell.lifecycleStatus;
       cells.set(cell.id, { ...cell, lifecycleStatus: authorityStatus, desiredLifecycleStatus: targetStatus, updatedAt: new Date() });
       return delivery;
@@ -469,8 +578,57 @@ export function createInMemoryPlatformAdministrationRepository(
     },
     failProjectionDelivery: async (deliveryId, error, audit) => {
       const delivery = requiredDelivery(deliveries, deliveryId);
-      deliveries.set(deliveryId, { ...delivery, status: "FAILED", lastError: error, updatedAt: new Date() });
+      const failedAt = audit.occurredAt;
+      deliveries.set(deliveryId, {
+        ...delivery, status: "FAILED", lastError: error, nextAttemptAt: failedAt,
+        leaseOwner: undefined, leaseExpiresAt: undefined, updatedAt: failedAt
+      });
       auditEvents.push({ ...audit });
+    },
+    claimDueProjectionDeliveries: async ({ workerId, attemptedAt, leaseExpiresAt, limit, maxAttempts }) => {
+      const claimed: ControlProjectionDeliveryRecord[] = [];
+      for (const delivery of [...deliveries.values()].sort((left, right) => left.nextAttemptAt.getTime() - right.nextAttemptAt.getTime())) {
+        if (claimed.length >= limit) break;
+        const due = (delivery.status === "PENDING" || delivery.status === "FAILED")
+          && delivery.nextAttemptAt <= attemptedAt
+          && delivery.attempts < maxAttempts
+          && (!delivery.leaseExpiresAt || delivery.leaseExpiresAt <= attemptedAt);
+        if (!due) continue;
+        const updated: ControlProjectionDeliveryRecord = {
+          ...delivery,
+          status: "PENDING",
+          attempts: delivery.attempts + 1,
+          lastAttemptAt: attemptedAt,
+          lastError: undefined,
+          leaseOwner: workerId,
+          leaseExpiresAt,
+          updatedAt: attemptedAt
+        };
+        deliveries.set(delivery.id, updated);
+        claimed.push({ ...updated });
+      }
+      return claimed;
+    },
+    rescheduleProjectionDelivery: async ({
+      deliveryId, workerId, failedAt, nextAttemptAt, maxAttempts, error, audit
+    }) => {
+      const delivery = requiredDelivery(deliveries, deliveryId);
+      if (delivery.leaseOwner !== workerId || delivery.status !== "PENDING") {
+        throw new Error("Control projection reconciliation lease was lost");
+      }
+      const deadLettered = delivery.attempts >= maxAttempts;
+      deliveries.set(deliveryId, {
+        ...delivery,
+        status: deadLettered ? "DEAD_LETTER" : "FAILED",
+        nextAttemptAt,
+        leaseOwner: undefined,
+        leaseExpiresAt: undefined,
+        deadLetteredAt: deadLettered ? failedAt : undefined,
+        lastError: error,
+        updatedAt: failedAt
+      });
+      auditEvents.push({ ...audit });
+      return { deadLettered };
     },
     projectionDeliveriesForCell: async (cellId) => [...deliveries.values()]
       .filter((delivery) => delivery.cellId === cellId)
@@ -492,5 +650,24 @@ function requiredDelivery(deliveries: Map<string, ControlProjectionDeliveryRecor
 function markDelivered(deliveries: Map<string, ControlProjectionDeliveryRecord>, deliveryId: string) {
   const delivery = requiredDelivery(deliveries, deliveryId);
   const deliveredAt = new Date();
-  deliveries.set(deliveryId, { ...delivery, status: "DELIVERED", deliveredAt, lastError: undefined, updatedAt: deliveredAt });
+  deliveries.set(deliveryId, {
+    ...delivery,
+    status: "DELIVERED",
+    deliveredAt,
+    lastError: undefined,
+    leaseOwner: undefined,
+    leaseExpiresAt: undefined,
+    updatedAt: deliveredAt
+  });
+}
+
+function boundedInteger(value: number | undefined, fallback: number, minimum: number, maximum: number): number {
+  if (value === undefined) return fallback;
+  if (!Number.isInteger(value)) throw new Error("Control projection reconciliation options must be integers");
+  return Math.min(maximum, Math.max(minimum, value));
+}
+
+function requiredString(value: unknown, error: string): string {
+  if (typeof value !== "string" || !value.trim()) throw new Error(error);
+  return value;
 }

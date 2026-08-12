@@ -16,6 +16,7 @@
     "prisma:platform:generate": "prisma generate --schema prisma/platform.schema.prisma",
     "prisma:platform:migrate": "prisma migrate deploy --config prisma/platform.config.ts --schema prisma/platform.schema.prisma",
     "prisma:platform:verify": "set \"PLATFORM_DATABASE_URL=postgresql://placeholder:placeholder@127.0.0.1:5432/platform\" && npx prisma validate --config prisma/platform.config.ts && npm run prisma:platform:generate && npm test -- src/server/platform/platform-migration-contract.test.ts",
+    "worker:control-projections": "tsx src/server/platform/control-projection-worker.ts",
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "prisma db seed",
     "gate": "npm run typecheck && npm run lint && npm run test && npm run build"

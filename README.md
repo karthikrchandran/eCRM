@@ -103,6 +103,19 @@ npm run gate
 
 Use the fast local checks while developing, and run the full gate before handing off work or opening a pull request. Prefer testing user-visible behavior for UI changes and reserve Playwright for the most important user journeys.
 
+## Control-projection reconciliation
+
+In platform mode, run one bounded reconciliation batch with the same platform database and cell-projection secrets used by the application:
+
+```powershell
+$env:APP_MODE = "platform"
+$env:PLATFORM_DATABASE_URL = "postgresql://..."
+$env:CELL_CONTROL_PROJECTION_SECRET = "..."
+npm run worker:control-projections
+```
+
+Optional positive-integer settings are `CONTROL_PROJECTION_BATCH_SIZE`, `CONTROL_PROJECTION_MAX_ATTEMPTS`, `CONTROL_PROJECTION_LEASE_MS`, and `CONTROL_PROJECTION_BACKOFF_MS`. The worker leases due `PENDING`/`FAILED` deliveries, retries with bounded exponential backoff, and records terminal dead-letter audit evidence. Schedule this command in the deployment's worker scheduler if recurring reconciliation is required; this repository does not install a cron schedule.
+
 ## Shared Records API
 
 `/api/shared-records` is the first shared CRM data slice for eCRM and EmailVoice synchronization. It is protected by `SHARED_DATA_API_TOKEN` and uses simple `searchText contains` filtering for the first low-volume slice. The schema includes a normal index on `searchText`; full-text or trigram search is intentionally deferred until volume requires it.

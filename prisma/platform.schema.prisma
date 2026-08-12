@@ -15,6 +15,7 @@ enum CustomerCellLifecycleStatus {
   SUSPENDING
   SUSPENDED
   OFFBOARDING
+  DELETING
   DELETED
 }
 
@@ -28,6 +29,7 @@ enum ControlProjectionDeliveryStatus {
   PENDING
   FAILED
   DELIVERED
+  DEAD_LETTER
 }
 
 model CustomerCell {
@@ -69,14 +71,19 @@ model ControlProjectionDelivery {
   status         ControlProjectionDeliveryStatus @default(PENDING)
   attempts       Int                             @default(0)
   lastAttemptAt  DateTime?
+  nextAttemptAt  DateTime                        @default(now())
+  leaseOwner     String?
+  leaseExpiresAt DateTime?
   deliveredAt    DateTime?
+  deadLetteredAt DateTime?
   lastError      String?
   createdAt      DateTime                        @default(now())
   updatedAt      DateTime                        @updatedAt
   cell           CustomerCell                    @relation(fields: [cellId], references: [id], onDelete: Restrict)
 
   @@unique([cellId, version])
-  @@index([status, updatedAt])
+  @@index([status, nextAttemptAt])
+  @@index([leaseExpiresAt])
   @@index([cellId, createdAt])
   @@index([correlationId])
 }
