@@ -15,7 +15,7 @@ Provide a repeatable, non-destructive way to bootstrap tenant-local demo users f
 ## Components
 
 1. `prisma/tenant-seed-fixtures.ts` defines the approved ARA Global and AI Consulting admin/sales demo identities and safe default modules.
-2. `prisma/seed-tenant.ts` validates `TENANT_SEED`, `APP_MODE=cell`, `CELL_ID`, `CELL_KEY`, and `DATABASE_URL`, then upserts the selected tenant's local users and cell configuration.
+2. `prisma/tenant-seed.ts` validates `TENANT_SEED`, `APP_MODE=cell`, `CELL_ID`, `CELL_KEY`, and `DATABASE_URL`, then upserts the selected tenant's local users and cell configuration.
 3. `src/components/platform/customer-cell-onboarding-panel.tsx` provides a client-side platform-admin console. The bearer token is entered at runtime and held only in component state; the server API remains the authorization boundary.
 4. `src/app/platform/cells/page.tsx` hosts the console outside the cell-authenticated app layout.
 5. `docs/operations/customer-cell-onboarding.md` documents first-time provisioning, tenant seeding, adding users later, and the separation between the constant overall admin and tenant admins/sales users.
