@@ -30,6 +30,8 @@ $env:APP_MODE = "cell"
 $env:CELL_ID = "cell_ara_global"
 $env:CELL_KEY = "ara-global"
 $env:TENANT_SEED = "ara-global"
+$env:TENANT_SEED_ADMIN_PASSWORD = "<retrieve from your secret manager>"
+$env:TENANT_SEED_SALES_PASSWORD = "<retrieve from your secret manager>"
 $env:DATABASE_URL = "postgresql://<user>:<password>@<host>:5432/ara_global"
 npm run prisma:seed:tenant
 ```
@@ -41,6 +43,8 @@ $env:APP_MODE = "cell"
 $env:CELL_ID = "cell_ai_consulting"
 $env:CELL_KEY = "ai-consulting"
 $env:TENANT_SEED = "ai-consulting"
+$env:TENANT_SEED_ADMIN_PASSWORD = "<retrieve from your secret manager>"
+$env:TENANT_SEED_SALES_PASSWORD = "<retrieve from your secret manager>"
 $env:DATABASE_URL = "postgresql://<user>:<password>@<host>:5432/ai_consulting"
 npm run prisma:seed:tenant
 ```
@@ -54,7 +58,7 @@ The seeded demo identities are:
 | ARA Global | `admin@ara-global.demo.local` | `sales@ara-global.demo.local` |
 | AI Consulting | `admin@ai-consulting.demo.local` | `sales@ai-consulting.demo.local` |
 
-The fixture passwords are safe local-demo defaults only. Treat them as temporary credentials, rotate them before any shared or production use, and do not put passwords in source control, tickets, logs, or deployment manifests. Add subsequent users from that tenant's **Admin Settings** page; tenant users remain local to that cell and are never inserted into the platform database.
+For a new user, supply `TENANT_SEED_ADMIN_PASSWORD` and/or `TENANT_SEED_SALES_PASSWORD` only through the deployment secret store or process environment. There are no source-controlled fixture passwords. Rerunning the command is additive/upsert-only: existing users keep their current password hash, role, and active state, and do not require password environment variables. The command verifies the persisted `CellControlProjection.cellId` matches the selected fixture before writing any configuration or users. Add subsequent users from that tenant's **Admin Settings** page; tenant users remain local to that cell and are never inserted into the platform database.
 
 ## External activation boundary
 

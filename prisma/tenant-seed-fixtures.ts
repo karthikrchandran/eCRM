@@ -4,8 +4,6 @@ export type TenantSeedUser = {
   name: string;
   email: string;
   role: "ADMIN" | "SALES";
-  /** Demo-only value. Production deployments must rotate credentials immediately. */
-  defaultPassword: string;
 };
 
 export type TenantSeedFixture = {
@@ -29,8 +27,8 @@ export const tenantSeedFixtures: Record<TenantSeedKey, TenantSeedFixture> = {
     enabledModules: demoModules,
     allowedModules: demoModules,
     users: [
-      { name: "ARA Global Admin", email: "admin@ara-global.demo.local", role: "ADMIN", defaultPassword: "DemoOnly-AraGlobal-Admin-2026!" },
-      { name: "ARA Global Sales", email: "sales@ara-global.demo.local", role: "SALES", defaultPassword: "DemoOnly-AraGlobal-Sales-2026!" }
+      { name: "ARA Global Admin", email: "admin@ara-global.demo.local", role: "ADMIN" },
+      { name: "ARA Global Sales", email: "sales@ara-global.demo.local", role: "SALES" }
     ]
   },
   "ai-consulting": {
@@ -41,8 +39,8 @@ export const tenantSeedFixtures: Record<TenantSeedKey, TenantSeedFixture> = {
     enabledModules: demoModules,
     allowedModules: demoModules,
     users: [
-      { name: "AI Consulting Admin", email: "admin@ai-consulting.demo.local", role: "ADMIN", defaultPassword: "DemoOnly-AIConsulting-Admin-2026!" },
-      { name: "AI Consulting Sales", email: "sales@ai-consulting.demo.local", role: "SALES", defaultPassword: "DemoOnly-AIConsulting-Sales-2026!" }
+      { name: "AI Consulting Admin", email: "admin@ai-consulting.demo.local", role: "ADMIN" },
+      { name: "AI Consulting Sales", email: "sales@ai-consulting.demo.local", role: "SALES" }
     ]
   }
 };

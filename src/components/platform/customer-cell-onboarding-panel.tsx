@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 type CellSummary = { id: string; cellKey?: string; displayName?: string; lifecycleStatus?: string };
+const moduleOptions = ["crm", "opportunities", "proposals", "orders", "production", "finance", "reports"] as const;
 
 const initialForm = {
   cellId: "",
@@ -12,12 +13,20 @@ const initialForm = {
   region: "",
   desiredSubdomain: "",
   planCode: "ENTERPRISE",
-  initialAdminEmail: ""
+  initialAdminEmail: "",
+  idempotencyKey: "",
+  correlationId: "",
+  reason: "Platform administrator customer-cell onboarding"
 };
 
 export function CustomerCellOnboardingPanel() {
   const [token, setToken] = useState("");
-  const [form, setForm] = useState(initialForm);
+  const [form, setForm] = useState(() => ({
+    ...initialForm,
+    idempotencyKey: `ui-${crypto.randomUUID()}`,
+    correlationId: crypto.randomUUID()
+  }));
+  const [selectedModules, setSelectedModules] = useState<string[]>(["crm"]);
   const [cells, setCells] = useState<CellSummary[]>([]);
   const [message, setMessage] = useState<string>();
   const [loading, setLoading] = useState(false);
@@ -34,6 +43,10 @@ export function CustomerCellOnboardingPanel() {
     setForm((current) => ({ ...current, [field]: value }));
   }
 
+  function toggleModule(module: string) {
+    setSelectedModules((current) => current.includes(module) ? current.filter((item) => item !== module) : [...current, module]);
+  }
+
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setLoading(true);
@@ -44,10 +57,7 @@ export function CustomerCellOnboardingPanel() {
         headers: { "content-type": "application/json", Authorization: `Bearer ${token.trim()}` },
         body: JSON.stringify({
           ...form,
-          allowedModules: ["crm", "opportunities", "proposals", "orders", "production", "finance", "reports"],
-          idempotencyKey: `ui-${form.cellId}-${Date.now()}`,
-          correlationId: crypto.randomUUID(),
-          reason: "Platform administrator customer-cell onboarding"
+          allowedModules: selectedModules
         })
       });
       const body = await response.json().catch(() => ({}));
@@ -68,6 +78,8 @@ export function CustomerCellOnboardingPanel() {
           <h2 className="text-lg font-semibold">Provision a customer cell</h2>
           <p className="mt-1 text-sm text-[var(--muted)]">The token is used only for this browser session and is never sent to the page server.</p>
         </div>
+        <div className="grid gap-2"><p className="text-sm font-medium">Allowed modules</p><div className="grid gap-2 sm:grid-cols-2 md:grid-cols-4">{moduleOptions.map((module) => <label className="flex items-center gap-2 text-sm" key={module}><input aria-label={module} checked={selectedModules.includes(module)} onChange={() => toggleModule(module)} type="checkbox" />{module}</label>)}</div></div>
+        <div className="grid gap-4 md:grid-cols-2">{(["idempotencyKey", "correlationId", "reason"] as const).map((field) => <label className="flex flex-col gap-1 text-sm font-medium" key={field}>{field === "idempotencyKey" ? "Idempotency key" : field === "correlationId" ? "Correlation ID" : "Reason"}{field === "reason" ? <textarea aria-label="Reason" className="crm-control" onChange={(event) => updateField(field, event.target.value)} value={form[field]} /> : <input aria-label={field === "idempotencyKey" ? "Idempotency key" : "Correlation ID"} className="crm-control" onChange={(event) => updateField(field, event.target.value)} value={form[field]} />}</label>)}</div>
         <label className="flex flex-col gap-1 text-sm font-medium">Platform bearer token<input aria-label="Platform bearer token" className="crm-control" onChange={(event) => setToken(event.target.value)} type="password" value={token} /></label>
         <div className="grid gap-4 md:grid-cols-2">
           {(["cellId", "cellKey", "legalName", "displayName", "region", "desiredSubdomain", "planCode", "initialAdminEmail"] as const).map((field) => (
