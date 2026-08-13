@@ -21,6 +21,7 @@
     "reconcile:integration-delivery": "tsx src/server/integration-delivery/reconcile-once.ts",
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "prisma db seed",
+    "prisma:seed:tenant": "tsx prisma/seed-tenant.ts",
     "gate": "npm run typecheck && npm run lint && npm run test && npm run build"
   },
   "dependencies": {
