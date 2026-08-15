@@ -1,197 +1,133 @@
-# Client onboarding guide
+# Client onboarding and customer-cell operations
 
-This guide is for the platform/admin team that provisions a new eCRM client.
+This guide is for the platform administrator who creates and operates an eCRM customer cell. Follow it for every new customer; do not create a new branch, copy of the application, or shared tenant database.
 
-The operating rule is simple: one client, one isolated customer cell. Do not colocate business records, users, files, or integration state between clients.
+## Operating model
 
-Use the same process for ARA Global, HaloEHS, AI Consulting, and Qgira. The only thing that changes is the client-specific metadata, database, secrets, and deployment identity.
+eCRM has one codebase and a small platform control plane. Each customer gets a separate **customer cell**: its own runtime, PostgreSQL database, secrets, storage namespace, backup evidence, and SignalLoop binding. The control plane stores only provisioning and lifecycle metadata; it never becomes a second place to store customer CRM data.
 
-## Shared vs client-specific
+A role prevents a user from seeing a screen. A customer cell prevents another customer, an operator error, and a database query from reaching the data at all.
 
-Shared across all clients:
+## Commercial lanes
 
-- the eCRM codebase
-- the platform control plane
-- the provisioning workflow
-- the release process
-- the deployment pipeline
+| Lane | Customers | Commercial purpose | Hosting position |
+| --- | --- | --- | --- |
+| Internal/reference | ARA Global, AI Consulting | Product development, demonstrations, reference workflows and training | Platform-owned, credit-funded where available; no expected customer payment |
+| Customer-hosted | HaloEHS, Qgira | First paid deployments and proof that the product can operate on customer infrastructure | Customer cloud account or server; customer pays its cloud bill directly |
+| Managed cell | Later customers that do not bring infrastructure | Recurring platform and operations service | Platform-owned isolated cloud account/project and cell |
 
-Client-specific per deployment:
+ARA Global is an India-based parent/reference company and AI Consulting is an offspring/demo layer. Give each the same isolation and release discipline as a paying customer, but classify them as `internal/reference` in the control plane. That lets the team demonstrate real customer-cell behaviour without pretending that either is a billable production contract.
 
-- `CELL_ID`
-- `CELL_KEY`
-- `APP_MODE=cell`
-- `DATABASE_URL`
-- application URL or subdomain
-- object-storage namespace or bucket prefix
-- `CELL_CONTROL_PROJECTION_SECRET`
-- tenant seed users and passwords
-- SignalLoop workspace binding
+For HaloEHS and Qgira, offer **bring-your-own-cloud/server (BYOC/BYOH)** as the default first commercial option. They own their cloud account, virtual machine or container platform, database, storage, backups and cloud invoice. We supply the signed application release, setup, upgrades, support and product license. Charge a modest implementation and annual platform/support fee; do not make cloud margin the primary product. Put the exact fee, SLA, support hours, responsibility split and upgrade window in the order form rather than hard-code prices in this guide.
 
-## Standard onboarding flow
+## Client matrix
 
-1. Create the client record in the platform control plane.
-2. Reserve the client key and client URL/subdomain.
-3. Provision a dedicated database for the client.
-4. Create the client deployment with cell-mode environment variables.
-5. Bootstrap the customer-cell control projection.
-6. Apply migrations to the client database only.
-7. Seed the initial admin and sales users.
-8. Verify login, module access, and isolation.
-9. Record backup and restore evidence.
-10. Hand the client to the admin team for ongoing user management.
+| Client | Cell ID | Cell key | Recommended first environment | Billing classification |
+| --- | --- | --- | --- | --- |
+| ARA Global | `cell_ara_global` | `ara-global` | Platform GCP internal/reference cell | Internal/reference, no expected payment |
+| AI Consulting | `cell_ai_consulting` | `ai-consulting` | Platform GCP internal/reference cell | Internal/reference, no expected payment |
+| HaloEHS | `cell_haloehs` | `haloehs` | Customer-owned cloud/server | Customer-hosted paid deployment |
+| Qgira | `cell_qgira` | `qgira` | Customer-owned cloud/server | Customer-hosted paid deployment |
 
-## Example client matrix
+Use separate cloud projects/accounts and separate databases for ARA Global and AI Consulting too. They can share the platform billing account and source repository, but must not share a database, runtime identity, object-storage namespace, secrets, users, or SignalLoop workspace.
 
-| Client | Cell ID | Cell key | Database | Admin login | Sales login |
-| --- | --- | --- | --- | --- | --- |
-| ARA Global | `cell_ara_global` | `ara-global` | `ara_global` | `admin@ara-global.demo.local` | `sales@ara-global.demo.local` |
-| AI Consulting | `cell_ai_consulting` | `ai-consulting` | `ai_consulting` | `admin@ai-consulting.demo.local` | `sales@ai-consulting.demo.local` |
-| HaloEHS | `cell_haloehs` | `haloehs` | `haloehs` | client-specific | client-specific |
-| Qgira | `cell_qgira` | `qgira` | `qgira` | client-specific | client-specific |
+## Before provisioning
 
-ARA Global and AI Consulting are the reference examples already modeled in the repo. HaloEHS and Qgira follow the same shape, but their exact login identities and passwords should come from the client onboarding record or secret store.
+Collect and approve these inputs in the customer onboarding record:
 
-## What to do when onboarding a new client
+- legal name, display name, cell key, country/region and data-residency needs
+- hostname and DNS owner
+- commercial lane and support tier
+- cloud owner, billing owner and emergency technical contact
+- whether the customer supplies the cloud account, server, database and storage
+- first tenant administrator and sales/operations users
+- enabled product modules and SignalLoop workspace binding
+- backup retention, recovery objective, change window and acceptance owner
+- the tenant admin's written acceptance of the responsibility matrix
 
-Use this sequence for every new client:
+For a customer-hosted cell, do not accept a shared administrator password or a personal cloud account. Require a customer-controlled service account/role, least-privilege deployment access, a named backup location and an agreed escalation contact.
 
-1. Confirm the legal name, display name, client key, region, subdomain, and initial module scope.
-2. Confirm the initial admin and sales identities.
-3. Create the client record in the platform control plane.
-4. Provision a dedicated database and dedicated secrets.
-5. Create the client deployment with `APP_MODE=cell`, `CELL_ID`, and `CELL_KEY`.
-6. Bootstrap the control projection and SignalLoop binding.
-7. Run the client migrations.
-8. Seed the first admin and sales users.
-9. Validate the login flow and verify the client can only see its own cell data.
-10. Save backup and restore evidence for the cell.
+## Provision a cell
 
-### Example: ARA Global
+1. Create the client record in the platform control plane and classify the lane as `internal/reference`, `customer-hosted`, or `managed`.
+2. Reserve the cell ID, cell key and hostname. A key is permanent; changing it later is a migration, not a rename.
+3. Create a separate cloud project/account boundary for the cell. In a customer-hosted deployment, create it in the customer's organisation.
+4. Provision a dedicated PostgreSQL database, object-storage namespace, secrets and runtime service account/identity.
+5. Deploy the approved application artifact in cell mode. Set only this cell's `APP_MODE=cell`, `CELL_ID`, `CELL_KEY`, `DATABASE_URL`, storage variables and `CELL_CONTROL_PROJECTION_SECRET`.
+6. Bootstrap and verify the signed control projection, then create the tenant-to-SignalLoop workspace binding.
+7. Apply migrations to this database only.
+8. Seed the initial users once, using passwords from the customer/corporate secret manager. Never put production passwords in a runbook or Git.
+9. Verify admin and sales login, cross-cell isolation, background-worker health, backups and restore evidence.
+10. Obtain the customer/admin acceptance and record the deployment version, recovery test, support contacts and handover date.
 
-Provision the ARA Global client with:
+The cell is not ready merely because the browser loads. It is ready only when the control projection, health/readiness endpoint, backup evidence and named administrator are all present.
 
-- cell ID: `cell_ara_global`
-- cell key: `ara-global`
-- database: `ara_global`
-- admin login: `admin@ara-global.demo.local`
-- sales login: `sales@ara-global.demo.local`
+## Internal/reference examples
 
-### Example: AI Consulting
+### ARA Global
 
-Provision the AI Consulting client with:
+Provision a GCP project such as `ecrm-ara-global-prod` under the platform organisation/billing account. It contains only the ARA Global runtime, `ara_global` database, `ara-global` storage namespace, ARA Global secrets and SignalLoop binding.
 
-- cell ID: `cell_ai_consulting`
-- cell key: `ai-consulting`
-- database: `ai_consulting`
-- admin login: `admin@ai-consulting.demo.local`
-- sales login: `sales@ai-consulting.demo.local`
+- `CELL_ID=cell_ara_global`
+- `CELL_KEY=ara-global`
+- initial admin: `admin@ara-global.demo.local`
+- initial sales user: `sales@ara-global.demo.local`
 
-## Provision the customer cell
+### AI Consulting
 
-Use the platform control plane to create the cell. The platform creates the customer-specific infrastructure and records durable provisioning evidence.
+Provision a different GCP project, such as `ecrm-ai-consulting-prod`, and a different database/runtime identity. Do not reuse ARA Global's database URL, storage prefix, user accounts or SignalLoop workspace.
 
-Required inputs:
+- `CELL_ID=cell_ai_consulting`
+- `CELL_KEY=ai-consulting`
+- initial admin: `admin@ai-consulting.demo.local`
+- initial sales user: `sales@ai-consulting.demo.local`
 
-- client key
-- display name
-- region
-- base URL
-- plan and module limits
-- initial admin identity
-- SignalLoop workspace binding
-
-The platform must create:
-
-- a dedicated database
-- a dedicated deployment
-- a dedicated storage namespace or prefix
-- a dedicated secret set
-- a control projection bootstrap record
-
-## Bootstrap the cell
-
-The cell becomes usable only after the deployment identity has been bootstrapped and the control projection is ACTIVE.
-
-The bootstrap sequence must be explicit and idempotent:
-
-- `APP_MODE=cell`
-- `CELL_ID` matches the provisioned client
-- `CELL_KEY` matches the provisioned client
-- the control-projection signature is valid
-- the cell database already exists
-
-## Apply migrations
-
-Run the tenant migrations against the client database only.
-
-Do not run the root demo reset script against a client database.
-
-## Seed the first users
-
-Use the tenant seed command for exactly one client database at a time.
-
-For ARA Global:
+For either reference cell, use the additive tenant-seed command only after confirming its target identity:
 
 ```powershell
 $env:APP_MODE = "cell"
-$env:CELL_ID = "cell_ara_global"
+$env:CELL_ID = "cell_ara_global" # use the target cell only
 $env:CELL_KEY = "ara-global"
 $env:TENANT_SEED = "ara-global"
-$env:TENANT_SEED_ADMIN_PASSWORD = "<secret-store value>"
-$env:TENANT_SEED_SALES_PASSWORD = "<secret-store value>"
+$env:TENANT_SEED_ADMIN_PASSWORD = "<secret-manager value>"
+$env:TENANT_SEED_SALES_PASSWORD = "<secret-manager value>"
 $env:DATABASE_URL = "postgresql://<user>:<password>@<host>:5432/ara_global"
 npm run prisma:seed:tenant
 ```
 
-For AI Consulting:
+Never run `npm run prisma:seed` against a customer cell: it is a demo-reset operation, not a safe onboarding operation.
 
-```powershell
-$env:APP_MODE = "cell"
-$env:CELL_ID = "cell_ai_consulting"
-$env:CELL_KEY = "ai-consulting"
-$env:TENANT_SEED = "ai-consulting"
-$env:TENANT_SEED_ADMIN_PASSWORD = "<secret-store value>"
-$env:TENANT_SEED_SALES_PASSWORD = "<secret-store value>"
-$env:DATABASE_URL = "postgresql://<user>:<password>@<host>:5432/ai_consulting"
-npm run prisma:seed:tenant
-```
+## Customer-hosted example: HaloEHS or Qgira
 
-For HaloEHS and Qgira, repeat the same pattern with their own cell identifiers, databases, and secrets.
+1. Agree that the customer owns the cloud account or server and the cloud bill.
+2. Create a customer project/account, dedicated database, bucket/namespace, secret manager entries and a least-privilege deployment role.
+3. Give the platform release pipeline that role, or have the customer run the signed deployment package under an observed change window.
+4. Configure the customer hostname, TLS, backup schedule, log retention and alert contact in their environment.
+5. Deploy the same approved Git release used by the reference cells, with only cell-specific configuration changed.
+6. Run the acceptance checklist and hand the customer their cell URL, tenant admin account, support route and recovery responsibilities.
 
-## Verify access
+The customer should never receive another customer's configuration, data, database dump or deployment credential. Conversely, platform staff should not retain standing broad access to a customer environment; use time-bounded, audited support access where the contract allows it.
 
-Confirm all of the following:
+## Release and ongoing operations
 
-- the client admin can sign in
-- the client sales user can sign in
-- the client can only see its own cell data
-- the platform control plane can still see provisioning metadata
-- no other client can read the new cell's data
-- backups and restore evidence are recorded
+All cells consume the same source commit and release artifact. A release does not create per-client branches.
 
-## Add later users
+1. Build, test and approve one commit on `main`.
+2. Publish one versioned container/package and a migration plan.
+3. Roll it through an internal/reference cell first.
+4. Schedule and deploy it to each customer cell under its own change window.
+5. Record version, migration, health, reconciliation and rollback evidence per cell.
 
-After onboarding, add new users through that client's Admin Settings page.
+Changes to users, branding and operational settings belong in the relevant customer cell. Plan, lifecycle and support-access decisions belong in the platform control plane. Do not add users or CRM records directly to the platform database.
 
-Do not add client users through the platform database.
+## Acceptance checklist
 
-## Operational rule for later changes
-
-- Password resets happen in the client cell only.
-- Module changes happen in the client cell only.
-- Branding changes happen in the client cell only.
-- Plan and lifecycle changes happen in the platform control plane.
-
-## Example onboarding sequence for Qgira
-
-1. Reserve `cell_qgira` and `qgira`.
-2. Create `qgira` as a dedicated database.
-3. Create a separate deployment for Qgira.
-4. Set `APP_MODE=cell`, `CELL_ID=cell_qgira`, and `CELL_KEY=qgira`.
-5. Bootstrap the control projection.
-6. Apply migrations.
-7. Seed the client admin and sales users.
-8. Test admin login and sales login.
-9. Confirm ARA Global, AI Consulting, and HaloEHS cannot see Qgira data.
-10. Record the backup and restore baseline.
+- [ ] Dedicated cloud/account/project boundary is recorded.
+- [ ] Dedicated database, storage namespace, secret set and runtime identity exist.
+- [ ] `APP_MODE`, `CELL_ID` and `CELL_KEY` match the control-plane record.
+- [ ] Control projection and SignalLoop workspace binding are ACTIVE.
+- [ ] Tenant admin and sales/operations login works.
+- [ ] A user from another cell cannot authenticate to or read this cell.
+- [ ] Worker, projection, retry/DLQ and readiness checks are healthy.
+- [ ] Backup was created and an isolated restore rehearsal is evidenced.
+- [ ] Support, change and recovery ownership has been accepted in writing.
