@@ -4,10 +4,12 @@ import { calculateOrderPaymentSummary } from "@/server/finance/calculations";
 import { assertCanViewReports } from "./permissions";
 import type {
   AgingBucketSummary,
+  CockpitReports,
   CollectionSummary,
   CountValueSummary,
   CustomerReports,
   DashboardMetric,
+  DeliveryRiskSummary,
   FinanceReports,
   PendingProductionSummary,
   PipelineStageSummary,
@@ -53,7 +55,7 @@ type OrderRecord = {
   subtotalPaisa: number;
   totalPaisa: number;
 };
-type PaymentRecord = { amountPaisa: number; id: string; paymentDate: Date };
+type PaymentRecord = { amountPaisa: number; id: string; paymentDate: Date; order: Pick<OrderRecord, "currency" | "status"> };
 type ActivityRecord = { dueAt: Date | null; id: string; leadCustomer: LeadCustomerRef; owner: BasicUser; subject: string };
 type ProductionWorkItemRecord = {
   assignedTo: BasicUser | null;
@@ -274,6 +276,75 @@ function buildPendingProduction(workItems: ProductionWorkItemRecord[]): PendingP
   }));
 }
 
+function utcMonthKey(date: Date) {
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+function buildCockpitTrend(orders: OrderRecord[], payments: PaymentRecord[], currency: ReportCurrency, now: Date): CockpitReports["trend"] {
+  const monthLabels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const months = Array.from({ length: 6 }, (_, index) => {
+    const date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - (5 - index), 1));
+    return { bookedPaisa: 0, collectedPaisa: 0, key: utcMonthKey(date), label: monthLabels[date.getUTCMonth()] };
+  });
+  const monthByKey = new Map(months.map((month) => [month.key, month]));
+
+  for (const order of orders) {
+    const month = monthByKey.get(utcMonthKey(order.bookedAt));
+    if (month && isCurrentOrder(order)) month.bookedPaisa += order.totalPaisa;
+  }
+  for (const payment of payments) {
+    const month = monthByKey.get(utcMonthKey(payment.paymentDate));
+    if (month && payment.order.currency === currency && payment.order.status !== "CANCELLED") month.collectedPaisa += payment.amountPaisa;
+  }
+
+  const points = months.map(({ bookedPaisa, collectedPaisa, label }) => ({ bookedPaisa, collectedPaisa, label }));
+  return {
+    hasHistory: points.filter((month) => month.bookedPaisa !== 0 || month.collectedPaisa !== 0).length >= 2,
+    months: points
+  };
+}
+
+function buildDeliveryRisk(workItems: ProductionWorkItemRecord[], now: Date): DeliveryRiskSummary {
+  let blockedCount = 0;
+  let dueSoonCount = 0;
+  let overdueCount = 0;
+  let totalCount = 0;
+  const dueSoonEnd = new Date(now.getTime() + 7 * 86_400_000);
+
+  for (const workItem of workItems) {
+    if (!isPendingProduction(workItem.status)) continue;
+
+    const isBlocked = workItem.stageInstances.some((stage) => isPendingProduction(stage.status) && stage.status === "BLOCKED");
+    const isOverdue = Boolean(workItem.dueAt && workItem.dueAt < now);
+    const isDueSoon = Boolean(workItem.dueAt && workItem.dueAt >= now && workItem.dueAt <= dueSoonEnd);
+
+    if (isBlocked) blockedCount += 1;
+    if (isOverdue) overdueCount += 1;
+    if (isDueSoon) dueSoonCount += 1;
+    if (isBlocked || isOverdue || isDueSoon) totalCount += 1;
+  }
+
+  return { blockedCount, dueSoonCount, overdueCount, totalCount };
+}
+
+function buildCockpitReports(input: {
+  activities: ActivityRecord[];
+  orders: OrderRecord[];
+  payments: PaymentRecord[];
+  currency: ReportCurrency;
+  workItems: ProductionWorkItemRecord[];
+  now: Date;
+}): CockpitReports {
+  return {
+    deliveryRisk: buildDeliveryRisk(input.workItems, input.now),
+    followUpRisk: {
+      overdueCount: input.activities.filter((activity) => followUpBucket(activity, input.now) === "overdue").length,
+      upcomingCount: input.activities.filter((activity) => followUpBucket(activity, input.now) === "upcoming").length
+    },
+    trend: buildCockpitTrend(input.orders, input.payments, input.currency, input.now)
+  };
+}
+
 function buildUpcomingFollowUps(activities: ActivityRecord[], now: Date): UpcomingFollowUpSummary[] {
   return [...activities]
     .filter((activity) => followUpBucket(activity, now) === "upcoming")
@@ -491,6 +562,12 @@ export async function getReportsOverview(
   const currency = filters.currency ?? settings?.defaultCurrency ?? "INR";
   const orderWhere = buildOrderWhere({ ...filters, currency });
   const opportunityWhere = buildOpportunityWhere(filters);
+  const activityWhere = {
+    status: "OPEN",
+    ...(dateRangeWhere(filters) ? { dueAt: dateRangeWhere(filters) } : {}),
+    ...(filters.customerId ? { leadCustomerId: filters.customerId } : {}),
+    ...(filters.ownerId ? { ownerId: filters.ownerId } : {})
+  };
 
   const [opportunities, orders, payments, productionWorkItems, activities, invoices, costs, incentives, products] = await Promise.all([
     database.opportunity.findMany({
@@ -515,8 +592,13 @@ export async function getReportsOverview(
         payments: { select: { id: true, amountPaisa: true } }
       }
     }),
-    database.payment.findMany({ orderBy: [{ paymentDate: "desc" }], select: { amountPaisa: true, id: true, paymentDate: true } }),
+    database.payment.findMany({
+      where: { order: orderWhere },
+      orderBy: [{ paymentDate: "desc" }],
+      select: { amountPaisa: true, id: true, paymentDate: true, order: { select: { currency: true, status: true } } }
+    }),
     database.productionWorkItem.findMany({
+      where: { orderLineItem: { order: orderWhere } },
       orderBy: [{ dueAt: "asc" }, { updatedAt: "desc" }],
       include: {
         assignedTo: { select: { id: true, name: true } },
@@ -538,7 +620,7 @@ export async function getReportsOverview(
       }
     }),
     database.activity.findMany({
-      where: { status: "OPEN" },
+      where: activityWhere,
       orderBy: [{ dueAt: "asc" }],
       include: { leadCustomer: { select: { id: true, name: true } }, owner: { select: { id: true, name: true } } }
     }),
@@ -578,9 +660,15 @@ export async function getReportsOverview(
   const pendingProduction = buildPendingProduction(productionWorkItems);
   const upcomingFollowUps = buildUpcomingFollowUps(activities, now);
   const topBillings = currentOrders.map(toBillingSummary).sort((left, right) => right.bookedValuePaisa - left.bookedValuePaisa);
+  const recentOrders = [...currentOrders]
+    .sort((left, right) => right.bookedAt.getTime() - left.bookedAt.getTime() || left.orderNumber.localeCompare(right.orderNumber) || left.id.localeCompare(right.id))
+    .map(toBillingSummary)
+    .slice(0, 5);
   const filterOptions = await loadFilterOptions(database, currentOrders, opportunities, products);
+  const cockpit = buildCockpitReports({ activities, currency, orders, payments, workItems: productionWorkItems, now });
 
   return {
+    cockpit,
     collections,
     currency,
     customers: buildCustomerReports(currentOrders, filters),
@@ -598,7 +686,7 @@ export async function getReportsOverview(
     pipelineByStage,
     production: buildProductionReports(productionWorkItems, now),
     products: buildProductReports(currentOrders, costs, selectedProductName),
-    recentOrders: topBillings.slice(0, 5),
+    recentOrders,
     sales: buildSalesReports(opportunities, activities, pipelineByStage, now),
     topBillings: topBillings.slice(0, 5),
     topClients: buildTopClients(currentOrders).slice(0, 5),

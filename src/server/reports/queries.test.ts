@@ -214,8 +214,18 @@ function createDatabase() {
     },
     payment: {
       findMany: vi.fn().mockResolvedValue([
-        { id: "payment_beta", amountPaisa: 118000, paymentDate: new Date("2026-08-04T10:00:00Z") },
-        { id: "payment_acme", amountPaisa: 100000, paymentDate: new Date("2026-08-03T10:00:00Z") }
+        {
+          id: "payment_beta",
+          amountPaisa: 118000,
+          paymentDate: new Date("2026-08-04T10:00:00Z"),
+          order: { currency: "USD", status: "DELIVERED" }
+        },
+        {
+          id: "payment_acme",
+          amountPaisa: 100000,
+          paymentDate: new Date("2026-08-03T10:00:00Z"),
+          order: { currency: "USD", status: "BOOKED" }
+        }
       ])
     },
     productionWorkItem: {
@@ -359,6 +369,209 @@ describe("reports overview", () => {
         subject: "Follow up on expansion"
       }
     ]);
+  });
+
+  test("builds a six-month cockpit projection from live orders, payments, work, and activities", async () => {
+    const overview = await getReportsOverview(admin, createDatabase(), {}, new Date("2026-08-16T12:00:00Z"));
+
+    expect(overview.cockpit.trend).toEqual({
+      hasHistory: false,
+      months: [
+        { bookedPaisa: 0, collectedPaisa: 0, label: "Mar" },
+        { bookedPaisa: 0, collectedPaisa: 0, label: "Apr" },
+        { bookedPaisa: 0, collectedPaisa: 0, label: "May" },
+        { bookedPaisa: 0, collectedPaisa: 0, label: "Jun" },
+        { bookedPaisa: 0, collectedPaisa: 0, label: "Jul" },
+        { bookedPaisa: 354000, collectedPaisa: 218000, label: "Aug" }
+      ]
+    });
+    expect(overview.cockpit.deliveryRisk).toEqual({ blockedCount: 0, dueSoonCount: 1, overdueCount: 0, totalCount: 1 });
+    expect(overview.cockpit.followUpRisk).toEqual({ overdueCount: 1, upcomingCount: 1 });
+  });
+
+  test("uses booking recency for recent orders while preserving value-ranked top billings", async () => {
+    const database = createDatabase();
+    const orders = await database.order.findMany();
+
+    database.order.findMany.mockResolvedValue([
+      ...orders,
+      {
+        ...orders[0],
+        id: "order_recent_first",
+        orderNumber: "ORD-2026-0004",
+        bookedAt: new Date("2026-08-04T10:00:00Z"),
+        subtotalPaisa: 5000,
+        totalPaisa: 5900
+      },
+      {
+        ...orders[0],
+        id: "order_recent_second",
+        orderNumber: "ORD-2026-0005",
+        bookedAt: new Date("2026-08-04T10:00:00Z"),
+        subtotalPaisa: 4000,
+        totalPaisa: 4720
+      }
+    ]);
+
+    const overview = await getReportsOverview(admin, database, {}, new Date("2026-08-16T12:00:00Z"));
+
+    expect(overview.recentOrders.map((order) => order.orderNumber)).toEqual([
+      "ORD-2026-0004",
+      "ORD-2026-0005",
+      "ORD-2026-0002",
+      "ORD-2026-0001"
+    ]);
+    expect(overview.topBillings.map((order) => order.orderNumber)).toEqual([
+      "ORD-2026-0002",
+      "ORD-2026-0001",
+      "ORD-2026-0004",
+      "ORD-2026-0005"
+    ]);
+  });
+
+  test("scopes cockpit collections to active orders in the selected currency and counts unique delivery risks", async () => {
+    const database = createDatabase();
+    const orders = await database.order.findMany();
+    const payments = await database.payment.findMany();
+    const workItems = await database.productionWorkItem.findMany();
+
+    database.order.findMany.mockResolvedValue([
+      ...orders,
+      {
+        ...orders[0],
+        id: "order_march",
+        bookedAt: new Date("2026-02-28T23:30:00-01:00"),
+        subtotalPaisa: 10000,
+        totalPaisa: 10000
+      }
+    ]);
+    database.payment.findMany.mockResolvedValue([
+      ...payments,
+      {
+        id: "payment_march_utc_boundary",
+        amountPaisa: 5100,
+        paymentDate: new Date("2026-02-28T23:30:00-01:00"),
+        order: { currency: "USD", status: "BOOKED" }
+      },
+      {
+        id: "payment_cancelled",
+        amountPaisa: 900000,
+        paymentDate: new Date("2026-08-05T10:00:00Z"),
+        order: { currency: "USD", status: "CANCELLED" }
+      },
+      {
+        id: "payment_other_currency",
+        amountPaisa: 700000,
+        paymentDate: new Date("2026-08-05T10:00:00Z"),
+        order: { currency: "INR", status: "BOOKED" }
+      }
+    ]);
+    database.productionWorkItem.findMany.mockResolvedValue([
+      ...workItems,
+      {
+        ...workItems[0],
+        id: "work_blocked_and_overdue",
+        dueAt: new Date("2026-08-15T10:00:00Z"),
+        stageInstances: [{ ...workItems[0].stageInstances[0], status: "BLOCKED" }]
+      },
+      {
+        ...workItems[0],
+        id: "work_done_blocked",
+        dueAt: new Date("2026-08-15T10:00:00Z"),
+        status: "DONE",
+        stageInstances: [{ ...workItems[0].stageInstances[0], status: "BLOCKED" }]
+      },
+      {
+        ...workItems[0],
+        id: "work_skipped_overdue",
+        dueAt: new Date("2026-08-15T10:00:00Z"),
+        status: "SKIPPED"
+      }
+    ]);
+
+    const overview = await getReportsOverview(admin, database, {}, new Date("2026-08-16T12:00:00Z"));
+
+    expect(database.payment.findMany).toHaveBeenLastCalledWith({
+      orderBy: [{ paymentDate: "desc" }],
+      select: { amountPaisa: true, id: true, paymentDate: true, order: { select: { currency: true, status: true } } },
+      where: { order: { currency: "USD" } }
+    });
+    expect(overview.cockpit.trend).toEqual({
+      hasHistory: true,
+      months: [
+        { bookedPaisa: 10000, collectedPaisa: 5100, label: "Mar" },
+        { bookedPaisa: 0, collectedPaisa: 0, label: "Apr" },
+        { bookedPaisa: 0, collectedPaisa: 0, label: "May" },
+        { bookedPaisa: 0, collectedPaisa: 0, label: "Jun" },
+        { bookedPaisa: 0, collectedPaisa: 0, label: "Jul" },
+        { bookedPaisa: 354000, collectedPaisa: 218000, label: "Aug" }
+      ]
+    });
+    expect(overview.cockpit.deliveryRisk).toEqual({ blockedCount: 1, dueSoonCount: 1, overdueCount: 1, totalCount: 2 });
+  });
+
+  test("scopes cockpit payments, follow-ups, and delivery risk to the active report filters", async () => {
+    const database = createDatabase();
+    const orders = await database.order.findMany();
+    const payments = await database.payment.findMany();
+    const activities = await database.activity.findMany();
+    const workItems = await database.productionWorkItem.findMany();
+    const foreignPayment = {
+      id: "payment_foreign",
+      amountPaisa: 900000,
+      paymentDate: new Date("2026-08-12T10:00:00Z"),
+      order: { currency: "USD", status: "BOOKED", leadCustomerId: "client_foreign", ownerId: "foreign_owner" }
+    };
+    const foreignActivity = {
+      ...activities[0],
+      id: "activity_foreign",
+      dueAt: new Date("2026-08-12T10:00:00Z"),
+      leadCustomer: { id: "client_foreign", name: "Foreign Customer" },
+      owner: { id: "foreign_owner", name: "Foreign Owner" }
+    };
+    const foreignWorkItem = {
+      ...workItems[0],
+      id: "work_foreign",
+      dueAt: new Date("2026-08-12T10:00:00Z"),
+      stageInstances: [{ ...workItems[0].stageInstances[0], status: "BLOCKED" }],
+      orderLineItem: {
+        ...workItems[0].orderLineItem,
+        order: { ...workItems[0].orderLineItem.order, id: "order_foreign", orderNumber: "ORD-FOREIGN" }
+      }
+    };
+
+    database.order.findMany.mockImplementation((args?: { where?: unknown }) => Promise.resolve(args?.where ? [orders[0]] : orders));
+    database.payment.findMany.mockImplementation((args?: { where?: unknown }) => Promise.resolve(args?.where ? [payments[1]] : [...payments, foreignPayment]));
+    database.activity.findMany.mockImplementation((args?: { where?: unknown }) => Promise.resolve(args?.where ? [activities[1]] : [...activities, foreignActivity]));
+    database.productionWorkItem.findMany.mockImplementation((args?: { where?: unknown }) => Promise.resolve(args?.where ? [workItems[0]] : [...workItems, foreignWorkItem]));
+
+    const filters = {
+      currency: "USD" as const,
+      customerId: "client_acme",
+      dateFrom: "2026-08-01",
+      dateTo: "2026-08-31",
+      ownerId: "sales",
+      status: "BOOKED"
+    };
+    const overview = await getReportsOverview(admin, database, filters, new Date("2026-08-16T12:00:00Z"));
+
+    expect(overview.cockpit.trend.months.at(-1)).toEqual({ bookedPaisa: 236000, collectedPaisa: 100000, label: "Aug" });
+    expect(overview.cockpit.followUpRisk).toEqual({ overdueCount: 1, upcomingCount: 0 });
+    expect(overview.cockpit.deliveryRisk).toEqual({ blockedCount: 0, dueSoonCount: 1, overdueCount: 0, totalCount: 1 });
+    expect(database.payment.findMany).toHaveBeenLastCalledWith(expect.objectContaining({
+      where: { order: expect.objectContaining({ currency: "USD", leadCustomerId: "client_acme", ownerId: "sales", status: "BOOKED" }) }
+    }));
+    expect(database.activity.findMany).toHaveBeenLastCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        dueAt: { gte: new Date("2026-08-01T00:00:00.000Z"), lte: new Date("2026-08-31T23:59:59.999Z") },
+        leadCustomerId: "client_acme",
+        ownerId: "sales",
+        status: "OPEN"
+      })
+    }));
+    expect(database.productionWorkItem.findMany).toHaveBeenLastCalledWith(expect.objectContaining({
+      where: { orderLineItem: { order: expect.objectContaining({ currency: "USD", leadCustomerId: "client_acme", ownerId: "sales", status: "BOOKED" }) } }
+    }));
   });
 
   test("does not expose gross margin or incentive metrics", async () => {
