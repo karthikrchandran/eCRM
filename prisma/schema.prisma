@@ -125,6 +125,25 @@ enum ProposalStatus {
   WITHDRAWN
 }
 
+enum ProposalVersionStatus {
+  DRAFT
+  DRAFT_REVIEW_REQUIRED
+  IN_REVIEW
+  APPROVED
+  SENT
+  ACCEPTED
+  REJECTED
+  EXPIRED
+  WITHDRAWN
+  SUPERSEDED
+}
+
+enum ProposalCreationMode {
+  MANUAL
+  TEMPLATE
+  GENERATIVE
+}
+
 enum OrderStatus {
   DRAFT
   BOOKED
@@ -224,6 +243,8 @@ model Organization {
   salesTargets                    SalesTarget[]
   productServices                 ProductService[]
   proposals                       Proposal[]
+  proposalVersions                ProposalVersion[]
+  proposalVersionLines            ProposalVersionLine[]
   proposalLineItems               ProposalLineItem[]
   proposalPdfAttachments          ProposalPdfAttachment[]
   orders                          Order[]
@@ -256,7 +277,7 @@ model OrganizationInstallation {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
-  organization Organization                 @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization   Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   replayReceipts IntegrationReplayReceipt[]
 
   @@unique([organizationId, installationId])
@@ -264,12 +285,12 @@ model OrganizationInstallation {
 }
 
 model IntegrationReplayReceipt {
-  id             String   @id @default(cuid())
-  installationId String
-  jti            String
+  id                String   @id @default(cuid())
+  installationId    String
+  jti               String
   projectionVersion Int
-  expiresAt      DateTime
-  createdAt      DateTime @default(now())
+  expiresAt         DateTime
+  createdAt         DateTime @default(now())
 
   installation OrganizationInstallation @relation(fields: [installationId], references: [installationId], onDelete: Cascade)
 
@@ -344,14 +365,14 @@ model BusinessSettings {
 
 // Durable migration audit artifact. Runtime code must never access it.
 model OrganizationTenancyMigrationReconciliation {
-  migrationKey String
-  tableName    String
-  beforeCount  BigInt
-  afterCount   BigInt   @default(0)
-  nullCount    BigInt   @default(0)
-  mismatchCount BigInt  @default(0)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @default(now())
+  migrationKey  String
+  tableName     String
+  beforeCount   BigInt
+  afterCount    BigInt   @default(0)
+  nullCount     BigInt   @default(0)
+  mismatchCount BigInt   @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @default(now())
 
   @@id([migrationKey, tableName])
   @@ignore
@@ -385,8 +406,8 @@ model SharedBusinessRecord {
   createdAt            DateTime                      @default(now())
   updatedAt            DateTime                      @updatedAt
   versions             SharedBusinessRecordVersion[]
-  parent               SharedBusinessRecord?          @relation("SharedRecordParent", fields: [organizationId, parentId], references: [organizationId, id], onDelete: NoAction, onUpdate: NoAction, map: "SharedBusinessRecord_tenant_parentId_fkey")
-  children             SharedBusinessRecord[]          @relation("SharedRecordParent")
+  parent               SharedBusinessRecord?         @relation("SharedRecordParent", fields: [organizationId, parentId], references: [organizationId, id], onDelete: NoAction, onUpdate: NoAction, map: "SharedBusinessRecord_tenant_parentId_fkey")
+  children             SharedBusinessRecord[]        @relation("SharedRecordParent")
   organization         Organization?                 @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
   @@unique([organizationId, id])
@@ -517,6 +538,7 @@ model User {
   updatedProductServices      ProductService[]          @relation("ProductServiceUpdatedBy")
   createdProposals            Proposal[]                @relation("ProposalCreatedBy")
   updatedProposals            Proposal[]                @relation("ProposalUpdatedBy")
+  createdProposalVersions     ProposalVersion[]         @relation("ProposalVersionCreatedBy")
   uploadedProposalPdfs        ProposalPdfAttachment[]   @relation("ProposalPdfUploadedBy")
   ownedOrders                 Order[]                   @relation("OrderOwner")
   createdOrders               Order[]                   @relation("OrderCreatedBy")
@@ -551,12 +573,12 @@ model User {
 }
 
 model UserIdentity {
-  id            String   @id @default(cuid())
+  id            String    @id @default(cuid())
   userId        String
-  issuer        String   @db.VarChar(512)
-  subject       String   @db.VarChar(255)
-  emailSnapshot String   @db.VarChar(320)
-  createdAt     DateTime @default(now())
+  issuer        String    @db.VarChar(512)
+  subject       String    @db.VarChar(255)
+  emailSnapshot String    @db.VarChar(320)
+  createdAt     DateTime  @default(now())
   lastLoginAt   DateTime?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -587,6 +609,8 @@ model LeadCustomer {
   activities       Activity[]
   ownershipHistory LeadOwnershipHistory[]
   opportunities    Opportunity[]
+  proposals        Proposal[]
+  proposalVersions ProposalVersion[]
   orders           Order[]
   salesTasks       SalesTask[]
   salesTextNotes   SalesTextNote[]
@@ -794,8 +818,8 @@ model SalesVoiceNote {
   task         SalesTask?             @relation(fields: [organizationId, taskId], references: [organizationId, id], onDelete: SetNull, map: "SalesVoiceNote_tenant_taskId_fkey")
   leadCustomer LeadCustomer?          @relation(fields: [organizationId, leadCustomerId], references: [organizationId, id], onDelete: SetNull, map: "SalesVoiceNote_tenant_leadCustomerId_fkey")
   opportunity  Opportunity?           @relation(fields: [organizationId, opportunityId], references: [organizationId, id], onDelete: SetNull, map: "SalesVoiceNote_tenant_opportunityId_fkey")
-  proposal     Proposal?               @relation(fields: [organizationId, proposalId], references: [organizationId, id], onDelete: SetNull, map: "SalesVoiceNote_tenant_proposalId_fkey")
-  order        Order?                  @relation(fields: [organizationId, orderId], references: [organizationId, id], onDelete: SetNull, map: "SalesVoiceNote_tenant_orderId_fkey")
+  proposal     Proposal?              @relation(fields: [organizationId, proposalId], references: [organizationId, id], onDelete: SetNull, map: "SalesVoiceNote_tenant_proposalId_fkey")
+  order        Order?                 @relation(fields: [organizationId, orderId], references: [organizationId, id], onDelete: SetNull, map: "SalesVoiceNote_tenant_orderId_fkey")
   actions      SalesVoiceNoteAction[]
   organization Organization?          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
@@ -904,8 +928,8 @@ model PipelineStage {
   organization  Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
   @@unique([organizationId, id])
-  @@index([organizationId])
   @@unique([organizationId, name])
+  @@index([organizationId])
   @@index([sortOrder])
   @@index([kind])
 }
@@ -1011,39 +1035,45 @@ model ProductService {
   organization      Organization?      @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
   @@unique([organizationId, id])
-  @@index([organizationId])
   @@unique([organizationId, code])
+  @@index([organizationId])
   @@index([active, sortOrder])
   @@index([category])
   @@index([name])
 }
 
 model Proposal {
-  id                String         @id @default(cuid())
-  organizationId    String
-  opportunityId     String
-  title             String
-  sequenceNumber    Int
-  versionLabel      String?
-  status            ProposalStatus @default(DRAFT)
-  currency          String         @default("INR")
-  validUntil        DateTime?
-  commercialSummary String?
-  assumptions       String?
-  inclusions        String?
-  exclusions        String?
-  paymentTerms      String?
-  deliveryTimeline  String?
-  internalNotes     String?
-  subtotalPaisa     Int            @default(0)
-  gstPaisa          Int            @default(0)
-  totalPaisa        Int            @default(0)
-  createdById       String
-  updatedById       String
-  createdAt         DateTime       @default(now())
-  updatedAt         DateTime       @updatedAt
+  id                   String         @id @default(cuid())
+  organizationId       String
+  opportunityId        String
+  clientAccountId      String
+  currentVersionId     String?
+  currentVersionNumber Int            @default(0)
+  title                String
+  sequenceNumber       Int
+  versionLabel         String?
+  status               ProposalStatus @default(DRAFT)
+  currency             String         @default("INR")
+  validUntil           DateTime?
+  commercialSummary    String?
+  assumptions          String?
+  inclusions           String?
+  exclusions           String?
+  paymentTerms         String?
+  deliveryTimeline     String?
+  internalNotes        String?
+  subtotalPaisa        Int            @default(0)
+  gstPaisa             Int            @default(0)
+  totalPaisa           Int            @default(0)
+  createdById          String
+  updatedById          String
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
 
   opportunity     Opportunity             @relation(fields: [organizationId, opportunityId], references: [organizationId, id], onDelete: Cascade, map: "Proposal_tenant_opportunityId_fkey")
+  clientAccount   LeadCustomer            @relation(fields: [organizationId, clientAccountId], references: [organizationId, id], onDelete: Cascade, map: "Proposal_tenant_clientAccountId_fkey")
+  currentVersion  ProposalVersion?        @relation("ProposalCurrentVersion", fields: [organizationId, currentVersionId], references: [organizationId, id], onDelete: Restrict)
+  versions        ProposalVersion[]       @relation("ProposalVersions")
   createdBy       User                    @relation("ProposalCreatedBy", fields: [createdById], references: [id])
   updatedBy       User                    @relation("ProposalUpdatedBy", fields: [updatedById], references: [id])
   lineItems       ProposalLineItem[]
@@ -1055,11 +1085,85 @@ model Proposal {
   organization    Organization?           @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
   @@unique([organizationId, id])
+  @@unique([organizationId, currentVersionId])
   @@unique([organizationId, opportunityId, sequenceNumber])
   @@index([organizationId])
   @@index([opportunityId])
   @@index([status])
   @@index([createdAt])
+}
+
+model ProposalVersion {
+  id                     String                @id @default(cuid())
+  organizationId         String
+  proposalId             String
+  clientAccountId        String
+  versionNumber          Int
+  supersedesVersionId    String?
+  status                 ProposalVersionStatus @default(DRAFT)
+  creationMode           ProposalCreationMode  @default(MANUAL)
+  title                  String
+  currency               String                @default("INR")
+  validUntil             DateTime?
+  commercialSummary      String?
+  assumptions            String?
+  inclusions             String?
+  exclusions             String?
+  paymentTerms           String?
+  deliveryTimeline       String?
+  internalNotes          String?
+  subtotalPaisa          Int                   @default(0)
+  taxPaisa               Int                   @default(0)
+  totalPaisa             Int                   @default(0)
+  templateVersionId      String?
+  questionnaireVersionId String?
+  modelVersion           String?
+  promptVersion          String?
+  sourceManifest         Json                  @default("{}")
+  sourceDigest           String
+  contentDigest          String
+  createdById            String
+  createdAt              DateTime              @default(now())
+
+  proposal           Proposal              @relation("ProposalVersions", fields: [organizationId, proposalId], references: [organizationId, id], onDelete: Cascade)
+  currentForProposal Proposal?             @relation("ProposalCurrentVersion")
+  clientAccount      LeadCustomer          @relation(fields: [organizationId, clientAccountId], references: [organizationId, id], onDelete: Cascade)
+  supersedesVersion  ProposalVersion?      @relation("ProposalVersionLineage", fields: [organizationId, supersedesVersionId], references: [organizationId, id], onDelete: Restrict)
+  successorVersions  ProposalVersion[]     @relation("ProposalVersionLineage")
+  createdBy          User                  @relation("ProposalVersionCreatedBy", fields: [createdById], references: [id])
+  lines              ProposalVersionLine[]
+  organization       Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, proposalId, versionNumber])
+  @@index([organizationId, clientAccountId, createdAt])
+  @@index([status])
+}
+
+model ProposalVersionLine {
+  id                      String   @id @default(cuid())
+  organizationId          String
+  versionId               String
+  productServiceId        String
+  productNameSnapshot     String?
+  productCategorySnapshot String?
+  description             String?
+  quantity                Int
+  unitPricePaisa          Int
+  taxRateBps              Int
+  taxOverrideReason       String?
+  lineSubtotalPaisa       Int
+  lineTaxPaisa            Int
+  lineTotalPaisa          Int
+  sortOrder               Int      @default(0)
+  createdAt               DateTime @default(now())
+
+  version      ProposalVersion @relation(fields: [organizationId, versionId], references: [organizationId, id], onDelete: Cascade)
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@index([organizationId, versionId, sortOrder])
+  @@index([organizationId, productServiceId])
 }
 
 model ProposalLineItem {
@@ -1164,8 +1268,8 @@ model Order {
 
   @@unique([organizationId, id])
   @@unique([organizationId, proposalId])
-  @@index([organizationId])
   @@unique([organizationId, orderNumber])
+  @@index([organizationId])
   @@index([status])
   @@index([ownerId])
   @@index([leadCustomerId])
@@ -1241,8 +1345,8 @@ model ProductionTemplate {
   organization Organization?             @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
   @@unique([organizationId, id])
-  @@index([organizationId])
   @@unique([organizationId, key])
+  @@index([organizationId])
   @@index([active, sortOrder])
 }
 
@@ -1389,8 +1493,8 @@ model Invoice {
   organization Organization?       @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
   @@unique([organizationId, id])
-  @@index([organizationId])
   @@unique([organizationId, invoiceNumber])
+  @@index([organizationId])
   @@index([orderId])
   @@index([status])
   @@index([dueDate])

@@ -53,7 +53,7 @@ test.beforeAll(async () => {
     id: ids.productB, organizationId: ids.orgB, name: "Tenant B Product", category: "Service", createdById: ids.userB, updatedById: ids.userB
   } });
   await db.proposal.upsert({ where: { id: ids.proposalB }, update: {}, create: {
-    id: ids.proposalB, organizationId: ids.orgB, opportunityId: ids.opportunityB, title: "Tenant B Proposal",
+    id: ids.proposalB, organizationId: ids.orgB, opportunityId: ids.opportunityB, clientAccountId: ids.leadB, title: "Tenant B Proposal",
     sequenceNumber: 1, status: "ACCEPTED", createdById: ids.userB, updatedById: ids.userB
   } });
   await db.proposalLineItem.upsert({ where: { id: ids.proposalLineB }, update: {}, create: {

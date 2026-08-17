@@ -100,7 +100,7 @@ describe("proposal template generation", () => {
     const createQuestionnaire = vi.fn().mockResolvedValue({ id: "questionnaire_v1" });
 
     const published = await publishTemplateBundle(
-      { id: "admin_1", role: "ADMIN" },
+      { id: "admin_1", organizationId: "org_test", role: "ADMIN" },
       "client_ara",
       "ARA Standard Proposal",
       template,

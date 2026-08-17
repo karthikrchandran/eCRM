@@ -803,6 +803,7 @@ async function main() {
     where: { id: "seed_proposal_acme_lms_accepted" },
     update: {
       organizationId: araOrganization.id,
+      clientAccountId: sampleLead.id,
       assumptions: "Client provides SME availability and branding inputs.",
       commercialSummary: "Accepted commercial proposal for the Northstar LMS modernization seed order flow.",
       currency: "INR",
@@ -823,6 +824,7 @@ async function main() {
     create: {
       id: "seed_proposal_acme_lms_accepted",
       organizationId: araOrganization.id,
+      clientAccountId: sampleLead.id,
       assumptions: "Client provides SME availability and branding inputs.",
       commercialSummary: "Accepted commercial proposal for the Northstar LMS modernization seed order flow.",
       currency: "INR",
@@ -878,6 +880,57 @@ async function main() {
         sortOrder: lineItem.sortOrder,
         unitPricePaisa: lineItem.unitPricePaisa
       }
+    });
+  }
+
+  if (!acceptedProposal.currentVersionId) {
+    const seedVersion = await prisma.proposalVersion.create({
+      data: {
+        id: "seed_proposal_version_acme_lms_accepted_v1",
+        organizationId: araOrganization.id,
+        proposalId: acceptedProposal.id,
+        clientAccountId: sampleLead.id,
+        versionNumber: 1,
+        status: "ACCEPTED",
+        creationMode: "MANUAL",
+        title: acceptedProposal.title,
+        currency: acceptedProposal.currency,
+        validUntil: acceptedProposal.validUntil,
+        commercialSummary: acceptedProposal.commercialSummary,
+        assumptions: acceptedProposal.assumptions,
+        inclusions: acceptedProposal.inclusions,
+        exclusions: acceptedProposal.exclusions,
+        paymentTerms: acceptedProposal.paymentTerms,
+        deliveryTimeline: acceptedProposal.deliveryTimeline,
+        internalNotes: acceptedProposal.internalNotes,
+        subtotalPaisa: acceptedProposal.subtotalPaisa,
+        taxPaisa: acceptedProposal.gstPaisa,
+        totalPaisa: acceptedProposal.totalPaisa,
+        sourceManifest: { seed: "ara-global-accepted-proposal-v1" },
+        sourceDigest: "a".repeat(64),
+        contentDigest: "b".repeat(64),
+        createdById: admin.id,
+        lines: {
+          create: demoProposalLineItems.map((lineItem) => ({
+            organizationId: araOrganization.id,
+            productServiceId: lineItem.productServiceId,
+            productNameSnapshot: lineItem.productNameSnapshot,
+            productCategorySnapshot: lineItem.productCategorySnapshot,
+            description: lineItem.description,
+            quantity: lineItem.quantity,
+            unitPricePaisa: lineItem.unitPricePaisa,
+            taxRateBps: lineItem.gstRateBps,
+            lineSubtotalPaisa: lineItem.lineSubtotalPaisa,
+            lineTaxPaisa: lineItem.lineGstPaisa,
+            lineTotalPaisa: lineItem.lineTotalPaisa,
+            sortOrder: lineItem.sortOrder
+          }))
+        }
+      }
+    });
+    await prisma.proposal.update({
+      where: { id: acceptedProposal.id },
+      data: { currentVersionId: seedVersion.id, currentVersionNumber: 1 }
     });
   }
 

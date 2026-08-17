@@ -162,7 +162,7 @@ integration("executable organization A/B adversarial matrix", () => {
         await transaction.pipelineStage.create({ data: { id: id("stage", tenantName), organizationId, name: `Matrix Stage ${tenantName}`, sortOrder: 1 } });
         await transaction.opportunity.create({ data: { id: id("opportunity", tenantName), organizationId, leadCustomerId: id("lead", tenantName), stageId: id("stage", tenantName), ownerId, title: marker, createdById: ownerId, updatedById: ownerId } });
         await transaction.productService.create({ data: { id: id("product", tenantName), organizationId, name: marker, code: "MATRIX-CODE", category: "Matrix", createdById: ownerId, updatedById: ownerId } });
-        await transaction.proposal.create({ data: { id: id("proposal", tenantName), organizationId, opportunityId: id("opportunity", tenantName), title: marker, sequenceNumber: 1, createdById: ownerId, updatedById: ownerId } });
+        await transaction.proposal.create({ data: { id: id("proposal", tenantName), organizationId, opportunityId: id("opportunity", tenantName), clientAccountId: id("lead", tenantName), title: marker, sequenceNumber: 1, createdById: ownerId, updatedById: ownerId } });
         await transaction.proposalLineItem.create({ data: { id: id("proposal_line", tenantName), organizationId, proposalId: id("proposal", tenantName), productServiceId: id("product", tenantName), productNameSnapshot: marker, productCategorySnapshot: "Matrix", quantity: 1, unitPricePaisa: 100, gstRateBps: 0, lineSubtotalPaisa: 100, lineGstPaisa: 0, lineTotalPaisa: 100 } });
         await transaction.order.create({ data: { id: id("order", tenantName), organizationId, orderNumber: "MATRIX-ORDER", proposalId: id("proposal", tenantName), opportunityId: id("opportunity", tenantName), leadCustomerId: id("lead", tenantName), ownerId, subtotalPaisa: 100, gstPaisa: 0, totalPaisa: 100, createdById: ownerId, updatedById: ownerId } });
         await transaction.invoice.create({ data: { id: id("invoice", tenantName), organizationId, orderId: id("order", tenantName), invoiceNumber: marker, invoiceDate: new Date("2026-01-01T00:00:00Z"), subtotalPaisa: 100, gstPaisa: 0, totalPaisa: 100, createdById: ownerId, updatedById: ownerId } });
@@ -263,7 +263,7 @@ integration("executable organization A/B adversarial matrix", () => {
           } });
           await transaction.proposal.create({ data: {
             id: duplicateProposalId, organizationId, opportunityId: id("opportunity", "B"), title: marker,
-            sequenceNumber: 2, status: "ACCEPTED", createdById: ownerId, updatedById: ownerId
+            clientAccountId: id("lead", "B"), sequenceNumber: 2, status: "ACCEPTED", createdById: ownerId, updatedById: ownerId
           } });
           await transaction.order.create({ data: {
             id: "matrix_duplicate_order_B", organizationId, orderNumber: "ORD-2026-0002", proposalId: duplicateProposalId,
@@ -426,6 +426,7 @@ integration("executable organization A/B adversarial matrix", () => {
             id: proposalTarget,
             organizationId: orgA,
             opportunityId: completeFixtureId("Opportunity", "A"),
+            clientAccountId: completeFixtureId("LeadCustomer", "A"),
             title: `Accepted ${scenario.model}`,
             sequenceNumber: 1000 + savepointIndex,
             status: "ACCEPTED",

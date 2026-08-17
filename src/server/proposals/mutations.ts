@@ -1,4 +1,5 @@
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
+import { createHash } from "node:crypto";
 import { isSafeExternalUrl } from "@/lib/safe-external-url";
 import { withOrganization } from "@/server/organizations/with-organization";
 import type { SupportedCurrency } from "@/server/settings/settings";
@@ -20,7 +21,11 @@ type ProposalCreateDb = {
     findUnique: (args: Prisma.BusinessSettingsFindUniqueArgs) => Promise<{ defaultCurrency: SupportedCurrency } | null>;
   };
   opportunity: {
-    findFirst: (args: Prisma.OpportunityFindFirstArgs) => Promise<{ id: string; stage: { kind: string; name: string } } | null>;
+    findFirst: (args: Prisma.OpportunityFindFirstArgs) => Promise<{
+      id: string;
+      leadCustomerId: string;
+      stage: { kind: string; name: string };
+    } | null>;
   };
   proposal: {
     count: (args: Prisma.ProposalCountArgs) => Promise<number>;
@@ -59,10 +64,154 @@ type ProposalStatusDb = {
   };
 };
 
+export type ProposalVersionSource = {
+  mode: "MANUAL" | "TEMPLATE" | "GENERATIVE";
+  sourceManifest: Record<string, unknown>;
+  sourceDigest: string;
+  templateVersionId?: string;
+  questionnaireVersionId?: string;
+  modelVersion?: string;
+  promptVersion?: string;
+};
+
+type CreatedProposalVersion = { id: string; versionNumber: number };
+
+type ProposalVersionDb = {
+  $queryRaw: (query: Prisma.Sql) => Promise<unknown>;
+  proposal: {
+    findFirst: (args: Prisma.ProposalFindFirstArgs) => Promise<{
+      id: string;
+      clientAccountId: string;
+      currentVersionId: string | null;
+      currentVersionNumber: number;
+      currency?: string;
+    } | null>;
+    update: (args: Prisma.ProposalUpdateArgs) => Promise<{ id: string }>;
+  };
+  proposalVersion: {
+    create: (args: Prisma.ProposalVersionCreateArgs) => Promise<CreatedProposalVersion>;
+  };
+};
+
+type ProposalVersionDatabase = {
+  $transaction: (operation: (transaction: ProposalVersionDb) => Promise<CreatedProposalVersion>) => Promise<CreatedProposalVersion>;
+};
+
+function stableDigest(value: unknown) {
+  return createHash("sha256").update(JSON.stringify(value)).digest("hex");
+}
+
+export async function createProposalVersion(
+  user: ProposalUser,
+  proposalId: string,
+  clientAccountId: string,
+  input: ProposalInput,
+  lines: ProposalLineInput[],
+  source: ProposalVersionSource,
+  database?: ProposalVersionDatabase
+): Promise<CreatedProposalVersion> {
+  assertCanWriteProposals(user);
+  if (lines.length < 1) throw new Error("Add at least one proposal line.");
+  if (!/^[a-f0-9]{64}$/i.test(source.sourceDigest)) throw new Error("Enter a valid source digest.");
+
+  const createInTransaction = async (transaction: ProposalVersionDb) => {
+    await transaction.$queryRaw(
+      Prisma.sql`SELECT id FROM "Proposal" WHERE "organizationId" = ${user.organizationId} AND id = ${proposalId} FOR UPDATE`
+    );
+    const proposal = await transaction.proposal.findFirst({
+      where: { id: proposalId, organizationId: user.organizationId, clientAccountId },
+      select: { id: true, clientAccountId: true, currentVersionId: true, currentVersionNumber: true }
+    });
+    if (!proposal) throw new Error("Proposal was not found for this client.");
+
+    const versionNumber = proposal.currentVersionNumber + 1;
+    const totals = calculateProposalTotals(lines);
+    const contentDigest = stableDigest({ input, lines, source, versionNumber });
+    const version = await transaction.proposalVersion.create({
+      data: {
+        organizationId: user.organizationId,
+        proposalId,
+        clientAccountId,
+        versionNumber,
+        supersedesVersionId: proposal.currentVersionId,
+        status: source.mode === "GENERATIVE" ? "DRAFT_REVIEW_REQUIRED" : "DRAFT",
+        creationMode: source.mode,
+        title: input.title,
+        validUntil: input.validUntil,
+        commercialSummary: input.commercialSummary,
+        assumptions: input.assumptions,
+        inclusions: input.inclusions,
+        exclusions: input.exclusions,
+        paymentTerms: input.paymentTerms,
+        deliveryTimeline: input.deliveryTimeline,
+        internalNotes: input.internalNotes,
+        subtotalPaisa: totals.subtotalPaisa,
+        taxPaisa: totals.gstPaisa,
+        totalPaisa: totals.totalPaisa,
+        templateVersionId: source.templateVersionId,
+        questionnaireVersionId: source.questionnaireVersionId,
+        modelVersion: source.modelVersion,
+        promptVersion: source.promptVersion,
+        sourceManifest: source.sourceManifest as Prisma.InputJsonValue,
+        sourceDigest: source.sourceDigest.toLowerCase(),
+        contentDigest,
+        createdById: user.id,
+        lines: {
+          create: lines.map((line, index) => ({
+            organizationId: user.organizationId,
+            productServiceId: line.productServiceId,
+            description: line.description,
+            quantity: line.quantity,
+            unitPricePaisa: line.unitPricePaisa,
+            taxRateBps: line.gstRateBps,
+            taxOverrideReason: line.gstOverrideReason,
+            lineSubtotalPaisa: totals.lines[index]!.lineSubtotalPaisa,
+            lineTaxPaisa: totals.lines[index]!.lineGstPaisa,
+            lineTotalPaisa: totals.lines[index]!.lineTotalPaisa,
+            sortOrder: index
+          }))
+        }
+      },
+      select: { id: true, versionNumber: true }
+    });
+
+    await transaction.proposal.update({
+      where: { organizationId_id: { organizationId: user.organizationId, id: proposalId } },
+      data: {
+        currentVersionId: version.id,
+        currentVersionNumber: versionNumber,
+        status: "DRAFT",
+        title: input.title,
+        versionLabel: `V${versionNumber}`,
+        validUntil: input.validUntil,
+        commercialSummary: input.commercialSummary,
+        assumptions: input.assumptions,
+        inclusions: input.inclusions,
+        exclusions: input.exclusions,
+        paymentTerms: input.paymentTerms,
+        deliveryTimeline: input.deliveryTimeline,
+        internalNotes: input.internalNotes,
+        subtotalPaisa: totals.subtotalPaisa,
+        gstPaisa: totals.gstPaisa,
+        totalPaisa: totals.totalPaisa,
+        updatedById: user.id
+      }
+    });
+    return version;
+  };
+
+  if (!database) {
+    return withOrganization(user.organizationId, (transaction) =>
+      createInTransaction(transaction as unknown as ProposalVersionDb)
+    );
+  }
+  return database.$transaction(createInTransaction);
+}
+
 async function assertOpenOpportunity(database: ProposalCreateDb, organizationId: string, opportunityId: string) {
   const opportunity = await database.opportunity.findFirst({
     where: { id: opportunityId, organizationId },
-    select: { id: true, stage: { select: { kind: true, name: true } } }
+    select: { id: true, leadCustomerId: true, stage: { select: { kind: true, name: true } } }
   });
 
   if (!opportunity) {
@@ -72,6 +221,7 @@ async function assertOpenOpportunity(database: ProposalCreateDb, organizationId:
   if (opportunity.stage.kind !== "OPEN") {
     throw new Error("Create proposals only for open opportunities.");
   }
+  return opportunity;
 }
 
 async function loadDefaultCurrency(database: ProposalCreateDb): Promise<SupportedCurrency> {
@@ -123,7 +273,7 @@ export async function createProposal(
     throw new Error("Add at least one proposal line.");
   }
 
-  await assertOpenOpportunity(database, user.organizationId, input.opportunityId);
+  const opportunity = await assertOpenOpportunity(database, user.organizationId, input.opportunityId);
   const currency = await loadDefaultCurrency(database);
   const productsById = await loadProductSnapshots(database, user.organizationId, lines, currency);
   const sequenceNumber = (await database.proposal.count({ where: { opportunityId: input.opportunityId, organizationId: user.organizationId } })) + 1;
@@ -132,6 +282,7 @@ export async function createProposal(
   return database.proposal.create({
     data: {
       organizationId: user.organizationId,
+      clientAccountId: opportunity.leadCustomerId,
       ...input,
       sequenceNumber,
       status: "DRAFT",

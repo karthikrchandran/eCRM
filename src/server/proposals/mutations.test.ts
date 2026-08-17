@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { addProposalPdfMetadata, changeProposalStatus, createProposal } from "./mutations";
+import { addProposalPdfMetadata, changeProposalStatus, createProposal, createProposalVersion } from "./mutations";
 
 const actor = { id: "user_sales", organizationId: "org_test", role: "SALES" as const };
 
@@ -27,6 +27,81 @@ const proposalLines = [
 ];
 
 describe("proposal mutations", () => {
+  it("creates a monotonic immutable successor version within the actor organization and client", async () => {
+    const versionCreate = vi.fn().mockResolvedValue({ id: "version_2", versionNumber: 2 });
+    const proposalUpdate = vi.fn().mockResolvedValue({ id: "proposal_1" });
+    const transaction = {
+      $queryRaw: vi.fn().mockResolvedValue([{ id: "proposal_1" }]),
+      proposal: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: "proposal_1",
+          clientAccountId: "client_ara",
+          currentVersionId: "version_1",
+          currentVersionNumber: 1
+        }),
+        update: proposalUpdate
+      },
+      proposalVersion: { create: versionCreate }
+    };
+
+    const created = await createProposalVersion(
+      actor,
+      "proposal_1",
+      "client_ara",
+      proposalInput,
+      proposalLines,
+      { mode: "MANUAL", sourceManifest: { priceBookVersion: "2026-08" }, sourceDigest: "a".repeat(64) },
+      { $transaction: async (operation) => operation(transaction) }
+    );
+
+    expect(created).toEqual({ id: "version_2", versionNumber: 2 });
+    expect(transaction.$queryRaw).toHaveBeenCalledOnce();
+    expect(transaction.proposal.findFirst).toHaveBeenCalledWith({
+      where: { id: "proposal_1", organizationId: "org_test", clientAccountId: "client_ara" },
+      select: { id: true, clientAccountId: true, currentVersionId: true, currentVersionNumber: true }
+    });
+    expect(versionCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        organizationId: "org_test",
+        proposalId: "proposal_1",
+        clientAccountId: "client_ara",
+        versionNumber: 2,
+        supersedesVersionId: "version_1",
+        sourceDigest: "a".repeat(64),
+        contentDigest: expect.stringMatching(/^[a-f0-9]{64}$/),
+        lines: { create: [expect.objectContaining({ organizationId: "org_test", productServiceId: "product_1" })] }
+      }),
+      select: { id: true, versionNumber: true }
+    });
+    expect(proposalUpdate).toHaveBeenCalledWith({
+      where: { organizationId_id: { organizationId: "org_test", id: "proposal_1" } },
+      data: expect.objectContaining({ currentVersionId: "version_2", currentVersionNumber: 2, updatedById: "user_sales" })
+    });
+  });
+
+  it("rejects cross-client or cross-organization proposal version substitution", async () => {
+    const versionCreate = vi.fn();
+    const transaction = {
+      $queryRaw: vi.fn().mockResolvedValue([]),
+      proposal: { findFirst: vi.fn().mockResolvedValue(null), update: vi.fn() },
+      proposalVersion: { create: versionCreate }
+    };
+
+    await expect(
+      createProposalVersion(
+        actor,
+        "proposal_other_tenant",
+        "client_other_tenant",
+        proposalInput,
+        proposalLines,
+        { mode: "MANUAL", sourceManifest: {}, sourceDigest: "b".repeat(64) },
+        { $transaction: async (operation) => operation(transaction) }
+      )
+    ).rejects.toThrow("Proposal was not found for this client.");
+    expect(transaction.$queryRaw).toHaveBeenCalledOnce();
+    expect(versionCreate).not.toHaveBeenCalled();
+  });
+
   it("creates a proposal for an OPEN opportunity with sequence number and line snapshots", async () => {
     const proposalCreate = vi.fn().mockResolvedValue({ id: "proposal_1" });
 
@@ -34,6 +109,7 @@ describe("proposal mutations", () => {
       opportunity: {
         findFirst: vi.fn().mockResolvedValue({
           id: "opp_1",
+          leadCustomerId: "client_acme",
           stage: { kind: "OPEN", name: "Qualified" }
         })
       },
@@ -93,6 +169,7 @@ describe("proposal mutations", () => {
         opportunity: {
           findFirst: vi.fn().mockResolvedValue({
             id: "opp_1",
+            leadCustomerId: "client_acme",
             stage: { kind: "OPEN", name: "Qualified" }
           })
         },
@@ -140,6 +217,7 @@ describe("proposal mutations", () => {
         opportunity: {
           findFirst: vi.fn().mockResolvedValue({
             id: "opp_1",
+            leadCustomerId: "client_acme",
             stage: { kind: "LOST", name: "Lost" }
           })
         },

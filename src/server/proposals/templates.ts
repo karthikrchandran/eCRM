@@ -64,11 +64,12 @@ export async function publishTemplateBundle(
   validatePublication(clientAccountId, template, questionnaireSchema);
   const publish = async (transaction: TemplatePublicationDb) => {
     const family = await transaction.proposalTemplate.create({
-      data: { clientAccountId, name: name.trim() }
+      data: { organizationId: user.organizationId, clientAccountId, name: name.trim() }
     });
     const publishedAt = new Date();
     const version = await transaction.proposalTemplateVersion.create({
       data: {
+        organizationId: user.organizationId,
         templateId: family.id,
         versionNumber: 1,
         status: "PUBLISHED",
@@ -87,6 +88,7 @@ export async function publishTemplateBundle(
     });
     const questionnaire = await transaction.proposalQuestionnaireVersion.create({
       data: {
+        organizationId: user.organizationId,
         templateVersionId: version.id,
         versionNumber: 1,
         jsonSchema: questionnaireSchema,
