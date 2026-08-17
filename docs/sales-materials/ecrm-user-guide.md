@@ -18,14 +18,14 @@ img { border: 1px solid #cbd5e1; border-radius: 5px; display: block; height: aut
 
 # eCRM User Guide
 
-<p class="updated">Updated July 29, 2026 · Sales workspace and Admin console</p>
+<p class="updated">Updated August 16, 2026 · Live Sales workspace and Admin Console Operations Cockpit captures</p>
 
 eCRM brings customer context, pipeline work, proposals, orders, production, finance, and performance into one operating workspace. This guide explains the pages available to the two current application roles:
 
 - **Sales** users plan and complete customer-facing work.
 - **Admin** users supervise company operations, reporting, finance, products, production configuration, and team performance.
 
-The screenshots in this guide were captured from the current local application with seeded demonstration data. Names, amounts, and credentials shown here are not production data.
+There is no separate **Manager** application role. The commercial workspace is labelled **Sales**; managers who need team controls, approvals, or configuration use the **Admin** role. The screenshots in this guide were captured from the current local application with seeded demonstration data on August 16, 2026. Names, amounts, and credentials shown here are not production data.
 
 ## 1. Sign in
 
@@ -56,19 +56,27 @@ Use **Sign out** in the page header when you finish.
 | Review your own results | Sales → **Performance** |
 | Review company orders, delivery, or receivables | Admin → **Orders**, **Production**, or **Finance** |
 | Review targets, incentives, or company reports | Admin → **Team performance**, **Incentives**, or **Reports** |
-| Maintain products, delivery stages, or workspace defaults | Admin → **Products**, **Production config**, or **Settings** |
+| Maintain products or delivery stages | Admin → **Products** or **Production config** |
+
+### Current role views
+
+The Sales workspace uses a horizontal navigation bar for day-to-day commercial work. The Admin Console uses a left navigation panel, with operating controls first and configuration grouped under **Setup**.
+
+![Sales workspace dashboard](assets/screenshots/manager-view.png)
+
+![Admin Console dashboard](assets/screenshots/admin-view.png)
 
 <h1 class="role-break">Sales Workspace</h1>
 
 Sales users see a horizontal navigation bar. Their pages focus on daily work, customer records, pipeline movement, and personal performance.
 
-## 3. Sales dashboard
+## 3. Sales Operations Cockpit
 
-The **Dashboard** is the quickest company-wide summary. It shows current customer follow-ups, open pipeline, booked orders, collections, receivables, and production work.
+The shared **Operations Cockpit** is the quickest company-wide summary. It groups live work into **Operations health**, **Commercial and cash**, and **Operating detail**. Health cards and chart panels link directly to pipeline, orders, finance, production, and My Day follow-up work.
 
 ![Sales dashboard](assets/screenshots/sales-dashboard.png)
 
-Use the links inside each dashboard section to open the related pipeline or report detail.
+Use the links inside each cockpit section to open the related pipeline, order, finance, production, or follow-up detail. Trend and aging panels show an explicit history fallback until enough period data exists.
 
 ## 4. My Day
 
@@ -160,9 +168,9 @@ Apply available filters before interpreting totals, especially when comparing a 
 
 Admin users see a left navigation panel and a dedicated **Admin Console** header. The primary section contains company operations; the **Setup** section contains configuration pages.
 
-## 9. Admin dashboard
+## 9. Admin Operations Cockpit
 
-The Admin **Dashboard** uses the same live company records as the Sales dashboard, but the console keeps operating controls and configuration within reach.
+The Admin **Operations Cockpit** uses the same live company records as the Sales view, with the Admin Console navigation keeping operating controls, reports, and configuration within reach. Review the health cards first, then use the linked commercial and operating detail panels for drill-through.
 
 ![Admin dashboard](assets/screenshots/admin-dashboard.png)
 
@@ -254,18 +262,16 @@ Use it to manage stage order, expected duration, required status, active status,
 
 ### Settings
 
-**Settings** contains workspace-level defaults.
+**Settings** is available only in a deployed customer-cell runtime. It contains the cell identity, included modules, business defaults, local users, and eligible integration-delivery controls. It is intentionally unavailable in the shared local demo runtime used for these screenshots.
 
-![Admin settings page](assets/screenshots/admin-settings.png)
-
-Only administrators can change these values. Confirm the business impact of currency or other shared defaults before updating them.
+Only administrators can change these values. Confirm the business impact of currency, included modules, local-user access, or other shared defaults before updating them.
 
 ## 14. Role and data rules
 
-- eCRM currently supports one company workspace rather than multiple tenants.
-- Sales and Admin users work from shared company records.
+- A deployed customer cell has its own data, users, settings, branding, and integration binding. The cell is selected by deployment configuration, not by a browser control.
+- Within a customer cell, Sales and Admin users work from shared company records.
 - Ownership indicates responsibility and supports filtering, targets, and incentives; it is not a private-record boundary between salespeople.
-- Admin-only setup pages are not shown in the Sales navigation.
+- The current application roles are **Sales** and **Admin**. Admin-only setup and team-control pages are not shown in Sales navigation.
 - SignalLoop or other connected applications exchange approved shared records through APIs; they must not write directly to the eCRM database.
 - Browser voice transcription depends on browser support. Uploaded audio can be stored even when automatic transcript text is unavailable.
 
