@@ -5,9 +5,11 @@
 # Playwright accessibility-snapshot dumps captured while debugging
 after-login-ecrm.yaml
 browser-baseline-ecrm.yaml
+customer360-ecrm.yaml
 ecrm-ai-recovery.yaml
 ecrm-ara-recovery.yaml
 ecrm-login.yaml
+route-*-ecrm.yaml
 signalloop-*.yaml
 *.err
 graphify-out/
