@@ -55,10 +55,12 @@ The seeded demo identities are:
 
 | Tenant | Admin | Sales |
 | --- | --- | --- |
-| ARA Global | `admin@ara-global.demo.local` | `sales@ara-global.demo.local` |
-| AI Consulting | `admin@ai-consulting.demo.local` | `sales@ai-consulting.demo.local` |
+| ARA Global | `karthik@ara-global.demo.local` | `yamini@ara-global.demo.local`, `padma@ara-global.demo.local`, `atchaya@ara-global.demo.local` |
+| AI Consulting | `karthik@ai-consulting.demo.local` | `aishwarya@ai-consulting.demo.local` |
 
-For a new user, supply `TENANT_SEED_ADMIN_PASSWORD` and/or `TENANT_SEED_SALES_PASSWORD` only through the deployment secret store or process environment. There are no source-controlled fixture passwords. Rerunning the command is additive/upsert-only: existing users keep their current password hash, role, and active state, and do not require password environment variables. The command verifies the persisted `CellControlProjection.cellId` matches the selected fixture before writing any configuration or users. Add subsequent users from that tenant's **Admin Settings** page; tenant users remain local to that cell and are never inserted into the platform database.
+The two Karthik accounts are intentionally different users in different customer-cell databases. They have different email addresses, credentials, `CELL_ID`, `CELL_KEY`, and `DATABASE_URL` values.
+
+For a new user, supply `TENANT_SEED_ADMIN_PASSWORD` and/or `TENANT_SEED_SALES_PASSWORD` only through the deployment secret store or process environment. There are no source-controlled fixture passwords. Rerunning the command is additive/upsert-only: existing users keep their current password hash, role, and active state, and do not require password environment variables. For an empty approved demo cell database, the command initializes the matching `CellControlProjection` as `ACTIVE`; if a conflicting projection already exists, it fails before writing configuration or users. Add subsequent users from that tenant's **Admin Settings** page; tenant users remain local to that cell and are never inserted into the platform database.
 
 ## External activation boundary
 
