@@ -1,0 +1,269 @@
+<!doctype html><html><head><meta charset='utf-8'><title>eCRM Pitch Deck</title><style>
+  @page { size: 13.333in 7.5in; margin: 0; }
+
+  :root {
+    --navy: #061f52;
+    --ink: #08275d;
+    --brand: #175ec5;
+    --blue: #2f7df4;
+    --cyan: #22c7ee;
+    --mint: #36d399;
+    --amber: #f2b84b;
+    --violet: #8b72ff;
+    --coral: #ff7a6f;
+    --slate: #42526b;
+    --muted: #697892;
+    --line: #ccdaec;
+    --pale: #edf5ff;
+    --paper: #ffffff;
+    --canvas: #f4f8fd;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body {
+    margin: 0;
+    font-family: Aptos, 'Segoe UI', Arial, sans-serif;
+    color: var(--ink);
+    background: var(--canvas);
+  }
+  h1, h2, h3, p, figure { margin: 0; }
+  p { line-height: 1.48; }
+  .brand-lockup { display: inline-flex; align-items: center; gap: 9px; font-weight: 800; letter-spacing: -.02em; }
+  .brand-dot { width: 12px; height: 12px; border-radius: 4px; background: linear-gradient(135deg, var(--cyan), var(--violet)); box-shadow: 0 0 0 5px rgb(34 199 238 / .12); }
+  .eyebrow { color: var(--blue); font-size: 11px; font-weight: 800; letter-spacing: .13em; text-transform: uppercase; }
+  .muted { color: var(--muted); }
+  .small { font-size: 11px; }
+  .tag-row { display: flex; flex-wrap: wrap; gap: 7px; }
+  .tag { display: inline-flex; align-items: center; border: 1px solid #b9ccec; border-radius: 999px; padding: 6px 11px; color: var(--ink); background: rgb(255 255 255 / .84); font-size: 11px; font-weight: 750; }
+  .card { border: 1px solid var(--line); border-radius: 14px; background: rgb(255 255 255 / .94); box-shadow: 0 16px 38px rgb(8 39 93 / .09); }
+  .grid-surface {
+    background-color: #f7fbff;
+    background-image: linear-gradient(rgb(23 94 197 / .045) 1px, transparent 1px), linear-gradient(90deg, rgb(23 94 197 / .045) 1px, transparent 1px);
+    background-size: 28px 28px;
+  }
+  .screen-frame { position: relative; padding: 9px; border: 1px solid #bfd0e8; border-radius: 14px; background: white; box-shadow: 0 20px 44px rgb(8 39 93 / .15); }
+  .screen-top { display: flex; align-items: center; gap: 5px; height: 16px; padding-left: 2px; }
+  .screen-top i { width: 6px; height: 6px; border-radius: 50%; background: #d2ddec; }
+  .screen-top i:first-child { background: #ff7a6f; }
+  .screen-top i:nth-child(2) { background: #f2b84b; }
+  .screen-top i:nth-child(3) { background: #36d399; }
+  .screen { display: block; width: 100%; border-radius: 8px; object-fit: cover; object-position: top; background: white; }
+  .screen-caption { display: flex; justify-content: space-between; gap: 10px; margin-top: 7px; color: var(--muted); font-size: 9px; }
+  .screen-caption b { color: var(--ink); }
+  .lifecycle { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; position: relative; }
+  .lifecycle::before { content: ''; position: absolute; left: 5%; right: 5%; top: 18px; height: 2px; background: linear-gradient(90deg, var(--cyan), var(--blue), var(--violet), var(--amber), var(--coral), var(--mint), var(--cyan)); opacity: .7; }
+  .life-step { position: relative; z-index: 1; text-align: center; }
+  .life-num { display: grid; place-items: center; width: 36px; height: 36px; margin: 0 auto 8px; border-radius: 12px; color: var(--ink); font-size: 10px; font-weight: 900; background: white; border: 2px solid var(--accent); box-shadow: 0 8px 20px rgb(8 39 93 / .12); }
+  .life-step b { display: block; font-size: 12px; color: var(--ink); }
+  .life-step span { display: block; margin-top: 3px; color: var(--muted); font-size: 9px; line-height: 1.25; }
+  .module-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .module-card { position: relative; min-height: 112px; padding: 14px; overflow: hidden; }
+  .module-card::after { content: ''; position: absolute; inset: auto -28px -35px auto; width: 88px; height: 88px; border-radius: 50%; background: var(--accent); opacity: .09; }
+  .glyph { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 11px; color: var(--ink); background: color-mix(in srgb, var(--accent) 16%, white); border: 1px solid color-mix(in srgb, var(--accent) 45%, white); font-size: 9px; font-weight: 900; letter-spacing: .05em; }
+  .module-card h3 { margin-top: 10px; font-size: 15px; }
+  .module-card p { margin-top: 5px; font-size: 10.5px; color: var(--slate); line-height: 1.35; }
+  .outcome-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .outcome { padding: 14px; border-top: 4px solid var(--accent); }
+  .outcome b { display: block; font-size: 15px; color: var(--ink); }
+  .outcome p { margin-top: 6px; font-size: 11px; color: var(--slate); }
+  .path-list { display: grid; gap: 8px; }
+  .path-item { display: grid; grid-template-columns: 34px 1fr; gap: 10px; align-items: center; padding: 10px; border: 1px solid var(--line); border-radius: 12px; background: white; }
+  .path-item .dot { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 11px; color: white; background: var(--accent); font-size: 11px; font-weight: 900; }
+  .path-item b { font-size: 12px; }
+  .path-item p { margin-top: 2px; color: var(--muted); font-size: 9.5px; }
+  .metric-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .metric { padding: 13px; border: 1px solid rgb(255 255 255 / .24); border-radius: 14px; background: rgb(255 255 255 / .105); backdrop-filter: blur(12px); }
+  .metric strong { display: block; color: white; font-size: 31px; line-height: 1; }
+  .metric span { display: block; margin-top: 7px; color: #dceaff; font-size: 10.5px; line-height: 1.25; }
+  .role-map { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .role { padding: 14px; }
+  .role h3 { display: flex; align-items: center; gap: 8px; font-size: 15px; }
+  .role h3::before { content: ''; width: 10px; height: 10px; border-radius: 3px; background: var(--accent); }
+  .role ul { margin: 8px 0 0; padding-left: 17px; }
+  .role li { margin: 4px 0; font-size: 10.5px; color: var(--slate); }
+  .quote-block { position: relative; padding: 20px; color: var(--ink); font-size: 22px; line-height: 1.25; overflow: hidden; }
+  .quote-block::before { content: '“'; position: absolute; right: 14px; top: -25px; color: var(--pale); font-size: 150px; font-family: Georgia, serif; z-index: 0; }
+  .quote-block > * { position: relative; z-index: 1; }
+  .compare { display: grid; grid-template-columns: 1fr 40px 1fr; gap: 12px; align-items: stretch; }
+  .compare-panel { padding: 16px; }
+  .compare-panel h3 { font-size: 17px; }
+  .compare-panel ul { margin: 10px 0 0; padding-left: 18px; }
+  .compare-panel li { margin: 7px 0; color: var(--slate); font-size: 11px; }
+  .compare-arrow { display: grid; place-items: center; color: var(--blue); font-size: 29px; font-weight: 900; }
+  table { width: 100%; border-collapse: collapse; font-size: 10px; }
+  th { color: var(--ink); text-align: left; background: #e8f2ff; }
+  th, td { border-bottom: 1px solid #d7e2f0; padding: 7px 8px; vertical-align: top; }
+  .callout { border-left: 4px solid var(--accent, var(--blue)); border-radius: 0 10px 10px 0; background: color-mix(in srgb, var(--accent, var(--blue)) 8%, white); padding: 10px 12px; color: var(--slate); }
+  .callout b { color: var(--ink); }
+
+  body { background: white; }
+  .slide { width: 13.333in; height: 7.5in; padding: .44in .56in; page-break-after: always; position: relative; overflow: hidden; background: linear-gradient(180deg, #f8fbff 0%, #fff 58%, #eef5fc 100%); }
+  .slide:last-child { page-break-after: auto; }
+  .slide.dark { color: white; background: linear-gradient(135deg, #051b47, #0a3577 62%, #244c7a); }
+  .slide h1 { font-size: 42px; line-height: 1.03; letter-spacing: -.035em; }
+  .slide h2 { color: var(--ink); font-size: 28px; line-height: 1.1; letter-spacing: -.025em; }
+  .slide.dark h1, .slide.dark h2 { color: white; }
+  .slide-lead { margin-top: 14px; max-width: 7in; color: #dfeeff; font-size: 17px; }
+  .slide-kicker { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .footer { position: absolute; left: .56in; right: .56in; bottom: .2in; display: flex; justify-content: space-between; color: #74849a; font-size: 9px; }
+  .dark .footer { color: #a9bfdd; }
+  .deck-cover { padding: 0; }
+  .cover-art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .cover-shade { position: absolute; inset: 0; background: linear-gradient(90deg, #041a45 0%, #07275e 38%, rgb(6 31 82 / .55) 63%, rgb(6 31 82 / .08) 100%); }
+  .cover-copy { position: absolute; left: .58in; top: .48in; width: 6.2in; color: white; }
+  .cover-copy h1 { margin-top: .58in; max-width: 5.8in; font-size: 48px; }
+  .cover-metrics { position: absolute; left: .58in; right: .58in; bottom: .55in; }
+  .deck-grid { display: grid; grid-template-columns: 1.08fr .92fr; gap: .3in; align-items: center; margin-top: .25in; }
+  .deck-grid.reverse { grid-template-columns: .92fr 1.08fr; }
+  .hero-panel { position: relative; height: 4.65in; border-radius: 20px; overflow: hidden; box-shadow: 0 24px 50px rgb(8 39 93 / .18); }
+  .hero-panel img { width: 100%; height: 100%; object-fit: cover; }
+  .hero-panel::after { content: ''; position: absolute; inset: 0; border: 1px solid rgb(255 255 255 / .8); border-radius: inherit; pointer-events: none; }
+  .deck-screen .screen { height: 4.55in; }
+  .deck-lifecycle-screen .screen { height: 3.62in; }
+  .deck-screen.tall .screen { height: 4.82in; }
+  .deck-lifecycle { margin-top: .32in; padding: 18px 16px 14px; }
+  .deck-modules { margin-top: .27in; }
+  .proof-stack { display: grid; gap: 9px; }
+  .proof { display: grid; grid-template-columns: 7px 1fr; gap: 12px; padding: 13px; }
+  .proof i { border-radius: 999px; background: var(--accent); }
+  .proof b { display: block; font-size: 14px; }
+  .proof p { margin-top: 4px; color: var(--slate); font-size: 10.5px; }
+  .ring-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 11px; margin-top: .24in; }
+  .ring-card { padding: 12px; text-align: center; }
+  .ring { display: grid; place-items: center; width: 74px; height: 74px; margin: 0 auto 9px; border-radius: 50%; background: conic-gradient(var(--accent) var(--sweep), #deebf7 0); position: relative; }
+  .ring::after { content: ''; position: absolute; width: 56px; height: 56px; border-radius: 50%; background: white; }
+  .ring b { position: relative; z-index: 1; font-size: 17px; }
+  .ring-card span { font-size: 10px; color: var(--muted); }
+  .closing-art { position: absolute; right: -1in; top: 0; width: 8.2in; height: 7.5in; object-fit: cover; opacity: .52; }
+  .closing-shade { position: absolute; inset: 0; background: linear-gradient(90deg, #041b49 0%, #07265b 48%, rgb(7 38 91 / .45) 82%, transparent); }
+</style></head><body>
+    <section class='slide dark deck-cover' id='deck-cover'>
+      <img class='cover-art' src='assets/graphics/ecrm-lead-to-cash-hero-v2.png' alt='Abstract connected lead-to-cash workflow'>
+      <div class='cover-shade'></div>
+      <div class='cover-copy'>
+        <div class='brand-lockup' style='color:#fff'><span class='brand-dot'></span><span>ARA Global eCRM</span></div>
+        <p class='eyebrow' style='color:#a8dfff;margin-top:.42in'>Connected lead-to-cash operations</p>
+        <h1>Run sales, delivery, and cash flow as one operating rhythm.</h1>
+        <p class='slide-lead'>eCRM connects daily selling, commercial control, order handoff, production progress, finance visibility, and management reporting in one focused workspace.</p>
+      </div>
+      <div class='cover-metrics metric-strip'>
+        <div class='metric'><strong>8</strong><span>Connected operational modules</span></div>
+        <div class='metric'><strong>2</strong><span>Simple roles: Admin and Sales</span></div>
+        <div class='metric'><strong>5</strong><span>Seeded service categories</span></div>
+        <div class='metric'><strong>4</strong><span>Production workflow templates</span></div>
+      </div>
+    </section>
+    <section class='slide grid-surface' id='deck-problem'>
+      <div class='slide-kicker'><div><p class='eyebrow'>The operating problem</p><h2>Fragmented handoffs hide work, delay cash, and blur ownership.</h2></div><div class='brand-lockup' style='color:var(--ink)'><span class='brand-dot'></span><span>ARA Global eCRM</span></div></div>
+      <div class='deck-grid'>
+        <div class='hero-panel'><img src='assets/graphics/ecrm-connected-work-v2.png' alt='Fragmented work becoming a connected system'></div>
+        <div class='compare' style='grid-template-columns:1fr'>
+          <div class='compare-panel card' style='border-top:4px solid var(--coral)'><h3>When work is scattered</h3><ul><li>Lead context and follow-ups drift apart</li><li>Proposal history becomes manual</li><li>Booked terms are re-keyed for delivery</li><li>Collections and margin appear too late</li></ul></div>
+          <div class='compare-arrow' style='transform:rotate(90deg)'>→</div>
+          <div class='compare-panel card' style='border-top:4px solid var(--mint)'><h3>When the lifecycle is connected</h3><ul><li>One customer context follows every pursuit</li><li>Commercial snapshots survive handoff</li><li>Production work stays stage-visible</li><li>Management sees pipeline to cash</li></ul></div>
+        </div>
+      </div>
+      <div class='footer'><span>ARA Global eCRM · Product overview</span><span>02</span></div>
+    </section>
+    <section class='slide grid-surface' id='deck-lifecycle'>
+      <div class='slide-kicker'><div><p class='eyebrow'>The operating model</p><h2>One lifecycle. Seven visible control points.</h2></div><div class='brand-lockup' style='color:var(--ink)'><span class='brand-dot'></span><span>ARA Global eCRM</span></div></div>
+      <div class='deck-lifecycle card'><div class='lifecycle '>
+    <div class='life-step' style='--accent:#22c7ee'><span class='life-num'>01</span><b>Lead</b><span>Customer context</span></div>
+
+    <div class='life-step' style='--accent:#4f8df7'><span class='life-num'>02</span><b>Opportunity</b><span>Pursuit and value</span></div>
+
+    <div class='life-step' style='--accent:#8b72ff'><span class='life-num'>03</span><b>Proposal</b><span>Terms and GST</span></div>
+
+    <div class='life-step' style='--accent:#f2b84b'><span class='life-num'>04</span><b>Order</b><span>Booked snapshot</span></div>
+
+    <div class='life-step' style='--accent:#ff7a6f'><span class='life-num'>05</span><b>Production</b><span>Delivery stages</span></div>
+
+    <div class='life-step' style='--accent:#36d399'><span class='life-num'>06</span><b>Finance</b><span>Margin and cash</span></div>
+
+    <div class='life-step' style='--accent:#22c7ee'><span class='life-num'>07</span><b>Reports</b><span>Operating view</span></div>
+  </div></div>
+      <div style='margin-top:.2in'><figure class='screen-frame deck-screen deck-lifecycle-screen'><div class='screen-top'><i></i><i></i><i></i></div><img class='screen' src='assets/screenshots/dashboard.png' alt='Management dashboard'><figcaption class='screen-caption'><b>Management dashboard</b><span>Live local seed/demo data</span></figcaption></figure></div>
+      <div class='footer'><span>ARA Global eCRM · Product overview</span><span>03</span></div>
+    </section>
+    <section class='slide' id='deck-capabilities'>
+      <div class='slide-kicker'><div><p class='eyebrow'>Capability system</p><h2>Eight modules built around the same operating context.</h2></div><div class='brand-lockup' style='color:var(--ink)'><span class='brand-dot'></span><span>ARA Global eCRM</span></div></div>
+      <div class='deck-modules'><div class='module-grid'>
+    <div class='module-card card' style='--accent:#22c7ee'><span class='glyph'>CRM</span><h3>CRM core</h3><p>Leads/customers, branches, contacts, activities, ownership, reassignment, and CSV import.</p></div>
+
+    <div class='module-card card' style='--accent:#4f8df7'><span class='glyph'>DAY</span><h3>My Day</h3><p>Daily sales planning, voice notes, transcripts, suggested actions, insights, and end-of-day review.</p></div>
+
+    <div class='module-card card' style='--accent:#8b72ff'><span class='glyph'>PIPE</span><h3>Pipeline</h3><p>Configurable opportunity stages, owner splits, target tracking, and follow-up driven views.</p></div>
+
+    <div class='module-card card' style='--accent:#f2b84b'><span class='glyph'>PROP</span><h3>Proposals</h3><p>Commercial summaries, GST line totals, statuses, and external document or Canva links.</p></div>
+
+    <div class='module-card card' style='--accent:#ff7a6f'><span class='glyph'>ORD</span><h3>Orders</h3><p>Accepted-proposal conversion with PO metadata and preserved commercial snapshots.</p></div>
+
+    <div class='module-card card' style='--accent:#e96b90'><span class='glyph'>PROD</span><h3>Production</h3><p>Order-line work items, templates, stage updates, notes, owners, and due dates.</p></div>
+
+    <div class='module-card card' style='--accent:#36d399'><span class='glyph'>FIN</span><h3>Finance</h3><p>Invoice, payment, cost, gross-margin, incentive, split, and approval records.</p></div>
+
+    <div class='module-card card' style='--accent:#22c7ee'><span class='glyph'>RPT</span><h3>Reports</h3><p>Read-only views for billings, pipeline, collections, production, clients, and products.</p></div>
+  </div></div>
+      <div class='callout' style='--accent:var(--cyan);margin-top:13px'><b>Design principle:</b> ownership supports responsibility, filtering, targets, and incentives; it does not hide company records from other Sales users.</div>
+      <div class='footer'><span>ARA Global eCRM · Product overview</span><span>04</span></div>
+    </section>
+    <section class='slide grid-surface' id='deck-my-day'>
+      <div class='slide-kicker'><div><p class='eyebrow'>Daily sales execution</p><h2>Turn a day of activity into deliberate, visible work.</h2></div><div class='brand-lockup' style='color:var(--ink)'><span class='brand-dot'></span><span>ARA Global eCRM</span></div></div>
+      <div class='deck-grid reverse'>
+        <div class='path-list'><div class='path-item'><span class='dot' style='--accent:#2f7df4'>01</span><div><b>Plan</b><p>Prioritize today, upcoming, overdue, and follow-up work.</p></div></div><div class='path-item'><span class='dot' style='--accent:#8b72ff'>02</span><div><b>Capture</b><p>Record tasks, call notes, voice notes, and linked account context.</p></div></div><div class='path-item'><span class='dot' style='--accent:#f2b84b'>03</span><div><b>Interpret</b><p>Review transcript-driven suggestions and attention signals.</p></div></div><div class='path-item'><span class='dot' style='--accent:#36d399'>04</span><div><b>Close the loop</b><p>Complete, carry forward, or intentionally re-plan unfinished work.</p></div></div></div>
+        <figure class='screen-frame deck-screen tall'><div class='screen-top'><i></i><i></i><i></i></div><img class='screen' src='assets/screenshots/my-day.png' alt='My Day workspace'><figcaption class='screen-caption'><b>My Day workspace</b><span>Personal planning without silent CRM mutations</span></figcaption></figure>
+      </div>
+      <div class='footer'><span>ARA Global eCRM · Product overview</span><span>05</span></div>
+    </section>
+    <section class='slide' id='deck-commercial'>
+      <div class='slide-kicker'><div><p class='eyebrow'>Commercial control</p><h2>Keep the record structured—from pursuit to booked order.</h2></div><div class='brand-lockup' style='color:var(--ink)'><span class='brand-dot'></span><span>ARA Global eCRM</span></div></div>
+      <div class='deck-grid'>
+        <figure class='screen-frame deck-screen tall'><div class='screen-top'><i></i><i></i><i></i></div><img class='screen' src='assets/screenshots/proposal-detail.png' alt='Proposal detail'><figcaption class='screen-caption'><b>Proposal detail</b><span>Terms, lines, GST, status, and document links</span></figcaption></figure>
+        <div class='proof-stack'><div class='proof card' style='--accent:#8b72ff'><i></i><div><b>Proposal</b><p>Capture assumptions, inclusions, exclusions, payment terms, timeline, and catalog-backed line items.</p></div></div><div class='proof card' style='--accent:#f2b84b'><i></i><div><b>Acceptance</b><p>Use explicit status actions so the commercial state remains visible and auditable.</p></div></div><div class='proof card' style='--accent:#36d399'><i></i><div><b>Order</b><p>Book once from the accepted proposal and preserve totals, customer, owner, lines, and PO context.</p></div></div></div>
+      </div>
+      <div class='footer'><span>ARA Global eCRM · Product overview</span><span>06</span></div>
+    </section>
+    <section class='slide grid-surface' id='deck-production'>
+      <div class='slide-kicker'><div><p class='eyebrow'>Delivery control</p><h2>Make post-sale progress as visible as the pipeline.</h2></div><div class='brand-lockup' style='color:var(--ink)'><span class='brand-dot'></span><span>ARA Global eCRM</span></div></div>
+      <div class='deck-grid reverse'>
+        <div class='proof-stack'><div class='proof card' style='--accent:#22c7ee'><i></i><div><b>Template-driven start</b><p>Products and services map to reusable production templates.</p></div></div><div class='proof card' style='--accent:#8b72ff'><i></i><div><b>Stage-level ownership</b><p>Each work item carries status, assignment, due date, notes, and completion data.</p></div></div><div class='proof card' style='--accent:#ff7a6f'><i></i><div><b>Order-line traceability</b><p>Delivery work remains connected to its customer, order, and commercial snapshot.</p></div></div><div class='proof card' style='--accent:#36d399'><i></i><div><b>Management scan</b><p>The board highlights what is active, complete, skipped, blocked, assigned, or due.</p></div></div></div>
+        <figure class='screen-frame deck-screen tall'><div class='screen-top'><i></i><i></i><i></i></div><img class='screen' src='assets/screenshots/production.png' alt='Production board'><figcaption class='screen-caption'><b>Production board</b><span>Work organized by booked order and service line</span></figcaption></figure>
+      </div>
+      <div class='footer'><span>ARA Global eCRM · Product overview</span><span>07</span></div>
+    </section>
+    <section class='slide' id='deck-model'>
+      <div class='slide-kicker'><div><p class='eyebrow'>Commercial foundation</p><h2>Seeded for INR, GST, service delivery, and margin visibility.</h2></div><div class='brand-lockup' style='color:var(--ink)'><span class='brand-dot'></span><span>ARA Global eCRM</span></div></div>
+      <div class='card' style='padding:14px;margin-top:.19in'><table><thead><tr><th>Product/service</th><th>GST</th><th>Template</th><th>Default workflow</th></tr></thead><tbody><tr><td>eLearning</td><td>18%</td><td>eLearning production</td><td>Script → storyboard → development → voiceover → review → delivery</td></tr><tr><td>Video shoot</td><td>18%</td><td>Video shoot production</td><td>Script → pre-production → shoot → edit → review → delivery</td></tr><tr><td>VR/AR</td><td>18%</td><td>VR/AR production</td><td>Discovery → experience design → development → testing → review → delivery</td></tr><tr><td>Animation</td><td>18%</td><td>Animation production</td><td>Script → storyboard → modeling → animation → voiceover → review → delivery</td></tr><tr><td>Other service</td><td>18%</td><td>No default template</td><td>Flexible service category for unmapped work</td></tr></tbody></table></div>
+      <div class='ring-grid'>
+        <div class='ring-card card' style='--accent:var(--blue);--sweep:100%'><div class='ring'><b>INR</b></div><span>Integer-paise commercial snapshots</span></div>
+        <div class='ring-card card' style='--accent:var(--violet);--sweep:65%'><div class='ring'><b>18%</b></div><span>Default GST stored as basis points</span></div>
+        <div class='ring-card card' style='--accent:var(--mint);--sweep:45%'><div class='ring'><b>5%</b></div><span>Default incentive on gross margin</span></div>
+        <div class='ring-card card' style='--accent:var(--amber);--sweep:82%'><div class='ring'><b>All</b></div><span>Company-wide operating visibility</span></div>
+      </div>
+      <div class='footer'><span>ARA Global eCRM · Product overview</span><span>08</span></div>
+    </section>
+    <section class='slide grid-surface' id='deck-reporting'>
+      <div class='slide-kicker'><div><p class='eyebrow'>Management visibility</p><h2>Read the business from demand through delivery and cash.</h2></div><div class='brand-lockup' style='color:var(--ink)'><span class='brand-dot'></span><span>ARA Global eCRM</span></div></div>
+      <div class='deck-grid'>
+        <figure class='screen-frame deck-screen tall'><div class='screen-top'><i></i><i></i><i></i></div><img class='screen' src='assets/screenshots/reports.png' alt='Reports workspace'><figcaption class='screen-caption'><b>Reports workspace</b><span>Read-only company-wide operating view</span></figcaption></figure>
+        <div class='proof-stack'><div class='proof card' style='--accent:#22c7ee'><i></i><div><b>Demand</b><p>Open opportunities, pipeline value, top clients, and product interest.</p></div></div><div class='proof card' style='--accent:#8b72ff'><i></i><div><b>Revenue</b><p>Booked value excluding GST, recent orders, billings, and collections.</p></div></div><div class='proof card' style='--accent:#ff7a6f'><i></i><div><b>Execution</b><p>Production pending, upcoming follow-ups, and delivery context.</p></div></div><div class='proof card' style='--accent:#36d399'><i></i><div><b>Economics</b><p>Order-level invoice, payment, cost, gross-margin, and incentive records.</p></div></div></div>
+      </div>
+      <div class='footer'><span>ARA Global eCRM · Product overview</span><span>09</span></div>
+    </section>
+    <section class='slide dark' id='deck-close'>
+      <img class='closing-art' src='assets/graphics/ecrm-lead-to-cash-hero-v2.png' alt='Connected lead-to-cash workflow'>
+      <div class='closing-shade'></div>
+      <div style='position:relative;z-index:2;width:7.1in'>
+        <div class='brand-lockup' style='color:#fff'><span class='brand-dot'></span><span>ARA Global eCRM</span></div>
+        <p class='eyebrow' style='color:#a8dfff;margin-top:.62in'>Focused operating discipline</p>
+        <h1 style='margin-top:12px'>Give a growing sales and delivery team one place to run the work.</h1>
+        <p class='slide-lead'>A practical fit for small B2B sales teams, service-delivery businesses, and founder-led operations that need connected execution without enterprise CRM weight.</p>
+        <div style='margin-top:.38in'><div class='outcome-grid'>
+    <div class='outcome card' style='--accent:var(--cyan)'><b>Cleaner execution</b><p>Daily work, calls, notes, follow-ups, and account context stay connected.</p></div>
+    <div class='outcome card' style='--accent:var(--amber)'><b>Controlled handoffs</b><p>Accepted commercial terms carry into orders before delivery work begins.</p></div>
+    <div class='outcome card' style='--accent:var(--mint)'><b>Visible economics</b><p>Billings, collections, costs, margin, incentives, and progress share one view.</p></div>
+  </div></div>
+      </div>
+      <div class='footer'><span>ARA Global eCRM · Product overview</span><span>10</span></div>
+    </section>
+  </body></html>

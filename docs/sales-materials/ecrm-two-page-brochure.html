@@ -1,0 +1,225 @@
+<!doctype html><html><head><meta charset='utf-8'><title>eCRM Two-Page Brochure</title><style>
+  @page { size: A4; margin: 0; }
+
+  :root {
+    --navy: #061f52;
+    --ink: #08275d;
+    --brand: #175ec5;
+    --blue: #2f7df4;
+    --cyan: #22c7ee;
+    --mint: #36d399;
+    --amber: #f2b84b;
+    --violet: #8b72ff;
+    --coral: #ff7a6f;
+    --slate: #42526b;
+    --muted: #697892;
+    --line: #ccdaec;
+    --pale: #edf5ff;
+    --paper: #ffffff;
+    --canvas: #f4f8fd;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body {
+    margin: 0;
+    font-family: Aptos, 'Segoe UI', Arial, sans-serif;
+    color: var(--ink);
+    background: var(--canvas);
+  }
+  h1, h2, h3, p, figure { margin: 0; }
+  p { line-height: 1.48; }
+  .brand-lockup { display: inline-flex; align-items: center; gap: 9px; font-weight: 800; letter-spacing: -.02em; }
+  .brand-dot { width: 12px; height: 12px; border-radius: 4px; background: linear-gradient(135deg, var(--cyan), var(--violet)); box-shadow: 0 0 0 5px rgb(34 199 238 / .12); }
+  .eyebrow { color: var(--blue); font-size: 11px; font-weight: 800; letter-spacing: .13em; text-transform: uppercase; }
+  .muted { color: var(--muted); }
+  .small { font-size: 11px; }
+  .tag-row { display: flex; flex-wrap: wrap; gap: 7px; }
+  .tag { display: inline-flex; align-items: center; border: 1px solid #b9ccec; border-radius: 999px; padding: 6px 11px; color: var(--ink); background: rgb(255 255 255 / .84); font-size: 11px; font-weight: 750; }
+  .card { border: 1px solid var(--line); border-radius: 14px; background: rgb(255 255 255 / .94); box-shadow: 0 16px 38px rgb(8 39 93 / .09); }
+  .grid-surface {
+    background-color: #f7fbff;
+    background-image: linear-gradient(rgb(23 94 197 / .045) 1px, transparent 1px), linear-gradient(90deg, rgb(23 94 197 / .045) 1px, transparent 1px);
+    background-size: 28px 28px;
+  }
+  .screen-frame { position: relative; padding: 9px; border: 1px solid #bfd0e8; border-radius: 14px; background: white; box-shadow: 0 20px 44px rgb(8 39 93 / .15); }
+  .screen-top { display: flex; align-items: center; gap: 5px; height: 16px; padding-left: 2px; }
+  .screen-top i { width: 6px; height: 6px; border-radius: 50%; background: #d2ddec; }
+  .screen-top i:first-child { background: #ff7a6f; }
+  .screen-top i:nth-child(2) { background: #f2b84b; }
+  .screen-top i:nth-child(3) { background: #36d399; }
+  .screen { display: block; width: 100%; border-radius: 8px; object-fit: cover; object-position: top; background: white; }
+  .screen-caption { display: flex; justify-content: space-between; gap: 10px; margin-top: 7px; color: var(--muted); font-size: 9px; }
+  .screen-caption b { color: var(--ink); }
+  .lifecycle { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; position: relative; }
+  .lifecycle::before { content: ''; position: absolute; left: 5%; right: 5%; top: 18px; height: 2px; background: linear-gradient(90deg, var(--cyan), var(--blue), var(--violet), var(--amber), var(--coral), var(--mint), var(--cyan)); opacity: .7; }
+  .life-step { position: relative; z-index: 1; text-align: center; }
+  .life-num { display: grid; place-items: center; width: 36px; height: 36px; margin: 0 auto 8px; border-radius: 12px; color: var(--ink); font-size: 10px; font-weight: 900; background: white; border: 2px solid var(--accent); box-shadow: 0 8px 20px rgb(8 39 93 / .12); }
+  .life-step b { display: block; font-size: 12px; color: var(--ink); }
+  .life-step span { display: block; margin-top: 3px; color: var(--muted); font-size: 9px; line-height: 1.25; }
+  .module-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .module-card { position: relative; min-height: 112px; padding: 14px; overflow: hidden; }
+  .module-card::after { content: ''; position: absolute; inset: auto -28px -35px auto; width: 88px; height: 88px; border-radius: 50%; background: var(--accent); opacity: .09; }
+  .glyph { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 11px; color: var(--ink); background: color-mix(in srgb, var(--accent) 16%, white); border: 1px solid color-mix(in srgb, var(--accent) 45%, white); font-size: 9px; font-weight: 900; letter-spacing: .05em; }
+  .module-card h3 { margin-top: 10px; font-size: 15px; }
+  .module-card p { margin-top: 5px; font-size: 10.5px; color: var(--slate); line-height: 1.35; }
+  .outcome-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .outcome { padding: 14px; border-top: 4px solid var(--accent); }
+  .outcome b { display: block; font-size: 15px; color: var(--ink); }
+  .outcome p { margin-top: 6px; font-size: 11px; color: var(--slate); }
+  .path-list { display: grid; gap: 8px; }
+  .path-item { display: grid; grid-template-columns: 34px 1fr; gap: 10px; align-items: center; padding: 10px; border: 1px solid var(--line); border-radius: 12px; background: white; }
+  .path-item .dot { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 11px; color: white; background: var(--accent); font-size: 11px; font-weight: 900; }
+  .path-item b { font-size: 12px; }
+  .path-item p { margin-top: 2px; color: var(--muted); font-size: 9.5px; }
+  .metric-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .metric { padding: 13px; border: 1px solid rgb(255 255 255 / .24); border-radius: 14px; background: rgb(255 255 255 / .105); backdrop-filter: blur(12px); }
+  .metric strong { display: block; color: white; font-size: 31px; line-height: 1; }
+  .metric span { display: block; margin-top: 7px; color: #dceaff; font-size: 10.5px; line-height: 1.25; }
+  .role-map { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .role { padding: 14px; }
+  .role h3 { display: flex; align-items: center; gap: 8px; font-size: 15px; }
+  .role h3::before { content: ''; width: 10px; height: 10px; border-radius: 3px; background: var(--accent); }
+  .role ul { margin: 8px 0 0; padding-left: 17px; }
+  .role li { margin: 4px 0; font-size: 10.5px; color: var(--slate); }
+  .quote-block { position: relative; padding: 20px; color: var(--ink); font-size: 22px; line-height: 1.25; overflow: hidden; }
+  .quote-block::before { content: '“'; position: absolute; right: 14px; top: -25px; color: var(--pale); font-size: 150px; font-family: Georgia, serif; z-index: 0; }
+  .quote-block > * { position: relative; z-index: 1; }
+  .compare { display: grid; grid-template-columns: 1fr 40px 1fr; gap: 12px; align-items: stretch; }
+  .compare-panel { padding: 16px; }
+  .compare-panel h3 { font-size: 17px; }
+  .compare-panel ul { margin: 10px 0 0; padding-left: 18px; }
+  .compare-panel li { margin: 7px 0; color: var(--slate); font-size: 11px; }
+  .compare-arrow { display: grid; place-items: center; color: var(--blue); font-size: 29px; font-weight: 900; }
+  table { width: 100%; border-collapse: collapse; font-size: 10px; }
+  th { color: var(--ink); text-align: left; background: #e8f2ff; }
+  th, td { border-bottom: 1px solid #d7e2f0; padding: 7px 8px; vertical-align: top; }
+  .callout { border-left: 4px solid var(--accent, var(--blue)); border-radius: 0 10px 10px 0; background: color-mix(in srgb, var(--accent, var(--blue)) 8%, white); padding: 10px 12px; color: var(--slate); }
+  .callout b { color: var(--ink); }
+
+  body { background: white; }
+  .page { width: 210mm; height: 297mm; overflow: hidden; padding: 12mm 14mm; page-break-after: always; position: relative; background: linear-gradient(180deg, #f8fbff, white 62%); }
+  .page:last-child { page-break-after: auto; }
+  .page h1 { color: var(--ink); font-size: 29px; line-height: 1.04; letter-spacing: -.035em; }
+  .page h2 { color: var(--ink); font-size: 18px; margin-bottom: 6px; }
+  .page h3 { color: var(--ink); font-size: 12px; }
+  .brochure-hero { display: grid; grid-template-columns: .9fr 1.1fr; gap: 8mm; align-items: center; }
+  .brochure-art { height: 79mm; border-radius: 18px; overflow: hidden; box-shadow: 0 18px 36px rgb(8 39 93 / .16); }
+  .brochure-art img { width: 100%; height: 100%; object-fit: cover; }
+  .brochure-lead { margin-top: 4mm; color: var(--slate); font-size: 11.5px; }
+  .brochure-section { margin-top: 7mm; }
+  .page .lifecycle { gap: 4px; }
+  .page .life-num { width: 29px; height: 29px; border-radius: 9px; }
+  .page .lifecycle::before { top: 14px; }
+  .page .life-step b { font-size: 9px; }
+  .page .life-step span { font-size: 7px; }
+  .page .outcome { min-height: 55px; padding: 9px; }
+  .page .outcome b { font-size: 12px; }
+  .page .outcome p { font-size: 8.5px; line-height: 1.3; }
+  .screen-montage { display: grid; grid-template-columns: 1.15fr .85fr; gap: 6px; }
+  .screen-montage .screen-frame:first-child { grid-row: span 2; }
+  .screen-montage .screen-frame:first-child .screen { height: 65mm; }
+  .screen-montage .screen-frame:not(:first-child) .screen { height: 29mm; }
+  .page .module-grid { grid-template-columns: repeat(4, 1fr); gap: 5px; }
+  .page .module-card { min-height: 58px; padding: 8px; border-radius: 10px; }
+  .page .glyph { width: 26px; height: 26px; border-radius: 8px; font-size: 7px; }
+  .page .module-card h3 { margin-top: 6px; font-size: 10px; }
+  .page .module-card p { display: none; }
+  .page .role { padding: 10px; }
+  .page .role h3 { font-size: 12px; }
+  .page .role li { font-size: 8.5px; margin: 3px 0; }
+  .brochure-transform { height: 58mm; border-radius: 16px; overflow: hidden; }
+  .brochure-transform img { width: 100%; height: 100%; object-fit: cover; }
+  .fit-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .fit { padding: 9px; min-height: 58px; }
+  .fit b { font-size: 11px; }
+  .fit p { margin-top: 4px; color: var(--slate); font-size: 8.5px; line-height: 1.3; }
+  .fineprint { color: var(--muted); font-size: 7.5px; line-height: 1.35; }
+</style></head><body>
+    <section class='page grid-surface' id='brochure-page-1'>
+      <div class='brochure-hero'>
+        <div>
+          <div class='brand-lockup' style='color:var(--ink)'><span class='brand-dot'></span><span>ARA Global eCRM</span></div>
+          <p class='eyebrow' style='margin-top:9mm'>Connected lead-to-cash operations</p>
+          <h1 style='margin-top:3mm'>Run sales, delivery, and cash flow in one focused workspace.</h1>
+          <p class='brochure-lead'>eCRM connects daily selling, opportunities, proposals, orders, production progress, finance visibility, and management reporting without enterprise CRM weight.</p>
+          <div class='tag-row' style='margin-top:6mm'><span class='tag'>Admin + Sales</span><span class='tag'>INR + GST ready</span><span class='tag'>Service delivery</span></div>
+        </div>
+        <div class='brochure-art'><img src='assets/graphics/ecrm-lead-to-cash-hero-v2.png' alt='Connected lead-to-cash workflow'></div>
+      </div>
+      <div class='brochure-section'>
+        <h2>One lifecycle, seven control points</h2>
+        <div class='card' style='padding:9px'><div class='lifecycle compact'>
+    <div class='life-step' style='--accent:#22c7ee'><span class='life-num'>01</span><b>Lead</b><span>Customer context</span></div>
+
+    <div class='life-step' style='--accent:#4f8df7'><span class='life-num'>02</span><b>Opportunity</b><span>Pursuit and value</span></div>
+
+    <div class='life-step' style='--accent:#8b72ff'><span class='life-num'>03</span><b>Proposal</b><span>Terms and GST</span></div>
+
+    <div class='life-step' style='--accent:#f2b84b'><span class='life-num'>04</span><b>Order</b><span>Booked snapshot</span></div>
+
+    <div class='life-step' style='--accent:#ff7a6f'><span class='life-num'>05</span><b>Production</b><span>Delivery stages</span></div>
+
+    <div class='life-step' style='--accent:#36d399'><span class='life-num'>06</span><b>Finance</b><span>Margin and cash</span></div>
+
+    <div class='life-step' style='--accent:#22c7ee'><span class='life-num'>07</span><b>Reports</b><span>Operating view</span></div>
+  </div></div>
+      </div>
+      <div class='brochure-section'>
+        <h2>What changes operationally</h2>
+        <div class='outcome-grid'>
+    <div class='outcome card' style='--accent:var(--cyan)'><b>Cleaner execution</b><p>Daily work, calls, notes, follow-ups, and account context stay connected.</p></div>
+    <div class='outcome card' style='--accent:var(--amber)'><b>Controlled handoffs</b><p>Accepted commercial terms carry into orders before delivery work begins.</p></div>
+    <div class='outcome card' style='--accent:var(--mint)'><b>Visible economics</b><p>Billings, collections, costs, margin, incentives, and progress share one view.</p></div>
+  </div>
+      </div>
+      <div class='brochure-section'>
+        <h2>Product proof</h2>
+        <div class='screen-montage'>
+          <figure class='screen-frame '><div class='screen-top'><i></i><i></i><i></i></div><img class='screen' src='assets/screenshots/dashboard.png' alt='Dashboard'><figcaption class='screen-caption'><b>Dashboard</b><span>Pipeline to cash</span></figcaption></figure>
+          <figure class='screen-frame '><div class='screen-top'><i></i><i></i><i></i></div><img class='screen' src='assets/screenshots/my-day.png' alt='My Day'><figcaption class='screen-caption'><b>My Day</b><span>Daily execution</span></figcaption></figure>
+          <figure class='screen-frame '><div class='screen-top'><i></i><i></i><i></i></div><img class='screen' src='assets/screenshots/production.png' alt='Production'><figcaption class='screen-caption'><b>Production</b><span>Delivery status</span></figcaption></figure>
+        </div>
+      </div>
+      <p class='fineprint' style='position:absolute;left:14mm;right:14mm;bottom:8mm'>Product claims and screens are generated from the current local eCRM checkout. Sample records shown are local seed/demo data.</p>
+    </section>
+    <section class='page' id='brochure-page-2'>
+      <div style='display:flex;justify-content:space-between;align-items:center'><div class='brand-lockup' style='color:var(--ink)'><span class='brand-dot'></span><span>ARA Global eCRM</span></div><span class='eyebrow'>Capability proof</span></div>
+      <div class='brochure-section brochure-transform'><img src='assets/graphics/ecrm-connected-work-v2.png' alt='Scattered work becoming a connected operating system'></div>
+      <div class='brochure-section'>
+        <h2>Eight connected capabilities</h2>
+        <div class='module-grid'>
+    <div class='module-card card' style='--accent:#22c7ee'><span class='glyph'>CRM</span><h3>CRM core</h3><p>Leads/customers, branches, contacts, activities, ownership, reassignment, and CSV import.</p></div>
+
+    <div class='module-card card' style='--accent:#4f8df7'><span class='glyph'>DAY</span><h3>My Day</h3><p>Daily sales planning, voice notes, transcripts, suggested actions, insights, and end-of-day review.</p></div>
+
+    <div class='module-card card' style='--accent:#8b72ff'><span class='glyph'>PIPE</span><h3>Pipeline</h3><p>Configurable opportunity stages, owner splits, target tracking, and follow-up driven views.</p></div>
+
+    <div class='module-card card' style='--accent:#f2b84b'><span class='glyph'>PROP</span><h3>Proposals</h3><p>Commercial summaries, GST line totals, statuses, and external document or Canva links.</p></div>
+
+    <div class='module-card card' style='--accent:#ff7a6f'><span class='glyph'>ORD</span><h3>Orders</h3><p>Accepted-proposal conversion with PO metadata and preserved commercial snapshots.</p></div>
+
+    <div class='module-card card' style='--accent:#e96b90'><span class='glyph'>PROD</span><h3>Production</h3><p>Order-line work items, templates, stage updates, notes, owners, and due dates.</p></div>
+
+    <div class='module-card card' style='--accent:#36d399'><span class='glyph'>FIN</span><h3>Finance</h3><p>Invoice, payment, cost, gross-margin, incentive, split, and approval records.</p></div>
+
+    <div class='module-card card' style='--accent:#22c7ee'><span class='glyph'>RPT</span><h3>Reports</h3><p>Read-only views for billings, pipeline, collections, production, clients, and products.</p></div>
+  </div>
+      </div>
+      <div class='brochure-section' style='display:grid;grid-template-columns:.9fr 1.1fr;gap:7mm'>
+        <div><h2>Role fit</h2><div class='role-map'>
+    <div class='role card' style='--accent:var(--violet)'><h3>Admin</h3><ul><li>All commercial and operational routes</li><li>Catalog and production configuration</li><li>Finance records and incentive controls</li><li>Company-wide reporting</li></ul></div>
+    <div class='role card' style='--accent:var(--cyan)'><h3>Sales</h3><ul><li>Company-wide CRM and pipeline context</li><li>My Day planning and voice notes</li><li>Opportunities, proposals, and orders</li><li>Production, payment, and report visibility</li></ul></div>
+  </div></div>
+        <div><h2>Included catalog defaults</h2><table><thead><tr><th>Product/service</th><th>GST</th><th>Template</th><th>Default workflow</th></tr></thead><tbody><tr><td>eLearning</td><td>18%</td><td>eLearning production</td><td>Script → storyboard → development → voiceover → review → delivery</td></tr><tr><td>Video shoot</td><td>18%</td><td>Video shoot production</td><td>Script → pre-production → shoot → edit → review → delivery</td></tr><tr><td>VR/AR</td><td>18%</td><td>VR/AR production</td><td>Discovery → experience design → development → testing → review → delivery</td></tr><tr><td>Animation</td><td>18%</td><td>Animation production</td><td>Script → storyboard → modeling → animation → voiceover → review → delivery</td></tr><tr><td>Other service</td><td>18%</td><td>No default template</td><td>Flexible service category for unmapped work</td></tr></tbody></table></div>
+      </div>
+      <div class='brochure-section'>
+        <h2>Good fit for</h2>
+        <div class='fit-grid'>
+          <div class='fit card'><b>Small B2B sales teams</b><p>Shared account visibility, clear ownership, follow-up discipline, and a focused operating model.</p></div>
+          <div class='fit card'><b>Service-delivery businesses</b><p>Commercial lines map to delivery templates so post-sale handoff becomes repeatable.</p></div>
+          <div class='fit card'><b>Founder-led operations</b><p>Sales, delivery, finance visibility, configuration, and reporting stay in one place.</p></div>
+        </div>
+      </div>
+      <div class='callout fineprint' style='--accent:var(--amber);position:absolute;left:14mm;right:14mm;bottom:8mm'><b>Current MVP boundaries:</b> proposal documents remain external; invoice PDF generation, native mobile apps, multi-tenant signup, email sync, and external accounting integrations are outside the current scope.</div>
+    </section>
+  </body></html>

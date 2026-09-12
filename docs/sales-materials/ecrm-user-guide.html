@@ -1,0 +1,297 @@
+<!doctype html><html><head><meta charset='utf-8'><title>eCRM User Guide</title><style>
+  @page { size: A4; margin: 11mm 12mm; }
+
+  :root {
+    --navy: #061f52;
+    --ink: #08275d;
+    --brand: #175ec5;
+    --blue: #2f7df4;
+    --cyan: #22c7ee;
+    --mint: #36d399;
+    --amber: #f2b84b;
+    --violet: #8b72ff;
+    --coral: #ff7a6f;
+    --slate: #42526b;
+    --muted: #697892;
+    --line: #ccdaec;
+    --pale: #edf5ff;
+    --paper: #ffffff;
+    --canvas: #f4f8fd;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body {
+    margin: 0;
+    font-family: Aptos, 'Segoe UI', Arial, sans-serif;
+    color: var(--ink);
+    background: var(--canvas);
+  }
+  h1, h2, h3, p, figure { margin: 0; }
+  p { line-height: 1.48; }
+  .brand-lockup { display: inline-flex; align-items: center; gap: 9px; font-weight: 800; letter-spacing: -.02em; }
+  .brand-dot { width: 12px; height: 12px; border-radius: 4px; background: linear-gradient(135deg, var(--cyan), var(--violet)); box-shadow: 0 0 0 5px rgb(34 199 238 / .12); }
+  .eyebrow { color: var(--blue); font-size: 11px; font-weight: 800; letter-spacing: .13em; text-transform: uppercase; }
+  .muted { color: var(--muted); }
+  .small { font-size: 11px; }
+  .tag-row { display: flex; flex-wrap: wrap; gap: 7px; }
+  .tag { display: inline-flex; align-items: center; border: 1px solid #b9ccec; border-radius: 999px; padding: 6px 11px; color: var(--ink); background: rgb(255 255 255 / .84); font-size: 11px; font-weight: 750; }
+  .card { border: 1px solid var(--line); border-radius: 14px; background: rgb(255 255 255 / .94); box-shadow: 0 16px 38px rgb(8 39 93 / .09); }
+  .grid-surface {
+    background-color: #f7fbff;
+    background-image: linear-gradient(rgb(23 94 197 / .045) 1px, transparent 1px), linear-gradient(90deg, rgb(23 94 197 / .045) 1px, transparent 1px);
+    background-size: 28px 28px;
+  }
+  .screen-frame { position: relative; padding: 9px; border: 1px solid #bfd0e8; border-radius: 14px; background: white; box-shadow: 0 20px 44px rgb(8 39 93 / .15); }
+  .screen-top { display: flex; align-items: center; gap: 5px; height: 16px; padding-left: 2px; }
+  .screen-top i { width: 6px; height: 6px; border-radius: 50%; background: #d2ddec; }
+  .screen-top i:first-child { background: #ff7a6f; }
+  .screen-top i:nth-child(2) { background: #f2b84b; }
+  .screen-top i:nth-child(3) { background: #36d399; }
+  .screen { display: block; width: 100%; border-radius: 8px; object-fit: cover; object-position: top; background: white; }
+  .screen-caption { display: flex; justify-content: space-between; gap: 10px; margin-top: 7px; color: var(--muted); font-size: 9px; }
+  .screen-caption b { color: var(--ink); }
+  .lifecycle { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; position: relative; }
+  .lifecycle::before { content: ''; position: absolute; left: 5%; right: 5%; top: 18px; height: 2px; background: linear-gradient(90deg, var(--cyan), var(--blue), var(--violet), var(--amber), var(--coral), var(--mint), var(--cyan)); opacity: .7; }
+  .life-step { position: relative; z-index: 1; text-align: center; }
+  .life-num { display: grid; place-items: center; width: 36px; height: 36px; margin: 0 auto 8px; border-radius: 12px; color: var(--ink); font-size: 10px; font-weight: 900; background: white; border: 2px solid var(--accent); box-shadow: 0 8px 20px rgb(8 39 93 / .12); }
+  .life-step b { display: block; font-size: 12px; color: var(--ink); }
+  .life-step span { display: block; margin-top: 3px; color: var(--muted); font-size: 9px; line-height: 1.25; }
+  .module-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .module-card { position: relative; min-height: 112px; padding: 14px; overflow: hidden; }
+  .module-card::after { content: ''; position: absolute; inset: auto -28px -35px auto; width: 88px; height: 88px; border-radius: 50%; background: var(--accent); opacity: .09; }
+  .glyph { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 11px; color: var(--ink); background: color-mix(in srgb, var(--accent) 16%, white); border: 1px solid color-mix(in srgb, var(--accent) 45%, white); font-size: 9px; font-weight: 900; letter-spacing: .05em; }
+  .module-card h3 { margin-top: 10px; font-size: 15px; }
+  .module-card p { margin-top: 5px; font-size: 10.5px; color: var(--slate); line-height: 1.35; }
+  .outcome-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .outcome { padding: 14px; border-top: 4px solid var(--accent); }
+  .outcome b { display: block; font-size: 15px; color: var(--ink); }
+  .outcome p { margin-top: 6px; font-size: 11px; color: var(--slate); }
+  .path-list { display: grid; gap: 8px; }
+  .path-item { display: grid; grid-template-columns: 34px 1fr; gap: 10px; align-items: center; padding: 10px; border: 1px solid var(--line); border-radius: 12px; background: white; }
+  .path-item .dot { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 11px; color: white; background: var(--accent); font-size: 11px; font-weight: 900; }
+  .path-item b { font-size: 12px; }
+  .path-item p { margin-top: 2px; color: var(--muted); font-size: 9.5px; }
+  .metric-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .metric { padding: 13px; border: 1px solid rgb(255 255 255 / .24); border-radius: 14px; background: rgb(255 255 255 / .105); backdrop-filter: blur(12px); }
+  .metric strong { display: block; color: white; font-size: 31px; line-height: 1; }
+  .metric span { display: block; margin-top: 7px; color: #dceaff; font-size: 10.5px; line-height: 1.25; }
+  .role-map { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .role { padding: 14px; }
+  .role h3 { display: flex; align-items: center; gap: 8px; font-size: 15px; }
+  .role h3::before { content: ''; width: 10px; height: 10px; border-radius: 3px; background: var(--accent); }
+  .role ul { margin: 8px 0 0; padding-left: 17px; }
+  .role li { margin: 4px 0; font-size: 10.5px; color: var(--slate); }
+  .quote-block { position: relative; padding: 20px; color: var(--ink); font-size: 22px; line-height: 1.25; overflow: hidden; }
+  .quote-block::before { content: '“'; position: absolute; right: 14px; top: -25px; color: var(--pale); font-size: 150px; font-family: Georgia, serif; z-index: 0; }
+  .quote-block > * { position: relative; z-index: 1; }
+  .compare { display: grid; grid-template-columns: 1fr 40px 1fr; gap: 12px; align-items: stretch; }
+  .compare-panel { padding: 16px; }
+  .compare-panel h3 { font-size: 17px; }
+  .compare-panel ul { margin: 10px 0 0; padding-left: 18px; }
+  .compare-panel li { margin: 7px 0; color: var(--slate); font-size: 11px; }
+  .compare-arrow { display: grid; place-items: center; color: var(--blue); font-size: 29px; font-weight: 900; }
+  table { width: 100%; border-collapse: collapse; font-size: 10px; }
+  th { color: var(--ink); text-align: left; background: #e8f2ff; }
+  th, td { border-bottom: 1px solid #d7e2f0; padding: 7px 8px; vertical-align: top; }
+  .callout { border-left: 4px solid var(--accent, var(--blue)); border-radius: 0 10px 10px 0; background: color-mix(in srgb, var(--accent, var(--blue)) 8%, white); padding: 10px 12px; color: var(--slate); }
+  .callout b { color: var(--ink); }
+
+  body { background: white; color: #102a53; font-size: 10.5px; }
+  .guide-page { width: 186mm; page-break-after: always; min-height: 275mm; position: relative; }
+  .guide-page:last-child { page-break-after: auto; }
+  .guide-cover { min-height: 275mm; overflow: hidden; border-radius: 0; color: white; background: var(--navy); }
+  .guide-cover-art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .guide-cover-shade { position: absolute; inset: 0; background: linear-gradient(180deg, rgb(4 25 67 / .72), rgb(4 25 67 / .96) 70%); }
+  .guide-cover-copy { position: absolute; inset: 18mm 14mm; display: flex; flex-direction: column; justify-content: space-between; }
+  .guide-cover h1 { margin-top: 16mm; color: white; font-size: 39px; line-height: 1.04; letter-spacing: -.035em; max-width: 145mm; }
+  .guide-cover .lead { margin-top: 7mm; max-width: 145mm; color: #dfedff; font-size: 14px; }
+  .guide-cover .lifecycle::before { background: linear-gradient(90deg, var(--cyan), var(--blue), var(--violet), var(--amber), var(--coral), var(--mint), var(--cyan)); }
+  .guide-cover .life-num { background: rgb(255 255 255 / .12); color: white; }
+  .guide-cover .life-step b { color: white; }
+  .guide-cover .life-step span { color: #bfd3ef; }
+  .chapter-head { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; padding-bottom: 9px; border-bottom: 1px solid #dce6f2; }
+  .chapter-num { display: grid; place-items: center; width: 38px; height: 38px; flex: 0 0 38px; border-radius: 12px; color: white; background: linear-gradient(135deg, var(--brand), var(--violet)); font-size: 12px; font-weight: 900; }
+  .guide-page h1 { color: var(--ink); font-size: 25px; line-height: 1.08; letter-spacing: -.025em; }
+  .guide-page.guide-cover h1 { color: white; }
+  .guide-page h2 { color: var(--ink); font-size: 17px; margin: 13px 0 6px; }
+  .guide-page h3 { color: var(--ink); font-size: 12.5px; margin: 0 0 5px; }
+  .guide-page ol, .guide-page ul { margin: 5px 0 0; padding-left: 17px; }
+  .guide-page li { margin: 3.5px 0; line-height: 1.4; }
+  .guide-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+  .howto { padding: 10px; border-top: 3px solid var(--accent, var(--blue)); }
+  .howto .mini-label { color: var(--accent, var(--blue)); font-size: 8px; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; }
+  .guide-shot { margin-top: 8px; }
+  .guide-shot .screen { max-height: 92mm; object-fit: contain; }
+  .guide-shot.short .screen { max-height: 66mm; }
+  .guide-shot.tall .screen { max-height: 120mm; }
+  .guide-shot .screen-caption { font-size: 8px; }
+  .contents-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10mm; }
+  .contents-card { display: grid; grid-template-columns: 30px 1fr; gap: 9px; align-items: center; padding: 10px; }
+  .contents-card .chapter-num { width: 30px; height: 30px; border-radius: 9px; font-size: 9px; }
+  .contents-card b { display: block; font-size: 12px; }
+  .contents-card span { display: block; margin-top: 2px; color: var(--muted); font-size: 9px; }
+  .route-band { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
+  .route { padding: 5px 8px; border-radius: 8px; color: var(--ink); background: #edf5ff; border: 1px solid #ccddf3; font-size: 8.5px; font-weight: 750; }
+  .guide-footer { position: absolute; left: 0; right: 0; bottom: 0; display: flex; justify-content: space-between; border-top: 1px solid #dce6f2; padding-top: 5px; color: var(--muted); font-size: 7.5px; }
+</style></head><body>
+    <section class='guide-page guide-cover' id='guide-cover'>
+      <img class='guide-cover-art' src='assets/graphics/ecrm-lead-to-cash-hero-v2.png' alt='Connected lead-to-cash workflow'>
+      <div class='guide-cover-shade'></div>
+      <div class='guide-cover-copy'>
+        <div>
+          <div class='brand-lockup' style='color:#fff'><span class='brand-dot'></span><span>ARA Global eCRM</span></div>
+          <p class='eyebrow' style='color:#a8dfff;margin-top:18mm'>Visual user guide · Admin and Sales</p>
+          <h1>Operate the complete lead-to-cash workspace with confidence.</h1>
+          <p class='lead'>A practical, screen-led guide to daily planning, customer context, opportunities, proposals, orders, production, finance visibility, reports, and configuration.</p>
+        </div>
+        <div><div class='card' style='padding:13px;background:rgb(255 255 255 / .09);border-color:rgb(255 255 255 / .2)'><div class='lifecycle compact'>
+    <div class='life-step' style='--accent:#22c7ee'><span class='life-num'>01</span><b>Lead</b><span>Customer context</span></div>
+
+    <div class='life-step' style='--accent:#4f8df7'><span class='life-num'>02</span><b>Opportunity</b><span>Pursuit and value</span></div>
+
+    <div class='life-step' style='--accent:#8b72ff'><span class='life-num'>03</span><b>Proposal</b><span>Terms and GST</span></div>
+
+    <div class='life-step' style='--accent:#f2b84b'><span class='life-num'>04</span><b>Order</b><span>Booked snapshot</span></div>
+
+    <div class='life-step' style='--accent:#ff7a6f'><span class='life-num'>05</span><b>Production</b><span>Delivery stages</span></div>
+
+    <div class='life-step' style='--accent:#36d399'><span class='life-num'>06</span><b>Finance</b><span>Margin and cash</span></div>
+
+    <div class='life-step' style='--accent:#22c7ee'><span class='life-num'>07</span><b>Reports</b><span>Operating view</span></div>
+  </div></div><p class='small' style='margin-top:8mm;color:#bcd0eb'>Edition 2 · Generated from the current local application and runtime screenshots</p></div>
+      </div>
+    </section>
+    <section class='guide-page' id='guide-contents'>
+      <div class='chapter-head'><div><p class='eyebrow'>Orientation</p><h1>How to use this guide</h1></div><span class='chapter-num'>→</span></div>
+      <p style='margin-top:9px'>Follow the lifecycle for end-to-end work, or jump directly to the chapter that matches your task. Each screen is current local product evidence; sample records are seed/demo data.</p>
+      <div class='contents-grid'><div class='contents-card card'><span class='chapter-num'>01</span><div><b>Getting started</b><span>Roles, sign-in, and navigation</span></div></div><div class='contents-card card'><span class='chapter-num'>02</span><div><b>Dashboard and reports</b><span>Read the company operating picture</span></div></div><div class='contents-card card'><span class='chapter-num'>03</span><div><b>My Day</b><span>Plan, capture, interpret, and close</span></div></div><div class='contents-card card'><span class='chapter-num'>04</span><div><b>Leads and customers</b><span>Build durable account context</span></div></div><div class='contents-card card'><span class='chapter-num'>05</span><div><b>Opportunities and proposals</b><span>Manage pursuit and commercial terms</span></div></div><div class='contents-card card'><span class='chapter-num'>06</span><div><b>Orders and production</b><span>Hand off accepted work to delivery</span></div></div><div class='contents-card card'><span class='chapter-num'>07</span><div><b>Catalog, templates, and finance</b><span>Admin configuration and economics</span></div></div><div class='contents-card card'><span class='chapter-num'>08</span><div><b>Roles and boundaries</b><span>Know what the MVP does today</span></div></div></div>
+      <h2 style='margin-top:13mm'>Role map</h2>
+      <div class='role-map'>
+    <div class='role card' style='--accent:var(--violet)'><h3>Admin</h3><ul><li>All commercial and operational routes</li><li>Catalog and production configuration</li><li>Finance records and incentive controls</li><li>Company-wide reporting</li></ul></div>
+    <div class='role card' style='--accent:var(--cyan)'><h3>Sales</h3><ul><li>Company-wide CRM and pipeline context</li><li>My Day planning and voice notes</li><li>Opportunities, proposals, and orders</li><li>Production, payment, and report visibility</li></ul></div>
+  </div>
+      <div class='callout' style='--accent:var(--violet);margin-top:9px'><b>No separate Manager role:</b> managers who need configuration and financial controls use Admin; managers who only need commercial execution can use Sales.</div>
+      <div class='guide-footer'><span>ARA Global eCRM · User guide</span><span>Orientation · 2</span></div>
+    </section>
+    <section class='guide-page' id='guide-started'>
+      <div class='chapter-head'><div><p class='eyebrow'>Sign in · roles · navigation</p><h1>Getting started</h1></div><span class='chapter-num'>01</span></div>
+      <p style='margin-top:8px'>eCRM is a single-company CRM. Admin and Sales users see company-wide operating data. Ownership is used for responsibility, filtering, targets, and incentives—not to hide records from other Sales users.</p>
+      <div class='callout' style='--accent:var(--amber);margin-top:8px'><b>Local development/demo access only:</b> Use the Admin or Sales account assigned for the current environment. Credentials are environment-specific and are not published in this guide.</div>
+      <figure class='screen-frame guide-shot short'><div class='screen-top'><i></i><i></i><i></i></div><img class='screen' src='assets/screenshots/login.png' alt='Sign-in screen'><figcaption class='screen-caption'><b>Sign-in screen</b><span>Use an assigned local demo account</span></figcaption></figure>
+      <h2>Main navigation</h2>
+      <div class='guide-grid'>
+        <div class='howto card' style='--accent:var(--cyan)'><span class='mini-label'>Sales workspace</span><h3>Commercial routes</h3><div class='route-band'><span class='route'>Dashboard</span><span class='route'>My Day</span><span class='route'>Leads</span><span class='route'>Opportunities</span><span class='route'>Orders</span><span class='route'>Production</span><span class='route'>Reports</span></div></div>
+        <div class='howto card' style='--accent:var(--violet)'><span class='mini-label'>Admin workspace</span><h3>Configuration routes</h3><div class='route-band'><span class='route'>Products</span><span class='route'>Production config</span><span class='route'>All Sales routes</span></div></div>
+      </div>
+      <div class='guide-footer'><span>ARA Global eCRM · User guide</span><span>Getting started · 3</span></div>
+    </section>
+    <section class='guide-page' id='guide-dashboard'>
+      <div class='chapter-head'><div><p class='eyebrow'>Read the operating picture</p><h1>Dashboard and reports</h1></div><span class='chapter-num'>02</span></div>
+      <div class='guide-grid' style='margin-top:8px'>
+        <div class='howto card' style='--accent:var(--blue)'><span class='mini-label'>Dashboard</span><h3>Start with the live pulse</h3><p>Review open opportunities, pipeline value, booked value, pending receivables, collected payments, production pending, and upcoming follow-ups.</p></div>
+        <div class='howto card' style='--accent:var(--mint)'><span class='mini-label'>Reports</span><h3>Scan the operating detail</h3><p>Compare top clients and products, recent orders, open pipeline, collections, production pending, and scheduled follow-ups.</p></div>
+      </div>
+      <figure class='screen-frame guide-shot short'><div class='screen-top'><i></i><i></i><i></i></div><img class='screen' src='assets/screenshots/dashboard.png' alt='Dashboard'><figcaption class='screen-caption'><b>Dashboard</b><span>Company-wide live metrics</span></figcaption></figure>
+      <h2>Use the Reports workspace</h2>
+      <ol><li>Open <b>Reports</b> from the top navigation.</li><li>Review the shared KPI band at the top.</li><li>Scan demand, revenue, cash, delivery, and follow-up sections for exceptions.</li><li>Open the underlying customer, order, or opportunity when action is needed.</li></ol>
+      <figure class='screen-frame guide-shot short'><div class='screen-top'><i></i><i></i><i></i></div><img class='screen' src='assets/screenshots/reports.png' alt='Reports'><figcaption class='screen-caption'><b>Reports</b><span>Read-only operating detail</span></figcaption></figure>
+      <div class='guide-footer'><span>ARA Global eCRM · User guide</span><span>Dashboard and reports · 4</span></div>
+    </section>
+    <section class='guide-page' id='guide-my-day'>
+      <div class='chapter-head'><div><p class='eyebrow'>Personal execution</p><h1>Plan sales work in My Day</h1></div><span class='chapter-num'>03</span></div>
+      <div style='margin-top:8px' class='card'><div class='lifecycle compact'>
+    <div class='life-step' style='--accent:#22c7ee'><span class='life-num'>01</span><b>Lead</b><span>Customer context</span></div>
+
+    <div class='life-step' style='--accent:#4f8df7'><span class='life-num'>02</span><b>Opportunity</b><span>Pursuit and value</span></div>
+
+    <div class='life-step' style='--accent:#8b72ff'><span class='life-num'>03</span><b>Proposal</b><span>Terms and GST</span></div>
+
+    <div class='life-step' style='--accent:#f2b84b'><span class='life-num'>04</span><b>Order</b><span>Booked snapshot</span></div>
+
+    <div class='life-step' style='--accent:#ff7a6f'><span class='life-num'>05</span><b>Production</b><span>Delivery stages</span></div>
+
+    <div class='life-step' style='--accent:#36d399'><span class='life-num'>06</span><b>Finance</b><span>Margin and cash</span></div>
+
+    <div class='life-step' style='--accent:#22c7ee'><span class='life-num'>07</span><b>Reports</b><span>Operating view</span></div>
+  </div></div>
+      <figure class='screen-frame guide-shot short'><div class='screen-top'><i></i><i></i><i></i></div><img class='screen' src='assets/screenshots/my-day.png' alt='My Day workspace'><figcaption class='screen-caption'><b>My Day workspace</b><span>Today, upcoming, overdue, and completed work</span></figcaption></figure>
+      <div class='guide-grid'>
+        <div class='howto card' style='--accent:var(--blue)'><span class='mini-label'>Create a task</span><ol><li>Open <b>My Day</b> and select Today.</li><li>Enter the task, type, priority, due date, and optional linked record.</li><li>Save and verify it appears in the intended time band.</li></ol></div>
+        <div class='howto card' style='--accent:var(--violet)'><span class='mini-label'>Capture a voice note</span><ol><li>Select <b>Record voice note</b>.</li><li>Attach it to a task when useful.</li><li>Review playback, transcript, and suggested follow-up actions when available.</li></ol></div>
+      </div>
+      <h2>Close the day intentionally</h2>
+      <p>Use insights to review accounts needing attention, voice-note summaries, tomorrow planning, and unfinished work. Complete, carry forward, or re-plan rather than letting work disappear.</p>
+      <figure class='screen-frame guide-shot short'><div class='screen-top'><i></i><i></i><i></i></div><img class='screen' src='assets/screenshots/my-day-insights.png' alt='My Day insights'><figcaption class='screen-caption'><b>My Day insights</b><span>Suggested attention and end-of-day review</span></figcaption></figure>
+      <div class='guide-footer'><span>ARA Global eCRM · User guide</span><span>My Day · 5</span></div>
+    </section>
+    <section class='guide-page' id='guide-leads'>
+      <div class='chapter-head'><div><p class='eyebrow'>CRM foundation</p><h1>Manage leads and customer context</h1></div><span class='chapter-num'>04</span></div>
+      <p style='margin-top:8px'>Leads and customers are company-level account records with branches, contacts, activities, notes, owner history, and reassignment.</p>
+      <figure class='screen-frame guide-shot short'><div class='screen-top'><i></i><i></i><i></i></div><img class='screen' src='assets/screenshots/leads.png' alt='Lead and customer list'><figcaption class='screen-caption'><b>Lead and customer list</b><span>Searchable account context</span></figcaption></figure>
+      <div class='guide-grid'>
+        <div class='howto card' style='--accent:var(--cyan)'><span class='mini-label'>Add one lead</span><ol><li>Open <b>Leads</b>.</li><li>Choose <b>Add one lead</b>.</li><li>Enter account details, state, owner, source, industry, and notes.</li><li>Save the record.</li></ol></div>
+        <div class='howto card' style='--accent:var(--amber)'><span class='mini-label'>Import a CSV</span><ol><li>Choose <b>Import leads from CSV</b>.</li><li>Follow the fixed template.</li><li>Upload and review row-level errors.</li><li>Import valid rows.</li></ol></div>
+      </div>
+      <figure class='screen-frame guide-shot short'><div class='screen-top'><i></i><i></i><i></i></div><img class='screen' src='assets/screenshots/lead-detail.png' alt='Customer 360'><figcaption class='screen-caption'><b>Customer 360</b><span>Branches, contacts, activity, ownership, and pursuits</span></figcaption></figure>
+      <div class='guide-footer'><span>ARA Global eCRM · User guide</span><span>Leads and customers · 6</span></div>
+    </section>
+    <section class='guide-page' id='guide-opportunities'>
+      <div class='chapter-head'><div><p class='eyebrow'>Pursuit · commercial control</p><h1>Opportunities and proposals</h1></div><span class='chapter-num'>05</span></div>
+      <p style='margin-top:8px'>Opportunities track separate pursuits under a lead/customer. Proposals belong to opportunities and hold the structured commercial record.</p>
+      <figure class='screen-frame guide-shot short'><div class='screen-top'><i></i><i></i><i></i></div><img class='screen' src='assets/screenshots/opportunities.png' alt='Opportunity pipeline'><figcaption class='screen-caption'><b>Opportunity pipeline</b><span>Stage, value, product interest, owner, and follow-up</span></figcaption></figure>
+      <div class='guide-grid'>
+        <div class='howto card' style='--accent:var(--violet)'><span class='mini-label'>Create the proposal</span><ol><li>Open an opportunity.</li><li>Create a proposal from its proposal area.</li><li>Add commercial summary, assumptions, inclusions, exclusions, payment terms, and timeline.</li></ol></div>
+        <div class='howto card' style='--accent:var(--amber)'><span class='mini-label'>Control the record</span><ol><li>Add catalog-backed line items.</li><li>Attach external PDF or optional Canva links.</li><li>Move through sent, accepted, rejected, expired, or withdrawn states.</li></ol></div>
+      </div>
+      <figure class='screen-frame guide-shot short'><div class='screen-top'><i></i><i></i><i></i></div><img class='screen' src='assets/screenshots/proposal-detail.png' alt='Proposal detail'><figcaption class='screen-caption'><b>Proposal detail</b><span>Terms, GST snapshots, status, and document links</span></figcaption></figure>
+      <div class='guide-footer'><span>ARA Global eCRM · User guide</span><span>Opportunities and proposals · 7</span></div>
+    </section>
+    <section class='guide-page' id='guide-orders'>
+      <div class='chapter-head'><div><p class='eyebrow'>Book · hand off · deliver</p><h1>Orders and production</h1></div><span class='chapter-num'>06</span></div>
+      <p style='margin-top:8px'>Orders are created from accepted proposals and preserve customer, owner, line items, GST totals, PO metadata, and source-proposal context.</p>
+      <figure class='screen-frame guide-shot short'><div class='screen-top'><i></i><i></i><i></i></div><img class='screen' src='assets/screenshots/orders.png' alt='Booked orders'><figcaption class='screen-caption'><b>Booked orders</b><span>Accepted work ready for delivery control</span></figcaption></figure>
+      <div class='guide-grid'>
+        <div class='howto card' style='--accent:var(--amber)'><span class='mini-label'>Book the order</span><ol><li>Open the accepted proposal.</li><li>Choose <b>Book order</b> or open the existing order link.</li><li>Enter PO metadata and due dates.</li><li>Verify the commercial snapshot.</li></ol></div>
+        <div class='howto card' style='--accent:var(--coral)'><span class='mini-label'>Run production</span><ol><li>Open <b>Production</b>.</li><li>Open stage controls or a work-item detail.</li><li>Update status, owner, due date, notes, completion, or skipped reason.</li><li>Scan progress by customer and order.</li></ol></div>
+      </div>
+      <div class='guide-grid'><figure class='screen-frame guide-shot short'><div class='screen-top'><i></i><i></i><i></i></div><img class='screen' src='assets/screenshots/order-detail.png' alt='Order detail'><figcaption class='screen-caption'><b>Order detail</b><span>Commercial and finance snapshot</span></figcaption></figure><figure class='screen-frame guide-shot short'><div class='screen-top'><i></i><i></i><i></i></div><img class='screen' src='assets/screenshots/production-detail.png' alt='Production detail'><figcaption class='screen-caption'><b>Production detail</b><span>Stage-level delivery progress</span></figcaption></figure></div>
+      <div class='guide-footer'><span>ARA Global eCRM · User guide</span><span>Orders and production · 8</span></div>
+    </section>
+    <section class='guide-page' id='guide-configuration'>
+      <div class='chapter-head'><div><p class='eyebrow'>Admin configuration</p><h1>Catalog, production templates, and finance</h1></div><span class='chapter-num'>07</span></div>
+      <div class='guide-grid' style='margin-top:8px'>
+        <div><figure class='screen-frame guide-shot short'><div class='screen-top'><i></i><i></i><i></i></div><img class='screen' src='assets/screenshots/products.png' alt='Product/service catalog'><figcaption class='screen-caption'><b>Product/service catalog</b><span>Active catalog rows and defaults</span></figcaption></figure><div class='callout' style='--accent:var(--cyan);margin-top:7px'><b>Sales:</b> use active catalog rows when building proposal lines so GST and commercial snapshots stay consistent.</div></div>
+        <div><figure class='screen-frame guide-shot short'><div class='screen-top'><i></i><i></i><i></i></div><img class='screen' src='assets/screenshots/production-config.png' alt='Production configuration'><figcaption class='screen-caption'><b>Production configuration</b><span>Templates, stages, durations, and mappings</span></figcaption></figure><div class='callout' style='--accent:var(--violet);margin-top:7px'><b>Admin:</b> manage template stages, duration, required flags, active state, and product/service mappings.</div></div>
+      </div>
+      <h2>Finance visibility on orders</h2>
+      <p>The order model supports invoice records, payments and allocations, cost components, gross margin, incentives, split recipients, approval status, overrides, rejection, voiding, and payout metadata.</p>
+      <div class='card' style='padding:10px;margin-top:8px'><table><thead><tr><th>Product/service</th><th>GST</th><th>Template</th><th>Default workflow</th></tr></thead><tbody><tr><td>eLearning</td><td>18%</td><td>eLearning production</td><td>Script → storyboard → development → voiceover → review → delivery</td></tr><tr><td>Video shoot</td><td>18%</td><td>Video shoot production</td><td>Script → pre-production → shoot → edit → review → delivery</td></tr><tr><td>VR/AR</td><td>18%</td><td>VR/AR production</td><td>Discovery → experience design → development → testing → review → delivery</td></tr><tr><td>Animation</td><td>18%</td><td>Animation production</td><td>Script → storyboard → modeling → animation → voiceover → review → delivery</td></tr><tr><td>Other service</td><td>18%</td><td>No default template</td><td>Flexible service category for unmapped work</td></tr></tbody></table></div>
+      <div class='callout' style='--accent:var(--amber);margin-top:8px'><b>Boundary:</b> invoice PDF generation and external accounting synchronization are not part of the current MVP.</div>
+      <div class='guide-footer'><span>ARA Global eCRM · User guide</span><span>Catalog and finance · 9</span></div>
+    </section>
+    <section class='guide-page' id='guide-boundaries'>
+      <div class='chapter-head'><div><p class='eyebrow'>Know the product today</p><h1>Roles, rules, and current boundaries</h1></div><span class='chapter-num'>08</span></div>
+      <p style='margin-top:8px'>Use this page as the operating contract for the current MVP.</p>
+      <h2>Role permissions</h2>
+      <div class='role-map'>
+    <div class='role card' style='--accent:var(--violet)'><h3>Admin</h3><ul><li>All commercial and operational routes</li><li>Catalog and production configuration</li><li>Finance records and incentive controls</li><li>Company-wide reporting</li></ul></div>
+    <div class='role card' style='--accent:var(--cyan)'><h3>Sales</h3><ul><li>Company-wide CRM and pipeline context</li><li>My Day planning and voice notes</li><li>Opportunities, proposals, and orders</li><li>Production, payment, and report visibility</li></ul></div>
+  </div>
+      <h2>Current product boundaries</h2>
+      <div class='path-list'>
+        <div class='path-item'><span class='dot' style='--accent:var(--blue)'>01</span><div><b>Single-company workspace</b><p>This build is not a browser-selectable multi-tenant CRM.</p></div></div>
+        <div class='path-item'><span class='dot' style='--accent:var(--violet)'>02</span><div><b>External proposal documents</b><p>eCRM links document metadata and optional Canva designs; it does not replace a document editor.</p></div></div>
+        <div class='path-item'><span class='dot' style='--accent:var(--amber)'>03</span><div><b>Finance workflow, not accounting sync</b><p>Invoice, payment, cost, margin, and incentive records are supported; invoice PDF and accounting integrations are outside scope.</p></div></div>
+        <div class='path-item'><span class='dot' style='--accent:var(--coral)'>04</span><div><b>Web application</b><p>Native mobile apps, Microsoft/Google login, and email sync are outside the current MVP.</p></div></div>
+        <div class='path-item'><span class='dot' style='--accent:var(--mint)'>05</span><div><b>Two application roles</b><p>Finance and Operations are workflow modules—not separate user roles.</p></div></div>
+      </div>
+      <h2>The operating promise</h2>
+      <div class='quote-block card'><p>Every handoff stays visible: who owns it, what was agreed, what is due, what has been delivered, and what has been collected.</p></div>
+      <div style='margin-top:12px'><div class='outcome-grid'>
+    <div class='outcome card' style='--accent:var(--cyan)'><b>Cleaner execution</b><p>Daily work, calls, notes, follow-ups, and account context stay connected.</p></div>
+    <div class='outcome card' style='--accent:var(--amber)'><b>Controlled handoffs</b><p>Accepted commercial terms carry into orders before delivery work begins.</p></div>
+    <div class='outcome card' style='--accent:var(--mint)'><b>Visible economics</b><p>Billings, collections, costs, margin, incentives, and progress share one view.</p></div>
+  </div></div>
+      <div class='guide-footer'><span>ARA Global eCRM · User guide</span><span>Roles and boundaries · 10</span></div>
+    </section>
+  </body></html>
