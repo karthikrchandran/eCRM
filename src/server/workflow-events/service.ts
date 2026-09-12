@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { db } from "@/server/db";
 import { mutateWithCellOutbox } from "@/server/integration-delivery/source-outbox";
-import { parseRuntimeConfig } from "@/server/runtime/cell-config";
+import { parseConfiguredRuntimeConfig } from "@/server/runtime/cell-config";
 
 export type WorkflowEventInput = {
   sourceApp: string;
@@ -53,7 +53,7 @@ export async function ingestWorkflowEvent(
   input: WorkflowEventInput,
   database: WorkflowEventDb = db as unknown as WorkflowEventDb
 ): Promise<WorkflowEventRecord> {
-  const runtime = parseRuntimeConfig({ ...process.env, APP_MODE: process.env.APP_MODE ?? "platform" });
+  const runtime = parseConfiguredRuntimeConfig();
   if (database.$transaction && runtime.mode === "cell") {
     return mutateWithCellOutbox({
       database: database as never,

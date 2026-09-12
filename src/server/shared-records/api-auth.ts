@@ -1,7 +1,7 @@
 import { db } from "@/server/db";
 import { IntegrationCredentialService, type IntegrationCapability } from "@/server/integration-delivery/credentials";
 import { PrismaIntegrationCredentialRepository } from "@/server/integration-delivery/prisma-credentials";
-import { isConfiguredCellRuntimeActive, parseRuntimeConfig } from "@/server/runtime/cell-config";
+import { isConfiguredCellRuntimeActive, parseConfiguredRuntimeConfig } from "@/server/runtime/cell-config";
 
 export async function requireSharedDataApiToken(
   request: Request,
@@ -29,7 +29,7 @@ export async function requireIntegrationCapability(
 }
 
 function defaultDependencies() {
-  const runtime = parseRuntimeConfig({ ...process.env, APP_MODE: process.env.APP_MODE ?? "platform" });
+  const runtime = parseConfiguredRuntimeConfig();
   const service = new IntegrationCredentialService(new PrismaIntegrationCredentialRepository(db), { runtime });
   return {
     isCellActive: () => isConfiguredCellRuntimeActive(),

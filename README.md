@@ -131,7 +131,7 @@ npm run test:e2e
 
 ## Deployment Notes
 
-For Vercel deployment, configure a hosted PostgreSQL `DATABASE_URL`, a strong `AUTH_SECRET`, `APP_BASE_URL`, and `BLOB_READ_WRITE_TOKEN` for durable voice-note audio storage. Local filesystem storage is only for local development.
+For Vercel deployment, configure a hosted PostgreSQL `DATABASE_URL`, a strong `AUTH_SECRET`, `APP_BASE_URL`, explicit `APP_MODE`, and `BLOB_READ_WRITE_TOKEN` for durable voice-note audio storage. Customer demos must run as dedicated cells: use one Supabase project/database and one deployment for ARA Global, and a separate Supabase project/database and deployment for AI Consulting. Set `APP_MODE=cell`, `CELL_ID`, and `CELL_KEY` for each cell; production fails closed when `APP_MODE` is omitted. Local filesystem storage is only for local development.
 
 `next-env.d.ts` is intentionally ignored. Next 16 regenerates it differently between development and build flows, and the committed TypeScript config includes the generated `.next/types/**/*.ts` and `.next/dev/types/**/*.ts` route types.
 

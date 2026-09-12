@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { db } from "@/server/db";
 import { mutateWithCellOutbox } from "@/server/integration-delivery/source-outbox";
-import { parseRuntimeConfig } from "@/server/runtime/cell-config";
+import { parseConfiguredRuntimeConfig } from "@/server/runtime/cell-config";
 import { buildSearchText, mapSharedRecordRow } from "./mappers";
 import { sharedRecordUpsertSchema } from "./validators";
 import type { SharedBusinessRecordRow, SharedRecordMutationResult, SharedRecordUpsertInput } from "./types";
@@ -98,7 +98,7 @@ export async function upsertSharedRecord(
   database: SharedRecordMutationDb = db as unknown as SharedRecordMutationDb
 ): Promise<SharedRecordMutationResult> {
   const input = sharedRecordUpsertSchema.parse(rawInput) as SharedRecordUpsertInput;
-  const runtime = parseRuntimeConfig({ ...process.env, APP_MODE: process.env.APP_MODE ?? "platform" });
+  const runtime = parseConfiguredRuntimeConfig();
   if (database.$transaction && runtime.mode === "cell") {
     const correlationId = `corr_${randomUUID()}`;
     return mutateWithCellOutbox({

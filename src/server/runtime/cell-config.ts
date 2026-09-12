@@ -38,6 +38,17 @@ export function parseRuntimeConfig(input: Record<string, string | undefined>): R
   return cellRuntimeConfigSchema.parse(input);
 }
 
+export function parseConfiguredRuntimeConfig(input: Record<string, string | undefined> = process.env): RuntimeConfig {
+  if (!input.APP_MODE && input.NODE_ENV === "production") {
+    throw new Error("APP_MODE must be explicit in production");
+  }
+
+  return parseRuntimeConfig({
+    ...input,
+    APP_MODE: input.APP_MODE ?? "platform"
+  });
+}
+
 export async function isCellRuntimeActive(
   runtime: RuntimeConfig,
   loadProjection: (cellId: string) => Promise<{ cellId: string; lifecycleStatus: string } | undefined>
@@ -51,7 +62,7 @@ export async function isConfiguredCellRuntimeActive(
   input: Record<string, string | undefined> = process.env,
   loadProjection?: (cellId: string) => Promise<{ cellId: string; lifecycleStatus: string } | undefined>
 ): Promise<boolean> {
-  const runtime = parseRuntimeConfig({ ...input, APP_MODE: input.APP_MODE ?? "platform" });
+  const runtime = parseConfiguredRuntimeConfig(input);
   if (runtime.mode !== "cell") return true;
   const loader = loadProjection ?? (async (cellId: string) => {
     const { db } = await import("@/server/db");

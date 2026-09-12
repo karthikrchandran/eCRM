@@ -33,17 +33,51 @@ export function validateTenantSeedEnvironment(input: Record<string, string | und
 }
 
 type TenantSeedClient = {
-  cellControlProjection: { findUnique(args: { where: { cellId: string }; select?: { cellId: true } }): Promise<{ cellId: string } | null> };
+  cellControlProjection: {
+    findUnique(args: { where: { cellId: string }; select?: { cellId: true } }): Promise<{ cellId: string } | null>;
+    create(args: { data: { cellId: string; lifecycleStatus: string; version: number; appliedAt: Date; sourceEventId: string; sourceIdempotencyKey: string } }): Promise<{ cellId: string }>;
+  };
   cellConfiguration: { upsert(args: { where: { id: string }; update: Record<string, unknown>; create: Record<string, unknown> }): Promise<unknown> };
   user: {
     findUnique(args: { where: { email: string } }): Promise<{ id: string; name: string; email: string; passwordHash: string; role: string; active: boolean } | null>;
-    upsert(args: { where: { email: string }; update: Record<string, unknown>; create: Record<string, unknown> }): Promise<unknown>;
+    upsert(args: { where: { email: string }; update: Record<string, unknown>; create: Record<string, unknown> }): Promise<{ id: string; name: string; email: string; passwordHash: string; role: string; active: boolean }>;
+  };
+  leadCustomer: {
+    upsert(args: { where: { id: string }; update: Record<string, unknown>; create: Record<string, unknown> }): Promise<{ id: string }>;
+  };
+  branch: {
+    upsert(args: { where: { id: string }; update: Record<string, unknown>; create: Record<string, unknown> }): Promise<unknown>;
+  };
+  contact: {
+    upsert(args: { where: { id: string }; update: Record<string, unknown>; create: Record<string, unknown> }): Promise<unknown>;
+  };
+  activity: {
+    upsert(args: { where: { id: string }; update: Record<string, unknown>; create: Record<string, unknown> }): Promise<unknown>;
+  };
+  salesTarget: {
+    upsert(args: {
+      where: { ownerId_financialYear_quarter: { ownerId: string; financialYear: number; quarter: number } };
+      update: Record<string, unknown>;
+      create: Record<string, unknown>;
+    }): Promise<unknown>;
   };
 };
 
 export async function seedTenant(client: TenantSeedClient, fixture: TenantSeedFixture, secrets: TenantSeedSecrets = {}): Promise<void> {
   const projection = await client.cellControlProjection.findUnique({ where: { cellId: fixture.cellId }, select: { cellId: true } });
-  if (!projection || projection.cellId !== fixture.cellId) throw new Error("Persisted cell identity does not match CELL_ID");
+  if (projection && projection.cellId !== fixture.cellId) throw new Error("Persisted cell identity does not match CELL_ID");
+  if (!projection) {
+    await client.cellControlProjection.create({
+      data: {
+        cellId: fixture.cellId,
+        lifecycleStatus: "ACTIVE",
+        version: 1,
+        appliedAt: new Date(),
+        sourceEventId: `tenant-seed:${fixture.cellKey}:bootstrap`,
+        sourceIdempotencyKey: `tenant-seed:${fixture.cellKey}:bootstrap:v1`
+      }
+    });
+  }
 
   const existingUsers = new Map<string, Awaited<ReturnType<TenantSeedClient["user"]["findUnique"]>>>();
   for (const user of fixture.users) {
@@ -74,10 +108,11 @@ export async function seedTenant(client: TenantSeedClient, fixture: TenantSeedFi
     }
   });
 
+  const usersByEmail = new Map<string, { id: string; name: string; email: string; passwordHash: string; role: string; active: boolean }>();
   for (const user of fixture.users) {
     const existing = existingUsers.get(user.email);
     const password = user.role === "ADMIN" ? secrets.adminPassword : secrets.salesPassword;
-    await client.user.upsert({
+    const persisted = await client.user.upsert({
       where: { email: user.email },
       update: { name: user.name },
       create: {
@@ -86,6 +121,131 @@ export async function seedTenant(client: TenantSeedClient, fixture: TenantSeedFi
         passwordHash: existing ? existing.passwordHash : await bcrypt.hash(password as string, 12),
         role: user.role,
         active: true
+      }
+    });
+    usersByEmail.set(user.email, persisted);
+  }
+
+  const adminUser = fixture.users.find((user) => user.role === "ADMIN");
+  if (!adminUser) throw new Error("Tenant fixture must include an admin user");
+  const admin = usersByEmail.get(adminUser.email);
+  if (!admin) throw new Error("Tenant admin was not persisted");
+
+  for (const lead of fixture.demoLeadCustomers) {
+    const owner = usersByEmail.get(lead.ownerEmail);
+    if (!owner) throw new Error(`Demo lead owner ${lead.ownerEmail} was not seeded`);
+
+    const leadCustomer = await client.leadCustomer.upsert({
+      where: { id: lead.id },
+      update: {
+        name: lead.name,
+        state: lead.state,
+        industry: lead.industry,
+        source: lead.source,
+        ownerId: owner.id,
+        notes: lead.notes,
+        updatedById: admin.id
+      },
+      create: {
+        id: lead.id,
+        name: lead.name,
+        state: lead.state,
+        industry: lead.industry,
+        source: lead.source,
+        ownerId: owner.id,
+        notes: lead.notes,
+        createdById: admin.id,
+        updatedById: admin.id
+      }
+    });
+
+    await client.branch.upsert({
+      where: { id: lead.branch.id },
+      update: {
+        leadCustomerId: leadCustomer.id,
+        name: lead.branch.name,
+        city: lead.branch.city,
+        region: lead.branch.region,
+        country: "India",
+        salesContext: lead.branch.salesContext
+      },
+      create: {
+        id: lead.branch.id,
+        leadCustomerId: leadCustomer.id,
+        name: lead.branch.name,
+        city: lead.branch.city,
+        region: lead.branch.region,
+        country: "India",
+        salesContext: lead.branch.salesContext
+      }
+    });
+
+    await client.contact.upsert({
+      where: { id: lead.contact.id },
+      update: {
+        leadCustomerId: leadCustomer.id,
+        branchId: lead.branch.id,
+        name: lead.contact.name,
+        designation: lead.contact.designation,
+        email: lead.contact.email,
+        phone: lead.contact.phone,
+        isPrimary: true
+      },
+      create: {
+        id: lead.contact.id,
+        leadCustomerId: leadCustomer.id,
+        branchId: lead.branch.id,
+        name: lead.contact.name,
+        designation: lead.contact.designation,
+        email: lead.contact.email,
+        phone: lead.contact.phone,
+        isPrimary: true
+      }
+    });
+
+    await client.activity.upsert({
+      where: { id: lead.activity.id },
+      update: {
+        leadCustomerId: leadCustomer.id,
+        branchId: lead.branch.id,
+        contactId: lead.contact.id,
+        ownerId: owner.id,
+        type: lead.activity.type,
+        status: "OPEN",
+        subject: lead.activity.subject,
+        dueAt: new Date(lead.activity.dueAt)
+      },
+      create: {
+        id: lead.activity.id,
+        leadCustomerId: leadCustomer.id,
+        branchId: lead.branch.id,
+        contactId: lead.contact.id,
+        ownerId: owner.id,
+        createdById: admin.id,
+        type: lead.activity.type,
+        status: "OPEN",
+        subject: lead.activity.subject,
+        dueAt: new Date(lead.activity.dueAt)
+      }
+    });
+
+    await client.salesTarget.upsert({
+      where: {
+        ownerId_financialYear_quarter: {
+          ownerId: owner.id,
+          financialYear: lead.salesTarget.financialYear,
+          quarter: lead.salesTarget.quarter
+        }
+      },
+      update: {
+        targetValueInr: lead.salesTarget.targetValueInr
+      },
+      create: {
+        ownerId: owner.id,
+        financialYear: lead.salesTarget.financialYear,
+        quarter: lead.salesTarget.quarter,
+        targetValueInr: lead.salesTarget.targetValueInr,
+        createdById: admin.id
       }
     });
   }

@@ -1,10 +1,11 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { getServerEnv } from "./env";
 
 const originalEnv = { ...process.env };
 
 afterEach(() => {
+  vi.unstubAllEnvs();
   process.env = { ...originalEnv };
 });
 
@@ -42,6 +43,14 @@ describe("getServerEnv", () => {
     expect(getServerEnv()).toMatchObject({
       runtime: { mode: "cell", cellId: "cell_ara", cellKey: "ara-global" }
     });
+  });
+
+  it("requires explicit runtime mode in production", () => {
+    setValidServerEnv();
+    vi.stubEnv("NODE_ENV", "production");
+    delete process.env.APP_MODE;
+
+    expect(() => getServerEnv()).toThrow("APP_MODE must be explicit in production");
   });
 
   it.each([
