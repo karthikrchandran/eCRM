@@ -8,53 +8,76 @@ afterEach(() => {
   process.env = { ...originalEnv };
 });
 
+function setValidServerEnv() {
+  process.env = {
+    NODE_ENV: "test",
+    DATABASE_URL: "postgresql://ecrm:ecrm@localhost:54329/ecrm?schema=public",
+    AUTH_SECRET: "replace-with-at-least-32-characters",
+    APP_BASE_URL: "http://localhost:3000"
+  };
+}
+
 describe("getServerEnv", () => {
   it("parses required server environment and defaults the app base URL", () => {
-    delete process.env.DATABASE_URL;
-    process.env.CONTROL_PLANE_DATABASE_URL = "postgresql://ecrm_control@localhost:54329/ecrm?schema=public";
-    process.env.TENANT_DATABASE_URL = "postgresql://ecrm_runtime@localhost:54329/ecrm?schema=public";
-    process.env.AUTH_SECRET = "replace-with-at-least-32-characters";
+    setValidServerEnv();
     delete process.env.APP_BASE_URL;
+    delete process.env.APP_MODE;
+    delete process.env.CELL_ID;
+    delete process.env.CELL_KEY;
 
     expect(getServerEnv()).toEqual({
-      CONTROL_PLANE_DATABASE_URL: "postgresql://ecrm_control@localhost:54329/ecrm?schema=public",
-      TENANT_DATABASE_URL: "postgresql://ecrm_runtime@localhost:54329/ecrm?schema=public",
+      DATABASE_URL: "postgresql://ecrm:ecrm@localhost:54329/ecrm?schema=public",
       AUTH_SECRET: "replace-with-at-least-32-characters",
       APP_BASE_URL: "http://localhost:3000",
-      AUTH_MODE: "local-test",
-      OIDC_ISSUER: undefined,
-      OIDC_CLIENT_ID: undefined,
-      OIDC_CLIENT_SECRET: undefined,
-      OIDC_REDIRECT_URI: undefined,
-      OIDC_AUDIENCE: undefined,
-      OIDC_SCOPES: "openid profile email",
-      OIDC_JWKS_URI: undefined
+      runtime: { mode: "platform" }
     });
   });
 
+  it("parses explicit cell runtime configuration", () => {
+    setValidServerEnv();
+    process.env.APP_MODE = "cell";
+    process.env.CELL_ID = "cell_ara";
+    process.env.CELL_KEY = "ara-global";
+
+    expect(getServerEnv()).toMatchObject({
+      runtime: { mode: "cell", cellId: "cell_ara", cellKey: "ara-global" }
+    });
+  });
+
+  it.each([
+    ["missing", undefined, "CELL_KEY is required"],
+    ["invalid", "Ara Global", "CELL_KEY must match ^[a-z0-9-]+$"]
+  ])("rejects %s cell keys", (_label, cellKey, expectedError) => {
+    setValidServerEnv();
+    process.env.APP_MODE = "cell";
+    process.env.CELL_ID = "cell_ara";
+
+    if (cellKey === undefined) {
+      delete process.env.CELL_KEY;
+    } else {
+      process.env.CELL_KEY = cellKey;
+    }
+
+    expect(() => getServerEnv()).toThrow(expectedError);
+  });
+
+  it("resets generic validation fixtures from a malformed host cell configuration", () => {
+    process.env = {
+      NODE_ENV: "test",
+      DATABASE_URL: "postgresql://ecrm:ecrm@localhost:54329/ecrm?schema=public",
+      AUTH_SECRET: "replace-with-at-least-32-characters",
+      APP_BASE_URL: "http://localhost:3000",
+      APP_MODE: "cell"
+    };
+
+    setValidServerEnv();
+
+    expect(getServerEnv()).toMatchObject({ runtime: { mode: "platform" } });
+  });
+
   it("rejects auth secrets shorter than 32 characters", () => {
-    process.env.CONTROL_PLANE_DATABASE_URL = "postgresql://ecrm_control@localhost:54329/ecrm?schema=public";
-    process.env.TENANT_DATABASE_URL = "postgresql://ecrm_runtime@localhost:54329/ecrm?schema=public";
+    setValidServerEnv();
     process.env.AUTH_SECRET = "short";
-    process.env.APP_BASE_URL = "http://localhost:3000";
-
-    expect(() => getServerEnv()).toThrow();
-  });
-
-  it("does not require or expose the schema-owner migration URL at runtime", () => {
-    delete process.env.DATABASE_URL;
-    process.env.CONTROL_PLANE_DATABASE_URL = "postgresql://ecrm_control@localhost:54329/ecrm?schema=public";
-    process.env.AUTH_SECRET = "replace-with-at-least-32-characters";
-    process.env.TENANT_DATABASE_URL = "postgresql://ecrm_runtime@localhost:54329/ecrm?schema=public";
-    process.env.APP_BASE_URL = "http://localhost:3000";
-    expect(getServerEnv()).not.toHaveProperty("DATABASE_URL");
-  });
-
-  it("rejects invalid app base URLs", () => {
-    process.env.CONTROL_PLANE_DATABASE_URL = "postgresql://ecrm_control@localhost:54329/ecrm?schema=public";
-    process.env.TENANT_DATABASE_URL = "postgresql://ecrm_runtime@localhost:54329/ecrm?schema=public";
-    process.env.AUTH_SECRET = "replace-with-at-least-32-characters";
-    process.env.APP_BASE_URL = "not-a-url";
 
     expect(() => getServerEnv()).toThrow();
   });
@@ -63,28 +86,22 @@ describe("getServerEnv", () => {
     ["missing", undefined],
     ["empty", ""],
     ["blank", "   "]
-  ])("rejects %s tenant database URLs", (_label, tenantDatabaseUrl) => {
-    process.env.CONTROL_PLANE_DATABASE_URL = "postgresql://ecrm_control@localhost:54329/ecrm?schema=public";
-    if (tenantDatabaseUrl === undefined) {
-      delete process.env.TENANT_DATABASE_URL;
+  ])("rejects %s database URLs", (_label, databaseUrl) => {
+    setValidServerEnv();
+
+    if (databaseUrl === undefined) {
+      delete process.env.DATABASE_URL;
     } else {
-      process.env.TENANT_DATABASE_URL = tenantDatabaseUrl;
+      process.env.DATABASE_URL = databaseUrl;
     }
-    process.env.AUTH_SECRET = "replace-with-at-least-32-characters";
-    process.env.APP_BASE_URL = "http://localhost:3000";
 
     expect(() => getServerEnv()).toThrow();
   });
 
-  it.each([["missing", undefined], ["empty", ""], ["blank", "   "]])(
-    "rejects %s control-plane database URLs",
-    (_label, controlUrl) => {
-      process.env.DATABASE_URL = "postgresql://schema_owner@localhost:54329/ecrm?schema=public";
-      process.env.TENANT_DATABASE_URL = "postgresql://tenant@localhost:54329/ecrm?schema=public";
-      process.env.AUTH_SECRET = "replace-with-at-least-32-characters";
-      if (controlUrl === undefined) delete process.env.CONTROL_PLANE_DATABASE_URL;
-      else process.env.CONTROL_PLANE_DATABASE_URL = controlUrl;
-      expect(() => getServerEnv()).toThrow();
-    }
-  );
+  it("rejects invalid app base URLs", () => {
+    setValidServerEnv();
+    process.env.APP_BASE_URL = "not-a-url";
+
+    expect(() => getServerEnv()).toThrow();
+  });
 });

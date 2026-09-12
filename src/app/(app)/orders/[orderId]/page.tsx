@@ -6,7 +6,7 @@ import { getOrderFinanceSummary } from "@/server/finance/queries";
 import { getOrderDetail } from "@/server/orders/queries";
 
 export default async function OrderDetailPage({ params }: { params: Promise<{ orderId: string }> }) {
-  const user = await requireUser();
+  const user = await requireUser("orders");
   const { orderId } = await params;
   const [finance, order] = await Promise.all([getOrderFinanceSummary(user, orderId), getOrderDetail(user, orderId)]);
 

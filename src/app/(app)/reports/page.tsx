@@ -80,7 +80,7 @@ export default async function ReportsPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const user = await requireUser();
+  const user = await requireUser("reports");
   const rawSearchParams = await searchParams;
   const filters = getFilters(rawSearchParams);
   const reports = await getReportsOverview(user, undefined, filters);

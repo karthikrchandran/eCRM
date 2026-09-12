@@ -5,7 +5,7 @@ import { createContactAction } from "@/server/crm/actions";
 import { getLeadCustomerDetail } from "@/server/crm/queries";
 
 export default async function NewContactPage({ params }: { params: Promise<{ leadId: string }> }) {
-  const user = await requireUser();
+  const user = await requireUser("crm");
   const { leadId } = await params;
   const lead = await getLeadCustomerDetail(user, leadId);
 
@@ -16,7 +16,7 @@ export default async function NewContactPage({ params }: { params: Promise<{ lea
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold">New contact for {lead.name}</h1>
-      <ContactForm action={createContactAction.bind(null, lead.id)} branches={lead.branches} />
+      <ContactForm action={createContactAction.bind(null, lead.id)} branches={lead.branches} draftKey={`contact:${lead.id}`} />
     </div>
   );
 }

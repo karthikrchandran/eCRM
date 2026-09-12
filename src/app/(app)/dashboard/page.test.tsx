@@ -1,6 +1,8 @@
-import { render, screen, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { cleanup, render, screen, within } from "@testing-library/react";
+import type { UserRole } from "@prisma/client";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import DashboardPage from "./page";
+import { requireUser } from "@/server/auth/current-user";
 
 vi.mock("next/link", () => ({
   default: ({ children, href, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
@@ -11,11 +13,23 @@ vi.mock("next/link", () => ({
 }));
 
 vi.mock("@/server/auth/current-user", () => ({
-  requireUser: vi.fn().mockResolvedValue({ id: "admin", name: "Admin User", email: "admin@example.com", role: "ADMIN" })
+  requireUser: vi.fn()
 }));
 
-    vi.mock("@/server/reports/queries", () => ({
+vi.mock("@/server/reports/queries", () => ({
   getReportsOverview: vi.fn().mockResolvedValue({
+    cockpit: {
+      deliveryRisk: { blockedCount: 1, dueSoonCount: 1, overdueCount: 1, totalCount: 3 },
+      followUpRisk: { overdueCount: 1, upcomingCount: 1 },
+      trend: {
+        hasHistory: true,
+        months: [
+          { bookedPaisa: 0, collectedPaisa: 0, label: "Mar" },
+          { bookedPaisa: 100000, collectedPaisa: 50000, label: "Apr" }
+        ]
+      }
+    },
+    currency: "INR",
     dashboardMetrics: [
       { detail: "Open stages", label: "Open opportunities", value: "2" },
       { detail: "Open estimated value", label: "Pipeline value", value: "INR 20,90,000.00" },
@@ -32,26 +46,63 @@ vi.mock("@/server/auth/current-user", () => ({
     upcomingFollowUps: [
       { activityId: "activity_1", clientName: "Acme", ownerName: "Sales User", subject: "Call back", dueAt: new Date("2026-06-25T10:00:00Z") }
     ],
+    finance: {
+      receivablesAging: [{ bucket: "0-30", invoiceCount: 1, outstandingPaisa: 1652000 }]
+    },
+    sales: { followUpCompliance: { overdue: 1, upcoming: 1 } },
+    recentOrders: [{ orderId: "order_1", orderNumber: "ORD-001", clientName: "Acme", bookedValuePaisa: 1400000 }],
     topBillings: [{ orderId: "order_1", orderNumber: "ORD-001", clientName: "Acme", bookedValuePaisa: 1400000 }],
     topClients: [{ clientId: "client_1", clientName: "Acme", orderCount: 1, bookedValuePaisa: 1400000 }]
   })
 }));
 
+afterEach(() => {
+  cleanup();
+  vi.clearAllMocks();
+});
+
 describe("DashboardPage", () => {
-  it("groups summary cards into business sections and removes GST wording from booked value", async () => {
+  const dashboardUsers: Array<{
+    bookingHref: string;
+    bookingLinkName: string;
+    email: string;
+    id: string;
+    name: string;
+    role: UserRole;
+  }> = [
+    { bookingHref: "/orders", bookingLinkName: "View orders", email: "admin@example.com", id: "admin", name: "Admin User", role: "ADMIN" },
+    { bookingHref: "/performance", bookingLinkName: "View performance", email: "sales@example.com", id: "sales", name: "Sales User", role: "SALES" }
+  ];
+
+  it.each(dashboardUsers)("gives $role the same operations cockpit and existing drill-through links", async (user) => {
+    vi.mocked(requireUser).mockResolvedValueOnce({ ...user, active: true });
     render(await DashboardPage());
 
-    const sales = screen.getByRole("region", { name: "Sales overview" });
-    const pipeline = screen.getByRole("region", { name: "Pipeline overview" });
-    const orders = screen.getByRole("region", { name: "Orders overview" });
-    const production = screen.getByRole("region", { name: "Production overview" });
+    const health = screen.getByRole("region", { name: "Operations health" });
+    const commercialAndCash = screen.getByRole("region", { name: "Commercial and cash" });
+    const operatingDetail = screen.getByRole("region", { name: "Operating detail" });
 
-    expect(within(sales).getByText("Upcoming follow-ups")).toBeVisible();
-    expect(within(pipeline).getByText("Pipeline value")).toBeVisible();
-    expect(within(orders).getByText("Booked orders")).toBeVisible();
-    expect(within(orders).getByText("Pending receivables")).toBeVisible();
-    expect(within(orders).getByText("Collected payments")).toBeVisible();
-    expect(within(production).getByText("Production pending")).toBeVisible();
-    expect(screen.queryByText("Booked value excl. GST")).not.toBeInTheDocument();
+    expect(within(health).getByText("Pipeline value")).toBeVisible();
+    expect(within(health).getByText("Delivery risk")).toBeVisible();
+    expect(within(health).getByRole("link", { name: "View pipeline health" })).toHaveAttribute("href", "/opportunities");
+    expect(within(health).getByRole("link", { name: "View booking health" })).toHaveAttribute("href", user.bookingHref);
+    expect(within(health).getByRole("link", { name: "View receivables health" })).toHaveAttribute("href", "/finance");
+    expect(within(health).getByRole("link", { name: "View collections health" })).toHaveAttribute("href", "/finance");
+    expect(within(health).getByRole("link", { name: "View delivery health" })).toHaveAttribute("href", "/production");
+    expect(within(health).getByRole("link", { name: "View delivery health" })).toHaveClass("dashboard-cockpit-risk--critical");
+    expect(within(health).getByRole("img", { name: "Booked trend" })).toBeVisible();
+    expect(within(health).getByRole("img", { name: "Collections trend" })).toBeVisible();
+    expect(within(health).getByRole("status", { name: "Six-month booked trend available. Increased by INR 1,000.00 from the prior month." })).toBeVisible();
+    expect(within(health).getByRole("status", { name: "Six-month collections trend available. Increased by INR 500.00 from the prior month." })).toBeVisible();
+    expect(within(health).getAllByRole("status", { name: "Not enough history yet." })).toHaveLength(3);
+    expect(within(commercialAndCash).getByRole("img", { name: "Pipeline by stage" })).toBeVisible();
+    expect(within(commercialAndCash).getByRole("img", { name: "Booked vs collected trend" })).toBeVisible();
+    expect(within(commercialAndCash).getByRole("figure", { name: "Delivery risk" }).closest(".dashboard-cockpit-risk--critical")).not.toBeNull();
+    expect(within(operatingDetail).getByRole("img", { name: "Receivables aging" })).toBeVisible();
+    expect(within(operatingDetail).getByRole("heading", { name: "Recent bookings" })).toBeVisible();
+    expect(within(operatingDetail).queryByRole("heading", { name: "Top bookings" })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "View delivery risk" })).toHaveAttribute("href", "/production");
+    expect(screen.getByRole("link", { name: "View My Day" })).toHaveAttribute("href", "/my-day");
+    expect(screen.getByRole("link", { name: user.bookingLinkName })).toHaveAttribute("href", user.bookingHref);
   });
 });

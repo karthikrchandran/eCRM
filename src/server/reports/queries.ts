@@ -1,14 +1,15 @@
 import { formatCurrencyPaisa, type ReportCurrency } from "@/components/reports/report-formatters";
-import { withOrganization } from "@/server/organizations/with-organization";
-import { listOrganizationUserOptions } from "@/server/organizations/member-options";
+import { db } from "@/server/db";
 import { calculateOrderPaymentSummary } from "@/server/finance/calculations";
 import { assertCanViewReports } from "./permissions";
 import type {
   AgingBucketSummary,
+  CockpitReports,
   CollectionSummary,
   CountValueSummary,
   CustomerReports,
   DashboardMetric,
+  DeliveryRiskSummary,
   FinanceReports,
   PendingProductionSummary,
   PipelineStageSummary,
@@ -54,7 +55,7 @@ type OrderRecord = {
   subtotalPaisa: number;
   totalPaisa: number;
 };
-type PaymentRecord = { amountPaisa: number; id: string; paymentDate: Date };
+type PaymentRecord = { amountPaisa: number; id: string; paymentDate: Date; order: Pick<OrderRecord, "currency" | "status"> };
 type ActivityRecord = { dueAt: Date | null; id: string; leadCustomer: LeadCustomerRef; owner: BasicUser; subject: string };
 type ProductionWorkItemRecord = {
   assignedTo: BasicUser | null;
@@ -98,6 +99,7 @@ type ProductServiceRecord = { id: string; name: string };
 
 type ReportsQueryDb = {
   activity: { findMany: (args: unknown) => Promise<ActivityRecord[]> };
+  cellConfiguration?: { findUnique: (args: unknown) => Promise<{ defaultCurrency: ReportCurrency } | null> };
   businessSettings?: { findUnique: (args: unknown) => Promise<{ defaultCurrency: ReportCurrency } | null> };
   costComponent?: { findMany: (args: unknown) => Promise<CostRecord[]> };
   incentive?: { findMany: (args: unknown) => Promise<IncentiveRecord[]> };
@@ -126,9 +128,8 @@ function dateRangeWhere(filters: ReportsFilters) {
   };
 }
 
-function buildOrderWhere(organizationId: string, filters: ReportsFilters) {
+function buildOrderWhere(filters: ReportsFilters) {
   return {
-    organizationId,
     ...(dateRangeWhere(filters) ? { bookedAt: dateRangeWhere(filters) } : {}),
     ...(filters.currency ? { currency: filters.currency } : {}),
     ...(filters.customerId ? { leadCustomerId: filters.customerId } : {}),
@@ -138,9 +139,8 @@ function buildOrderWhere(organizationId: string, filters: ReportsFilters) {
   };
 }
 
-function buildOpportunityWhere(organizationId: string, filters: ReportsFilters) {
+function buildOpportunityWhere(filters: ReportsFilters) {
   return {
-    organizationId,
     ...(filters.customerId ? { leadCustomerId: filters.customerId } : {}),
     ...(filters.ownerId ? { ownerId: filters.ownerId } : {}),
     ...(filters.stageId ? { stageId: filters.stageId } : {})
@@ -274,6 +274,75 @@ function buildPendingProduction(workItems: ProductionWorkItemRecord[]): PendingP
     status: workItem.status,
     workItemId: workItem.id
   }));
+}
+
+function utcMonthKey(date: Date) {
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+function buildCockpitTrend(orders: OrderRecord[], payments: PaymentRecord[], currency: ReportCurrency, now: Date): CockpitReports["trend"] {
+  const monthLabels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const months = Array.from({ length: 6 }, (_, index) => {
+    const date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - (5 - index), 1));
+    return { bookedPaisa: 0, collectedPaisa: 0, key: utcMonthKey(date), label: monthLabels[date.getUTCMonth()] };
+  });
+  const monthByKey = new Map(months.map((month) => [month.key, month]));
+
+  for (const order of orders) {
+    const month = monthByKey.get(utcMonthKey(order.bookedAt));
+    if (month && isCurrentOrder(order)) month.bookedPaisa += order.totalPaisa;
+  }
+  for (const payment of payments) {
+    const month = monthByKey.get(utcMonthKey(payment.paymentDate));
+    if (month && payment.order.currency === currency && payment.order.status !== "CANCELLED") month.collectedPaisa += payment.amountPaisa;
+  }
+
+  const points = months.map(({ bookedPaisa, collectedPaisa, label }) => ({ bookedPaisa, collectedPaisa, label }));
+  return {
+    hasHistory: points.filter((month) => month.bookedPaisa !== 0 || month.collectedPaisa !== 0).length >= 2,
+    months: points
+  };
+}
+
+function buildDeliveryRisk(workItems: ProductionWorkItemRecord[], now: Date): DeliveryRiskSummary {
+  let blockedCount = 0;
+  let dueSoonCount = 0;
+  let overdueCount = 0;
+  let totalCount = 0;
+  const dueSoonEnd = new Date(now.getTime() + 7 * 86_400_000);
+
+  for (const workItem of workItems) {
+    if (!isPendingProduction(workItem.status)) continue;
+
+    const isBlocked = workItem.stageInstances.some((stage) => isPendingProduction(stage.status) && stage.status === "BLOCKED");
+    const isOverdue = Boolean(workItem.dueAt && workItem.dueAt < now);
+    const isDueSoon = Boolean(workItem.dueAt && workItem.dueAt >= now && workItem.dueAt <= dueSoonEnd);
+
+    if (isBlocked) blockedCount += 1;
+    if (isOverdue) overdueCount += 1;
+    if (isDueSoon) dueSoonCount += 1;
+    if (isBlocked || isOverdue || isDueSoon) totalCount += 1;
+  }
+
+  return { blockedCount, dueSoonCount, overdueCount, totalCount };
+}
+
+function buildCockpitReports(input: {
+  activities: ActivityRecord[];
+  orders: OrderRecord[];
+  payments: PaymentRecord[];
+  currency: ReportCurrency;
+  workItems: ProductionWorkItemRecord[];
+  now: Date;
+}): CockpitReports {
+  return {
+    deliveryRisk: buildDeliveryRisk(input.workItems, input.now),
+    followUpRisk: {
+      overdueCount: input.activities.filter((activity) => followUpBucket(activity, input.now) === "overdue").length,
+      upcomingCount: input.activities.filter((activity) => followUpBucket(activity, input.now) === "upcoming").length
+    },
+    trend: buildCockpitTrend(input.orders, input.payments, input.currency, input.now)
+  };
 }
 
 function buildUpcomingFollowUps(activities: ActivityRecord[], now: Date): UpcomingFollowUpSummary[] {
@@ -459,10 +528,10 @@ function optionsFromCustomers(orders: OrderRecord[], opportunities: OpportunityR
   return Array.from(customers.values()).sort((left, right) => left.name.localeCompare(right.name));
 }
 
-async function loadFilterOptions(database: ReportsQueryDb, organizationId: string, orders: OrderRecord[], opportunities: OpportunityRecord[], products: ProductServiceRecord[], preloadedOwners?: ReportOption[]): Promise<ReportsFilterOptions> {
-  const owners = preloadedOwners ?? (database.user
-    ? await database.user.findMany({ where: { memberships: { some: { organizationId, status: "ACTIVE" } } }, orderBy: { name: "asc" }, select: { id: true, name: true, email: true } })
-    : []);
+async function loadFilterOptions(database: ReportsQueryDb, orders: OrderRecord[], opportunities: OpportunityRecord[], products: ProductServiceRecord[]): Promise<ReportsFilterOptions> {
+  const owners = database.user
+    ? await database.user.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, email: true } })
+    : [];
   const stageMap = new Map<string, ReportOption>();
   for (const opportunity of opportunities) stageMap.set(opportunity.stage.id, { id: opportunity.stage.id, name: opportunity.stage.name });
 
@@ -478,23 +547,27 @@ async function loadFilterOptions(database: ReportsQueryDb, organizationId: strin
 
 export async function getReportsOverview(
   user: ReportsUser,
-  database?: ReportsQueryDb,
+  database: ReportsQueryDb = db as unknown as ReportsQueryDb,
   filters: ReportsFilters = {},
-  now = new Date(),
-  preloadedOwners?: ReportOption[]
+  now = new Date()
 ): Promise<ReportsOverview> {
-  if (!database) {
-    const owners = await listOrganizationUserOptions(user.organizationId, ["ADMIN", "SALES", "FINANCE", "PRODUCTION", "READ_ONLY", "OWNER"]);
-    return withOrganization(user.organizationId, (tx) => getReportsOverview(user, tx as unknown as ReportsQueryDb, filters, now, owners));
-  }
   assertCanViewReports(user);
 
-  const settings = database.businessSettings
-    ? await database.businessSettings.findUnique({ where: { id: "default" }, select: { defaultCurrency: true } })
+  const configuration = database.cellConfiguration
+    ? await database.cellConfiguration.findUnique({ where: { id: "default" }, select: { defaultCurrency: true } })
     : null;
+  const settings = configuration ?? (database.businessSettings
+    ? await database.businessSettings.findUnique({ where: { id: "default" }, select: { defaultCurrency: true } })
+    : null);
   const currency = filters.currency ?? settings?.defaultCurrency ?? "INR";
-  const orderWhere = buildOrderWhere(user.organizationId, { ...filters, currency });
-  const opportunityWhere = buildOpportunityWhere(user.organizationId, filters);
+  const orderWhere = buildOrderWhere({ ...filters, currency });
+  const opportunityWhere = buildOpportunityWhere(filters);
+  const activityWhere = {
+    status: "OPEN",
+    ...(dateRangeWhere(filters) ? { dueAt: dateRangeWhere(filters) } : {}),
+    ...(filters.customerId ? { leadCustomerId: filters.customerId } : {}),
+    ...(filters.ownerId ? { ownerId: filters.ownerId } : {})
+  };
 
   const [opportunities, orders, payments, productionWorkItems, activities, invoices, costs, incentives, products] = await Promise.all([
     database.opportunity.findMany({
@@ -519,9 +592,13 @@ export async function getReportsOverview(
         payments: { select: { id: true, amountPaisa: true } }
       }
     }),
-    database.payment.findMany({ where: { organizationId: user.organizationId }, orderBy: [{ paymentDate: "desc" }], select: { amountPaisa: true, id: true, paymentDate: true } }),
+    database.payment.findMany({
+      where: { order: orderWhere },
+      orderBy: [{ paymentDate: "desc" }],
+      select: { amountPaisa: true, id: true, paymentDate: true, order: { select: { currency: true, status: true } } }
+    }),
     database.productionWorkItem.findMany({
-      where: { organizationId: user.organizationId },
+      where: { orderLineItem: { order: orderWhere } },
       orderBy: [{ dueAt: "asc" }, { updatedAt: "desc" }],
       include: {
         assignedTo: { select: { id: true, name: true } },
@@ -543,12 +620,11 @@ export async function getReportsOverview(
       }
     }),
     database.activity.findMany({
-      where: { organizationId: user.organizationId, status: "OPEN" },
+      where: activityWhere,
       orderBy: [{ dueAt: "asc" }],
       include: { leadCustomer: { select: { id: true, name: true } }, owner: { select: { id: true, name: true } } }
     }),
     database.invoice?.findMany({
-      where: { organizationId: user.organizationId },
       orderBy: [{ invoiceDate: "desc" }],
       include: {
         order: {
@@ -563,20 +639,18 @@ export async function getReportsOverview(
       }
     }) ?? Promise.resolve([]),
     database.costComponent?.findMany({
-      where: { organizationId: user.organizationId },
       orderBy: [{ id: "asc" }],
       include: {
         order: { select: { id: true, currency: true, leadCustomer: { select: { id: true, name: true } }, orderNumber: true } }
       }
     }) ?? Promise.resolve([]),
     database.incentive?.findMany({
-      where: { organizationId: user.organizationId },
       orderBy: [{ id: "asc" }],
       include: {
         order: { select: { id: true, currency: true, leadCustomer: { select: { id: true, name: true } }, orderNumber: true } }
       }
     }) ?? Promise.resolve([]),
-    database.productService?.findMany({ where: { organizationId: user.organizationId }, orderBy: [{ name: "asc" }], select: { id: true, name: true } }) ?? Promise.resolve([])
+    database.productService?.findMany({ orderBy: [{ name: "asc" }], select: { id: true, name: true } }) ?? Promise.resolve([])
   ]);
 
   const currentOrders = orders.filter(isCurrentOrder);
@@ -586,9 +660,15 @@ export async function getReportsOverview(
   const pendingProduction = buildPendingProduction(productionWorkItems);
   const upcomingFollowUps = buildUpcomingFollowUps(activities, now);
   const topBillings = currentOrders.map(toBillingSummary).sort((left, right) => right.bookedValuePaisa - left.bookedValuePaisa);
-  const filterOptions = await loadFilterOptions(database, user.organizationId, currentOrders, opportunities, products, preloadedOwners);
+  const recentOrders = [...currentOrders]
+    .sort((left, right) => right.bookedAt.getTime() - left.bookedAt.getTime() || left.orderNumber.localeCompare(right.orderNumber) || left.id.localeCompare(right.id))
+    .map(toBillingSummary)
+    .slice(0, 5);
+  const filterOptions = await loadFilterOptions(database, currentOrders, opportunities, products);
+  const cockpit = buildCockpitReports({ activities, currency, orders, payments, workItems: productionWorkItems, now });
 
   return {
+    cockpit,
     collections,
     currency,
     customers: buildCustomerReports(currentOrders, filters),
@@ -606,7 +686,7 @@ export async function getReportsOverview(
     pipelineByStage,
     production: buildProductionReports(productionWorkItems, now),
     products: buildProductReports(currentOrders, costs, selectedProductName),
-    recentOrders: topBillings.slice(0, 5),
+    recentOrders,
     sales: buildSalesReports(opportunities, activities, pipelineByStage, now),
     topBillings: topBillings.slice(0, 5),
     topClients: buildTopClients(currentOrders).slice(0, 5),

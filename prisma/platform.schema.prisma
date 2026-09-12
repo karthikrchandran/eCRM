@@ -1,0 +1,177 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/platform-client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("PLATFORM_DATABASE_URL")
+}
+
+enum CustomerCellLifecycleStatus {
+  PROVISIONING
+  ACTIVE
+  PROVISIONING_FAILED
+  SUSPENDING
+  SUSPENDED
+  OFFBOARDING
+  DELETING
+  DELETED
+}
+
+enum ProvisioningResult {
+  IN_PROGRESS
+  SUCCEEDED
+  FAILED
+}
+
+enum ControlProjectionDeliveryStatus {
+  PENDING
+  FAILED
+  DELIVERED
+  DEAD_LETTER
+}
+
+model CustomerCell {
+  id                         String                      @id
+  cellKey                    String                      @unique
+  legalName                  String
+  displayName                String
+  region                     String
+  desiredSubdomain           String                      @unique
+  planCode                   String
+  allowedModules             String[]
+  lifecycleStatus            CustomerCellLifecycleStatus @default(PROVISIONING)
+  desiredLifecycleStatus     CustomerCellLifecycleStatus?
+  databaseReference          String?
+  storageReference           String?
+  secretReference            String?
+  backupReference            String?
+  applicationReference       String?
+  applicationUrl             String?
+  signalLoopWorkspaceReference String?
+  createdAt                  DateTime                    @default(now())
+  updatedAt                  DateTime                    @updatedAt
+  connections                InstallationConnection[]
+  provisioningAttempts       ProvisioningAttempt[]
+  auditEvents                ControlPlaneAuditEvent[]
+  supportGrants              SupportGrant[]
+  controlProjectionDeliveries ControlProjectionDelivery[]
+}
+
+model ControlProjectionDelivery {
+  id             String                          @id @default(cuid())
+  cellId         String
+  version        Int
+  type           String
+  correlationId  String
+  idempotencyKey String                          @unique
+  issuedAt       DateTime
+  payload        Json
+  status         ControlProjectionDeliveryStatus @default(PENDING)
+  attempts       Int                             @default(0)
+  lastAttemptAt  DateTime?
+  nextAttemptAt  DateTime                        @default(now())
+  leaseOwner     String?
+  leaseExpiresAt DateTime?
+  deliveredAt    DateTime?
+  deadLetteredAt DateTime?
+  lastError      String?
+  createdAt      DateTime                        @default(now())
+  updatedAt      DateTime                        @updatedAt
+  cell           CustomerCell                    @relation(fields: [cellId], references: [id], onDelete: Restrict)
+
+  @@unique([cellId, version])
+  @@index([status, nextAttemptAt])
+  @@index([leaseExpiresAt])
+  @@index([cellId, createdAt])
+  @@index([correlationId])
+}
+
+model InstallationConnection {
+  id                String       @id @default(cuid())
+  cellId            String
+  connectionKey     String
+  provider          String
+  workspaceReference String?
+  secretReference   String
+  capabilities      Json
+  status            String
+  correlationId     String
+  idempotencyKey    String
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  cell              CustomerCell @relation(fields: [cellId], references: [id], onDelete: Restrict)
+
+  @@unique([cellId, connectionKey])
+  @@index([cellId, status])
+}
+
+model ProvisioningAttempt {
+  id              String             @id @default(cuid())
+  cellId          String
+  idempotencyKey  String
+  correlationId   String
+  leaseVersion    Int                @default(1)
+  result          ProvisioningResult @default(IN_PROGRESS)
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  cell            CustomerCell       @relation(fields: [cellId], references: [id], onDelete: Restrict)
+  actions         ProvisioningAction[]
+
+  @@unique([cellId, idempotencyKey])
+  @@unique([id, leaseVersion])
+  @@index([correlationId])
+}
+
+model ProvisioningAction {
+  id          String              @id @default(cuid())
+  attemptId   String
+  step        String
+  result      ProvisioningResult
+  reference   String?
+  errorCode   String?
+  occurredAt  DateTime            @default(now())
+  attempt     ProvisioningAttempt @relation(fields: [attemptId], references: [id], onDelete: Restrict)
+
+  @@index([attemptId, occurredAt])
+}
+
+model ControlPlaneAuditEvent {
+  id            String       @id @default(cuid())
+  cellId        String
+  actor          String
+  action         String
+  result         ProvisioningResult
+  correlationId  String
+  reason         String?
+  error          String?
+  errorCode      String?
+  secretReference String?
+  occurredAt    DateTime     @default(now())
+  cell          CustomerCell @relation(fields: [cellId], references: [id], onDelete: Restrict)
+
+  @@index([cellId, occurredAt])
+  @@index([correlationId])
+}
+
+model SupportGrant {
+  id            String       @id @default(cuid())
+  cellId        String
+  operatorId    String
+  caseReference String
+  capabilities  String[]
+  reason        String
+  startsAt      DateTime
+  expiresAt     DateTime
+  revokedAt     DateTime?
+  revokedBy     String?
+  revocationReason String?
+  actor         String
+  correlationId String
+  createdAt     DateTime     @default(now())
+  cell          CustomerCell @relation(fields: [cellId], references: [id], onDelete: Restrict)
+
+  @@index([cellId, expiresAt])
+  @@unique([cellId, correlationId])
+}

@@ -23,7 +23,7 @@ function formatDate(date: Date | null) {
 const detailActionClass = "crm-button crm-button-secondary w-full text-sm sm:w-auto";
 
 export default async function LeadDetailPage({ params }: { params: Promise<{ leadId: string }> }) {
-  const user = await requireUser();
+  const user = await requireUser("crm");
   const { leadId } = await params;
   const [lead, owners, timeline] = await Promise.all([
     getLeadCustomerDetail(user, leadId),

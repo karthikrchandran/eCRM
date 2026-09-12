@@ -4,7 +4,7 @@ import { requireUser } from "@/server/auth/current-user";
 import { getContactDetail } from "@/server/crm/queries";
 
 export default async function ContactDetailPage({ params }: { params: Promise<{ contactId: string }> }) {
-  const user = await requireUser();
+  const user = await requireUser("crm");
   const { contactId } = await params;
   const contact = await getContactDetail(user, contactId);
 

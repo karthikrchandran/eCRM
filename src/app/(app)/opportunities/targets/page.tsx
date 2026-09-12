@@ -5,8 +5,8 @@ import { upsertSalesTargetAction } from "@/server/opportunities/actions";
 import { listOpportunityFormOptions, listSalesTargets } from "@/server/opportunities/queries";
 
 export default async function OpportunityTargetsPage() {
-  const user = await requireUser();
-  const [options, targets] = await Promise.all([listOpportunityFormOptions(user), listSalesTargets(user)]);
+  const user = await requireUser("crm");
+  const [options, targets] = await Promise.all([listOpportunityFormOptions(), listSalesTargets(user)]);
   const serializableTargets = targets.map((target) => ({
     ...target,
     targetValueInr: target.targetValueInr.toString()

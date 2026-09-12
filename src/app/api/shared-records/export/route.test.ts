@@ -22,12 +22,12 @@ const buildSharedRecordExportPageMock = vi.mocked(buildSharedRecordExportPage);
 describe("shared-record export route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    requireSharedDataApiTokenMock.mockReturnValue(null);
+    requireSharedDataApiTokenMock.mockResolvedValue(null);
     buildSharedRecordExportPageMock.mockResolvedValue({ items: [], nextCursor: null });
   });
 
   it("passes through auth failures", async () => {
-    requireSharedDataApiTokenMock.mockReturnValue(new Response("blocked", { status: 401 }));
+    requireSharedDataApiTokenMock.mockResolvedValue(new Response("blocked", { status: 401 }));
 
     const response = await GET(new Request("http://localhost/api/shared-records/export"));
 

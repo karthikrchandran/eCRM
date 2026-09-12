@@ -112,6 +112,25 @@ export type AgingBucketSummary = {
   outstandingPaisa?: number;
 };
 
+export type CockpitTrendPoint = {
+  bookedPaisa: number;
+  collectedPaisa: number;
+  label: string;
+};
+
+export type DeliveryRiskSummary = {
+  blockedCount: number;
+  dueSoonCount: number;
+  overdueCount: number;
+  totalCount: number;
+};
+
+export type CockpitReports = {
+  deliveryRisk: DeliveryRiskSummary;
+  followUpRisk: { overdueCount: number; upcomingCount: number };
+  trend: { hasHistory: boolean; months: CockpitTrendPoint[] };
+};
+
 export type SalesReports = {
   followUpCompliance: {
     overdue: number;
@@ -166,6 +185,7 @@ export type ProductReports = {
 };
 
 export type ReportsOverview = {
+  cockpit: CockpitReports;
   collections: CollectionSummary;
   currency: ReportCurrency;
   customers: CustomerReports;

@@ -16,7 +16,7 @@ export default async function AdminPerformancePage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const user = await requireUser();
+  const user = await requireUser("reports");
 
   if (!canManageAdminSettings(user.role)) {
     notFound();

@@ -151,7 +151,7 @@ export function parseIncentiveApprovalFormForTest(formData: FormData): ParseResu
 export async function createInvoiceAction(_previousState: ActionState, formData: FormData): Promise<ActionState> {
   "use server";
 
-  const user = await requireUser();
+  const user = await requireUser("finance");
   const parsed = parseInvoiceFormForTest(formData);
 
   if (!parsed.ok) {
@@ -167,7 +167,7 @@ export async function createInvoiceAction(_previousState: ActionState, formData:
 export async function recordPaymentAction(_previousState: ActionState, formData: FormData): Promise<ActionState> {
   "use server";
 
-  const user = await requireUser();
+  const user = await requireUser("finance");
   const parsed = parsePaymentFormForTest(formData);
 
   if (!parsed.ok) {
@@ -183,7 +183,7 @@ export async function recordPaymentAction(_previousState: ActionState, formData:
 export async function createCostComponentAction(_previousState: ActionState, formData: FormData): Promise<ActionState> {
   "use server";
 
-  const user = await requireUser();
+  const user = await requireUser("finance");
   const parsed = parseCostComponentFormForTest(formData);
 
   if (!parsed.ok) {
@@ -199,7 +199,7 @@ export async function createCostComponentAction(_previousState: ActionState, for
 export async function approveIncentiveAction(incentiveId: string, _previousState: ActionState, formData: FormData): Promise<ActionState> {
   "use server";
 
-  const user = await requireUser();
+  const user = await requireUser("finance");
   const parsed = parseIncentiveApprovalFormForTest(formData);
 
   if (!parsed.ok) {
@@ -217,7 +217,7 @@ export async function approveIncentiveAction(incentiveId: string, _previousState
 export async function changeCostComponentStatusAction(costComponentId: string, status: "APPROVED" | "REJECTED" | "VOID", formData: FormData) {
   "use server";
 
-  const user = await requireUser();
+  const user = await requireUser("finance");
   const costComponent = await changeCostComponentStatus(user, costComponentId, {
     reason: formData.get("reason")?.toString(),
     status

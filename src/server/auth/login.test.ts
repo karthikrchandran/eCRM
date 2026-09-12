@@ -7,17 +7,7 @@ const activeUser = {
   email: "admin@example.com",
   passwordHash: "hashed-password",
   role: "ADMIN" as const,
-  active: true,
-  memberships: [
-    {
-      id: "membership_1",
-      organizationId: "org_1",
-      role: "OWNER" as const,
-      status: "ACTIVE" as const,
-      updatedAt: new Date("2026-08-09T12:00:00.000Z"),
-      organization: { status: "ACTIVE" as const }
-    }
-  ]
+  active: true
 };
 
 describe("authenticateLogin", () => {
@@ -105,105 +95,19 @@ describe("authenticateLogin", () => {
         id: "user_1",
         name: "Admin User",
         email: "admin@example.com",
-        organizationId: "org_1",
-        membershipId: "membership_1",
-        role: "OWNER",
-        sessionVersion: new Date("2026-08-09T12:00:00.000Z").getTime()
+        role: "ADMIN"
       }
     });
   });
 
-  it("rejects a valid password when there is no active membership in an active organization", async () => {
+  it("denies a new session when the cell lifecycle is not ACTIVE", async () => {
+    const findUserByEmail = vi.fn().mockResolvedValue(activeUser);
     const result = await authenticateLogin(
       { email: "admin@example.com", password: "Admin@12345" },
-      {
-        findUserByEmail: vi.fn().mockResolvedValue({ ...activeUser, memberships: [] }),
-        verifyPassword: vi.fn().mockResolvedValue(true)
-      }
+      { findUserByEmail, verifyPassword: vi.fn().mockResolvedValue(true), isCellActive: () => false }
     );
 
-    expect(result).toEqual({ error: "Invalid email or password." });
-  });
-
-  it.each([
-    ["INVITED membership", { status: "INVITED", organization: { status: "ACTIVE" } }],
-    ["SUSPENDED membership", { status: "SUSPENDED", organization: { status: "ACTIVE" } }],
-    ["REVOKED membership", { status: "REVOKED", organization: { status: "ACTIVE" } }],
-    ["PROVISIONING organization", { status: "ACTIVE", organization: { status: "PROVISIONING" } }],
-    ["SUSPENDED organization", { status: "ACTIVE", organization: { status: "SUSPENDED" } }],
-    ["OFFBOARDING organization", { status: "ACTIVE", organization: { status: "OFFBOARDING" } }],
-    ["DELETED organization", { status: "ACTIVE", organization: { status: "DELETED" } }]
-  ])("rejects a valid password with %s", async (_label, membershipOverrides) => {
-    const membership = {
-      ...activeUser.memberships[0],
-      ...membershipOverrides
-    };
-    const result = await authenticateLogin(
-      { email: "admin@example.com", password: "Admin@12345" },
-      {
-        findUserByEmail: vi.fn().mockResolvedValue({ ...activeUser, memberships: [membership] }),
-        verifyPassword: vi.fn().mockResolvedValue(true)
-      }
-    );
-
-    expect(result).toEqual({ error: "Invalid email or password." });
-  });
-
-  it("selects the most recently updated active membership and uses its database role", async () => {
-    const result = await authenticateLogin(
-      { email: "admin@example.com", password: "Admin@12345" },
-      {
-        findUserByEmail: vi.fn().mockResolvedValue({
-          ...activeUser,
-          role: "ADMIN",
-          memberships: [
-            {
-              ...activeUser.memberships[0],
-              id: "membership_older",
-              organizationId: "org_older",
-              role: "ADMIN",
-              updatedAt: new Date("2026-08-08T12:00:00.000Z")
-            },
-            {
-              ...activeUser.memberships[0],
-              id: "membership_newer",
-              organizationId: "org_newer",
-              role: "FINANCE",
-              updatedAt: new Date("2026-08-09T12:00:00.000Z")
-            }
-          ]
-        }),
-        verifyPassword: vi.fn().mockResolvedValue(true)
-      }
-    );
-
-    expect(result).toMatchObject({
-      user: {
-        organizationId: "org_newer",
-        membershipId: "membership_newer",
-        role: "FINANCE",
-        sessionVersion: new Date("2026-08-09T12:00:00.000Z").getTime()
-      }
-    });
-  });
-
-  it("breaks equal membership timestamps by membership id ascending", async () => {
-    const result = await authenticateLogin(
-      { email: "admin@example.com", password: "Admin@12345" },
-      {
-        findUserByEmail: vi.fn().mockResolvedValue({
-          ...activeUser,
-          memberships: [
-            { ...activeUser.memberships[0], id: "membership_z", organizationId: "org_z" },
-            { ...activeUser.memberships[0], id: "membership_a", organizationId: "org_a", role: "SALES" }
-          ]
-        }),
-        verifyPassword: vi.fn().mockResolvedValue(true)
-      }
-    );
-
-    expect(result).toMatchObject({
-      user: { organizationId: "org_a", membershipId: "membership_a", role: "SALES" }
-    });
+    expect(result).toEqual({ error: "Customer cell is not active." });
+    expect(findUserByEmail).not.toHaveBeenCalled();
   });
 });

@@ -5,8 +5,8 @@ import { upsertPipelineStageAction } from "@/server/opportunities/actions";
 import { listOpportunityFormOptions } from "@/server/opportunities/queries";
 
 export default async function OpportunityStagesPage() {
-  const user = await requireUser();
-  const { stages } = await listOpportunityFormOptions(user);
+  const user = await requireUser("crm");
+  const { stages } = await listOpportunityFormOptions();
 
   return (
     <div className="space-y-6">

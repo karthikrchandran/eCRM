@@ -3,7 +3,7 @@ import { requireUser } from "@/server/auth/current-user";
 import { createProductServiceAction } from "@/server/products/actions";
 
 export default async function NewProductServicePage() {
-  await requireUser();
+  await requireUser("production");
 
   return (
     <div className="space-y-6">

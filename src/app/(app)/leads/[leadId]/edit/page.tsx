@@ -5,7 +5,7 @@ import { updateLeadCustomerAction } from "@/server/crm/actions";
 import { getLeadCustomerDetail, listCrmOwners } from "@/server/crm/queries";
 
 export default async function EditLeadPage({ params }: { params: Promise<{ leadId: string }> }) {
-  const user = await requireUser();
+  const user = await requireUser("crm");
   const { leadId } = await params;
   const [lead, owners] = await Promise.all([getLeadCustomerDetail(user, leadId), listCrmOwners(user)]);
 

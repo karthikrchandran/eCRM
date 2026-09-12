@@ -24,6 +24,7 @@ function sharedRecordRow(overrides: Partial<SharedBusinessRecordRow> = {}): Shar
     phone: null,
     companyName: null,
     searchText: "acme learning active lead_1",
+    headVersion: 1,
     data: {},
     archivedAt: null,
     createdAt: new Date("2026-06-24T12:00:00.000Z"),
@@ -48,7 +49,6 @@ describe("upsertSharedRecord", () => {
     };
 
     const result = await upsertSharedRecord(
-      "org_test",
       {
         entityType: "CUSTOMER",
         displayName: "Acme Learning",
@@ -94,7 +94,6 @@ describe("upsertSharedRecord", () => {
 
     await expect(
       upsertSharedRecord(
-        "org_test",
         {
           entityType: "CUSTOMER",
           displayName: "New name",
@@ -114,14 +113,12 @@ describe("upsertSharedRecord", () => {
     });
     expect(database.sharedBusinessRecord.findFirst).toHaveBeenNthCalledWith(1, {
       where: {
-        organizationId: "org_test",
         entityType: "CUSTOMER",
         ecrmLegacyId: "lead_1"
       }
     });
     expect(database.sharedBusinessRecord.findFirst).toHaveBeenNthCalledWith(2, {
       where: {
-        organizationId: "org_test",
         entityType: "CUSTOMER",
         ecrmLegacyId: "lead_1"
       }
@@ -160,7 +157,6 @@ describe("upsertSharedRecord", () => {
     };
 
     const result = await upsertSharedRecord(
-      "org_test",
       {
         entityType: "CUSTOMER",
         displayName: "Linked customer",
@@ -176,7 +172,6 @@ describe("upsertSharedRecord", () => {
     expect(database.sharedBusinessRecord.create).not.toHaveBeenCalled();
     expect(database.sharedBusinessRecord.findFirst).toHaveBeenNthCalledWith(2, {
       where: {
-        organizationId: "org_test",
         entityType: "CUSTOMER",
         emailVoiceLegacyId: "emailvoice_contact_1"
       }
@@ -207,7 +202,6 @@ describe("upsertSharedRecord", () => {
     };
 
     const result = await upsertSharedRecord(
-      "org_test",
       {
         entityType: "LEAD",
         displayName: "Updated external lead",
@@ -222,7 +216,6 @@ describe("upsertSharedRecord", () => {
     expect(database.sharedBusinessRecord.create).not.toHaveBeenCalled();
     expect(database.sharedBusinessRecord.findFirst).toHaveBeenCalledWith({
       where: {
-        organizationId: "org_test",
         entityType: "LEAD",
         externalKey: "emailvoice:lead:123"
       }
@@ -266,7 +259,6 @@ describe("upsertSharedRecord", () => {
     };
 
     const result = await upsertSharedRecord(
-      "org_test",
       {
         entityType: "ORDER",
         displayName: "Updated external order",
@@ -280,7 +272,6 @@ describe("upsertSharedRecord", () => {
     expect(result.created).toBe(false);
     expect(database.sharedBusinessRecord.findFirst).toHaveBeenNthCalledWith(2, {
       where: {
-        organizationId: "org_test",
         entityType: "ORDER",
         externalKey: "external:order:777"
       }
@@ -294,42 +285,26 @@ describe("upsertSharedRecord", () => {
     });
   });
 
-  it.each([
-    ["relatedLeadId", "leadCustomer"],
-    ["relatedCustomerId", "leadCustomer"],
-    ["relatedContactId", "contact"],
-    ["relatedOpportunityId", "opportunity"]
-  ] as const)("rejects a tenant-B semantic %s", async (field, delegate) => {
+  it("returns the same source version for an identical retry and increments for a later change", async () => {
+    const existing = sharedRecordRow({ id: "shared_1", headVersion: 4, data: { tier: "gold" } });
+    const changed = sharedRecordRow({ id: "shared_1", headVersion: 5, displayName: "Acme Global", data: { tier: "gold" } });
     const database = {
-      [delegate]: { findFirst: vi.fn().mockResolvedValue(null) },
-      sharedBusinessRecord: { create: vi.fn(), findFirst: vi.fn(), update: vi.fn() }
+      sharedBusinessRecord: {
+        create: vi.fn(),
+        findFirst: vi.fn().mockResolvedValueOnce(existing).mockResolvedValueOnce(existing),
+        update: vi.fn().mockResolvedValue(changed)
+      }
     };
+    const base = { entityType: "CUSTOMER", status: "ACTIVE", sourceApp: "ecrm", ecrmLegacyId: "lead_1", data: { tier: "gold" } };
 
-    await expect(upsertSharedRecord("org_A", {
-      entityType: "CUSTOMER",
-      displayName: "Cross tenant",
-      status: "ACTIVE",
-      sourceApp: "ecrm",
-      externalKey: "cross-tenant",
-      [field]: "tenant_B_id"
-    }, database as never)).rejects.toThrow("Related record was not found.");
-    expect(database.sharedBusinessRecord.create).not.toHaveBeenCalled();
-  });
+    const retry = await upsertSharedRecord({ ...base, displayName: "Acme Learning" }, database as never);
+    expect(retry.record.headVersion).toBe(4);
+    expect(database.sharedBusinessRecord.update).not.toHaveBeenCalled();
 
-  it("rejects an inactive or tenant-B semantic ownerId", async () => {
-    const database = {
-      $queryRaw: vi.fn().mockResolvedValue([{ allowed: false }]),
-      sharedBusinessRecord: { create: vi.fn(), findFirst: vi.fn(), update: vi.fn() }
-    };
-
-    await expect(upsertSharedRecord("org_A", {
-      entityType: "CUSTOMER",
-      displayName: "Cross tenant",
-      status: "ACTIVE",
-      sourceApp: "ecrm",
-      externalKey: "cross-tenant-owner",
-      ownerId: "tenant_B_user"
-    }, database as never)).rejects.toThrow("Organization member was not found.");
-    expect(database.sharedBusinessRecord.create).not.toHaveBeenCalled();
+    const update = await upsertSharedRecord({ ...base, displayName: "Acme Global" }, database as never);
+    expect(update.record.headVersion).toBe(5);
+    expect(database.sharedBusinessRecord.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: "shared_1" }, data: expect.objectContaining({ headVersion: { increment: 1 } })
+    }));
   });
 });

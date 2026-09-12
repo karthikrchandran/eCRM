@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseLeadCustomerFormForTest } from "./actions";
+import { parseContactFormForTest, parseLeadCustomerFormForTest } from "./actions";
 
 describe("crm actions", () => {
   it("returns field errors from lead form parsing", () => {
@@ -35,6 +35,26 @@ describe("crm actions", () => {
         state: "LEAD",
         ownerId: "user_sales",
         source: "Referral"
+      }
+    });
+  });
+
+  it("parses an edited contact with normalized email", () => {
+    const formData = new FormData();
+    formData.set("leadCustomerId", "lead_1");
+    formData.set("branchId", "branch_1");
+    formData.set("name", " Anita Rao ");
+    formData.set("email", " ANITA.RAO@example.com ");
+    formData.set("isPrimary", "on");
+
+    expect(parseContactFormForTest("lead_1", formData)).toEqual({
+      ok: true,
+      data: {
+        leadCustomerId: "lead_1",
+        branchId: "branch_1",
+        name: "Anita Rao",
+        email: "anita.rao@example.com",
+        isPrimary: true
       }
     });
   });

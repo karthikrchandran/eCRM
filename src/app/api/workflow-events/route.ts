@@ -24,7 +24,7 @@ const workflowEventSchema = z.object({
 });
 
 export async function POST(request: Request) {
-  const authResponse = requireSharedDataApiToken(request);
+  const authResponse = await requireSharedDataApiToken(request, "WORKFLOW_EVENTS_WRITE");
   if (authResponse) return authResponse;
   const organizationId = getSharedDataOrganizationId();
   if (!organizationId) return Response.json({ error: "Shared data organization is not configured." }, { status: 500 });

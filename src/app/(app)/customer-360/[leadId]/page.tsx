@@ -6,7 +6,7 @@ import { requireUser } from "@/server/auth/current-user";
 import { getCustomer360Timeline, getLeadCustomerDetail } from "@/server/crm/queries";
 
 export default async function Customer360DetailPage({ params }: { params: Promise<{ leadId: string }> }) {
-  const user = await requireUser();
+  const user = await requireUser("crm");
   const { leadId } = await params;
   const [lead, timeline] = await Promise.all([getLeadCustomerDetail(user, leadId), getCustomer360Timeline(user, leadId)]);
 

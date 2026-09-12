@@ -25,6 +25,7 @@ export type SharedBusinessRecordRow = {
   phone: string | null;
   companyName: string | null;
   searchText: string;
+  headVersion?: number;
   data: Prisma.JsonValue;
   archivedAt: Date | null;
   createdAt: Date;

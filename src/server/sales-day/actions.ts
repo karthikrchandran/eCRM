@@ -44,7 +44,7 @@ export async function createSalesTaskAction(
   _previousState: SalesDayActionState,
   formData: FormData
 ): Promise<SalesDayActionState> {
-  const user = await requireUser();
+  const user = await requireUser("crm");
   const result = salesTaskInputSchema.safeParse({
     title: formData.get("title"),
     description: formData.get("description"),
@@ -75,7 +75,7 @@ export async function updateSalesTaskAction(
   _previousState: SalesDayActionState,
   formData: FormData
 ): Promise<SalesDayActionState> {
-  const user = await requireUser();
+  const user = await requireUser("crm");
   const result = salesTaskUpdateSchema.safeParse({
     title: formData.get("title"),
     description: formData.get("description"),
@@ -116,7 +116,7 @@ export async function createSalesTextNoteAction(
   _previousState: SalesDayActionState,
   formData: FormData
 ): Promise<SalesDayActionState> {
-  const user = await requireUser();
+  const user = await requireUser("crm");
   const result = parseTextNoteForm(formData);
 
   if (!result.success) {
@@ -137,7 +137,7 @@ export async function updateSalesTextNoteAction(
   _previousState: SalesDayActionState,
   formData: FormData
 ): Promise<SalesDayActionState> {
-  const user = await requireUser();
+  const user = await requireUser("crm");
   const result = parseTextNoteForm(formData);
 
   if (!result.success) {
@@ -154,31 +154,31 @@ export async function updateSalesTextNoteAction(
 }
 
 export async function deleteSalesTextNoteAction(noteId: string) {
-  const user = await requireUser();
+  const user = await requireUser("crm");
   await deleteSalesTextNote(user, noteId);
   revalidatePath("/my-day");
 }
 
 export async function completeSalesTaskAction(taskId: string) {
-  const user = await requireUser();
+  const user = await requireUser("crm");
   await completeSalesTask(user, taskId);
   revalidatePath("/my-day");
 }
 
 export async function reopenSalesTaskAction(taskId: string) {
-  const user = await requireUser();
+  const user = await requireUser("crm");
   await reopenSalesTask(user, taskId);
   revalidatePath("/my-day");
 }
 
 export async function cancelSalesTaskAction(taskId: string) {
-  const user = await requireUser();
+  const user = await requireUser("crm");
   await cancelSalesTask(user, taskId);
   revalidatePath("/my-day");
 }
 
 export async function acceptSuggestedActionAction(actionId: string) {
-  const user = await requireUser();
+  const user = await requireUser("crm");
   const result = acceptSuggestedActionSchema.safeParse({ actionId });
 
   if (!result.success) {
@@ -190,7 +190,7 @@ export async function acceptSuggestedActionAction(actionId: string) {
 }
 
 export async function rejectSuggestedActionAction(actionId: string) {
-  const user = await requireUser();
+  const user = await requireUser("crm");
   const result = acceptSuggestedActionSchema.safeParse({ actionId });
 
   if (!result.success) {
@@ -205,7 +205,7 @@ export async function saveEndOfDayReviewAction(
   _previousState: SalesDayActionState,
   formData: FormData
 ): Promise<SalesDayActionState> {
-  const user = await requireUser();
+  const user = await requireUser("crm");
   const taskIds = formData.getAll("taskId").map(String);
   const result = salesDayReviewSchema.safeParse({
     reviewDate: formData.get("reviewDate"),

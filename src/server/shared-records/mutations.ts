@@ -1,51 +1,22 @@
+import { randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
-import { assertTenantMember } from "@/server/organizations/tenant-member-guard";
-import { withOrganization } from "@/server/organizations/with-organization";
+import { db } from "@/server/db";
+import { mutateWithCellOutbox } from "@/server/integration-delivery/source-outbox";
+import { parseRuntimeConfig } from "@/server/runtime/cell-config";
 import { buildSearchText, mapSharedRecordRow } from "./mappers";
 import { sharedRecordUpsertSchema } from "./validators";
 import type { SharedBusinessRecordRow, SharedRecordMutationResult, SharedRecordUpsertInput } from "./types";
 
 type SharedRecordMutationDb = {
-  $queryRaw?<T>(query: TemplateStringsArray, ...values: unknown[]): Promise<T>;
-  contact?: { findFirst: (args: Prisma.ContactFindFirstArgs) => Promise<{ id: string } | null> };
-  leadCustomer?: { findFirst: (args: Prisma.LeadCustomerFindFirstArgs) => Promise<{ id: string } | null> };
-  opportunity?: { findFirst: (args: Prisma.OpportunityFindFirstArgs) => Promise<{ id: string } | null> };
   sharedBusinessRecord: {
     create: (args: Prisma.SharedBusinessRecordCreateArgs) => Promise<SharedBusinessRecordRow>;
     findFirst: (args: Prisma.SharedBusinessRecordFindFirstArgs) => Promise<SharedBusinessRecordRow | null>;
     update: (args: Prisma.SharedBusinessRecordUpdateArgs) => Promise<SharedBusinessRecordRow>;
   };
+  $transaction?: <T>(operation: (transaction: unknown) => Promise<T>) => Promise<T>;
 };
 
-async function validateSemanticRelationships(
-  organizationId: string,
-  input: SharedRecordUpsertInput,
-  database: SharedRecordMutationDb
-) {
-  if (input.ownerId) {
-    if (!database.$queryRaw) throw new Error("Organization member was not found.");
-    await assertTenantMember(database as Required<Pick<SharedRecordMutationDb, "$queryRaw">>, input.ownerId);
-  }
-
-  const lookups: Array<Promise<{ id: string } | null> | undefined> = [];
-  if (input.relatedLeadId) {
-    lookups.push(database.leadCustomer?.findFirst({ where: { id: input.relatedLeadId, organizationId }, select: { id: true } }));
-  }
-  if (input.relatedCustomerId) {
-    lookups.push(database.leadCustomer?.findFirst({ where: { id: input.relatedCustomerId, organizationId }, select: { id: true } }));
-  }
-  if (input.relatedContactId) {
-    lookups.push(database.contact?.findFirst({ where: { id: input.relatedContactId, organizationId }, select: { id: true } }));
-  }
-  if (input.relatedOpportunityId) {
-    lookups.push(database.opportunity?.findFirst({ where: { id: input.relatedOpportunityId, organizationId }, select: { id: true } }));
-  }
-  if (lookups.length && (await Promise.all(lookups)).some((row) => !row)) {
-    throw new Error("Related record was not found.");
-  }
-}
-
-function toRecordData(organizationId: string, input: SharedRecordUpsertInput) {
+function toRecordData(input: SharedRecordUpsertInput) {
   const searchText = buildSearchText({
     displayName: input.displayName,
     status: input.status,
@@ -58,7 +29,6 @@ function toRecordData(organizationId: string, input: SharedRecordUpsertInput) {
   });
 
   return {
-    organizationId,
     entityType: input.entityType,
     displayName: input.displayName,
     status: input.status,
@@ -84,11 +54,10 @@ function isPrismaUniqueConstraintError(error: unknown) {
   return typeof error === "object" && error !== null && "code" in error && error.code === "P2002";
 }
 
-async function findExistingSharedRecord(organizationId: string, input: SharedRecordUpsertInput, database: SharedRecordMutationDb) {
+async function findExistingSharedRecord(input: SharedRecordUpsertInput, database: SharedRecordMutationDb) {
   if (input.ecrmLegacyId) {
     const existingByEcrmLegacyId = await database.sharedBusinessRecord.findFirst({
       where: {
-        organizationId,
         entityType: input.entityType,
         ecrmLegacyId: input.ecrmLegacyId
       }
@@ -102,7 +71,6 @@ async function findExistingSharedRecord(organizationId: string, input: SharedRec
   if (input.emailVoiceLegacyId) {
     const existingByEmailVoiceLegacyId = await database.sharedBusinessRecord.findFirst({
       where: {
-        organizationId,
         entityType: input.entityType,
         emailVoiceLegacyId: input.emailVoiceLegacyId
       }
@@ -116,7 +84,6 @@ async function findExistingSharedRecord(organizationId: string, input: SharedRec
   if (input.externalKey) {
     return database.sharedBusinessRecord.findFirst({
       where: {
-        organizationId,
         entityType: input.entityType,
         externalKey: input.externalKey
       }
@@ -127,28 +94,40 @@ async function findExistingSharedRecord(organizationId: string, input: SharedRec
 }
 
 export async function upsertSharedRecord(
-  organizationId: string,
   rawInput: unknown,
-  database?: SharedRecordMutationDb
+  database: SharedRecordMutationDb = db as unknown as SharedRecordMutationDb
 ): Promise<SharedRecordMutationResult> {
-  if (!database) {
-    return withOrganization(organizationId, (tx) => upsertSharedRecord(organizationId, rawInput, tx as unknown as SharedRecordMutationDb));
-  }
   const input = sharedRecordUpsertSchema.parse(rawInput) as SharedRecordUpsertInput;
-  await validateSemanticRelationships(organizationId, input, database);
-  if (input.parentId) {
-    const parent = await database.sharedBusinessRecord.findFirst({
-      where: { id: input.parentId, organizationId }
+  const runtime = parseRuntimeConfig({ ...process.env, APP_MODE: process.env.APP_MODE ?? "platform" });
+  if (database.$transaction && runtime.mode === "cell") {
+    const correlationId = `corr_${randomUUID()}`;
+    return mutateWithCellOutbox({
+      database: database as never,
+      runtime,
+      destinationInstallation: process.env.INTEGRATION_DESTINATION_INSTALLATION ?? "",
+      eventType: "shared-record.changed",
+      correlationId,
+      idempotencyKey: (result) => `shared-record:${result.record.id}:${result.record.headVersion ?? 1}`,
+      mutate: (transaction) => upsertSharedRecordCore(input, transaction as unknown as SharedRecordMutationDb),
+      payload: (result) => ({ recordId: result.record.id, entityType: result.record.entityType }),
+      payloadVersion: (result) => result.record.headVersion ?? 1
     });
-    if (!parent) throw new Error("Related record was not found.");
   }
-  const existing = await findExistingSharedRecord(organizationId, input, database);
-  const data = toRecordData(organizationId, input);
+  return upsertSharedRecordCore(input, database);
+}
+
+async function upsertSharedRecordCore(
+  input: SharedRecordUpsertInput,
+  database: SharedRecordMutationDb
+): Promise<SharedRecordMutationResult> {
+  const existing = await findExistingSharedRecord(input, database);
+  const data = toRecordData(input);
 
   if (existing) {
+    if (sameRecord(existing, data)) return { record: mapSharedRecordRow(existing), created: false };
     const row = await database.sharedBusinessRecord.update({
       where: { id: existing.id },
-      data
+      data: { ...data, headVersion: { increment: 1 } }
     });
 
     return { record: mapSharedRecordRow(row), created: false };
@@ -165,7 +144,7 @@ export async function upsertSharedRecord(
       throw error;
     }
 
-    const duplicate = await findExistingSharedRecord(organizationId, input, database);
+    const duplicate = await findExistingSharedRecord(input, database);
 
     if (!duplicate) {
       throw error;
@@ -173,9 +152,19 @@ export async function upsertSharedRecord(
 
     const row = await database.sharedBusinessRecord.update({
       where: { id: duplicate.id },
-      data
+      data: sameRecord(duplicate, data) ? {} : { ...data, headVersion: { increment: 1 } }
     });
 
     return { record: mapSharedRecordRow(row), created: false };
   }
+}
+
+function sameRecord(existing: SharedBusinessRecordRow, data: ReturnType<typeof toRecordData>): boolean {
+  const scalarKeys = [
+    "entityType", "displayName", "status", "ownerId", "parentId", "relatedLeadId", "relatedCustomerId",
+    "relatedContactId", "relatedOpportunityId", "sourceApp", "ecrmLegacyId", "emailVoiceLegacyId", "externalKey",
+    "email", "phone", "companyName", "searchText"
+  ] as const;
+  return scalarKeys.every((key) => (existing[key] ?? null) === (data[key] ?? null))
+    && JSON.stringify(existing.data) === JSON.stringify(data.data);
 }

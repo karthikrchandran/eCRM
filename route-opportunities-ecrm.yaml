@@ -1,0 +1,193 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - complementary [ref=e3]:
+      - link "eCRM" [ref=e4] [cursor=pointer]:
+        - /url: /dashboard
+      - paragraph [ref=e5]: Admin Console
+      - navigation "Admin navigation" [ref=e6]:
+        - link "Dashboard" [ref=e7] [cursor=pointer]:
+          - /url: /dashboard
+        - link "Customer 360" [ref=e8] [cursor=pointer]:
+          - /url: /customer-360
+        - link "Pipeline" [ref=e9] [cursor=pointer]:
+          - /url: /opportunities
+        - link "Orders" [ref=e10] [cursor=pointer]:
+          - /url: /orders
+        - link "Incentives" [ref=e11] [cursor=pointer]:
+          - /url: /incentives
+        - link "Team performance" [ref=e12] [cursor=pointer]:
+          - /url: /admin/performance
+        - link "Reports" [ref=e13] [cursor=pointer]:
+          - /url: /reports
+        - paragraph [ref=e15]: Setup
+        - link "Production" [ref=e16] [cursor=pointer]:
+          - /url: /production
+        - link "Products" [ref=e17] [cursor=pointer]:
+          - /url: /admin/products
+        - link "Production config" [ref=e18] [cursor=pointer]:
+          - /url: /admin/production-config
+        - link "Settings" [ref=e19] [cursor=pointer]:
+          - /url: /admin/settings
+    - generic [ref=e20]:
+      - banner [ref=e21]:
+        - generic [ref=e22]:
+          - generic [ref=e23]:
+            - paragraph [ref=e24]: Admin Console
+            - paragraph [ref=e25]: Company controls, reporting, configuration, and operations.
+          - generic [ref=e26]:
+            - generic [ref=e27]:
+              - generic [ref=e28]:
+                - paragraph [ref=e29]: Kavya Iyer
+                - generic [ref=e30]: Admin
+              - paragraph [ref=e31]: admin@example.com
+            - button "Sign out" [ref=e33]
+      - main [ref=e34]:
+        - generic [ref=e35]:
+          - generic [ref=e36]:
+            - generic [ref=e37]:
+              - paragraph [ref=e38]: Sales pipeline
+              - heading "Pipeline" [level=1] [ref=e39]
+              - paragraph [ref=e40]: Simple pipeline list with filters, owner drilldown, and quick access to stages and targets.
+            - generic [ref=e41]:
+              - link "Stages" [ref=e42] [cursor=pointer]:
+                - /url: /opportunities/stages
+              - link "Targets" [ref=e43] [cursor=pointer]:
+                - /url: /opportunities/targets
+              - link "New opportunity" [ref=e44] [cursor=pointer]:
+                - /url: /opportunities/new
+          - generic [ref=e45]:
+            - article [ref=e46]:
+              - paragraph [ref=e47]: Open pipeline
+              - paragraph [ref=e48]: INR 12,50,000.00
+              - paragraph [ref=e49]: 1 active opportunities
+            - article [ref=e50]:
+              - paragraph [ref=e51]: Weighted pipeline
+              - paragraph [ref=e52]: INR 7,50,000.00
+              - paragraph [ref=e53]: Value adjusted by probability
+            - article [ref=e54]:
+              - paragraph [ref=e55]: Follow-ups scheduled
+              - paragraph [ref=e56]: "2"
+              - paragraph [ref=e57]: Records with a next action date
+            - article [ref=e58]:
+              - paragraph [ref=e59]: Visible records
+              - paragraph [ref=e60]: "2"
+              - paragraph [ref=e61]: After current filters
+          - generic [ref=e63]:
+            - generic [ref=e64]:
+              - heading "Owner focus" [level=2] [ref=e65]
+              - paragraph [ref=e66]: Start with the full pipeline, then narrow to one sales rep if needed.
+            - generic [ref=e67]:
+              - link "All reps" [ref=e68] [cursor=pointer]:
+                - /url: /opportunities?view=list
+              - link "Arjun Srinivasan" [ref=e69] [cursor=pointer]:
+                - /url: /opportunities?ownerId=cmqre4cnt0002tnnonsaqjviq&view=list
+              - link "Kavya Iyer" [ref=e70] [cursor=pointer]:
+                - /url: /opportunities?ownerId=cmqre4bp20000tnno5px9nitc&view=list
+              - link "Priya Menon" [ref=e71] [cursor=pointer]:
+                - /url: /opportunities?ownerId=cmqre4c7y0001tnnorjjsrqxj&view=list
+          - generic [ref=e72]:
+            - generic [ref=e73]:
+              - text: Search
+              - searchbox "Search" [ref=e74]
+            - generic [ref=e75]:
+              - text: Owner
+              - combobox "Owner" [ref=e76]:
+                - option "All owners" [selected]
+                - option "Arjun Srinivasan (sales2@example.com)"
+                - option "Kavya Iyer (admin@example.com)"
+                - option "Priya Menon (sales@example.com)"
+            - generic [ref=e77]:
+              - text: Stage
+              - combobox "Stage" [ref=e78]:
+                - option "All stages" [selected]
+                - option "Lead"
+                - option "Qualified"
+                - option "Proposal Sent"
+                - option "Negotiation"
+                - option "Won"
+                - option "Lost"
+                - option "Dormant"
+            - generic [ref=e79]:
+              - text: Follow-up
+              - combobox "Follow-up" [ref=e80]:
+                - option "Any follow-up" [selected]
+                - option "overdue"
+                - option "today"
+                - option "upcoming"
+            - generic [ref=e81]:
+              - button "Apply filters" [ref=e82]
+              - link "Reset" [ref=e83] [cursor=pointer]:
+                - /url: /opportunities
+          - generic [ref=e84]:
+            - link "List" [ref=e85] [cursor=pointer]:
+              - /url: /opportunities?view=list
+            - link "Board" [ref=e86] [cursor=pointer]:
+              - /url: /opportunities?view=board
+          - table [ref=e88]:
+            - rowgroup [ref=e89]:
+              - row "Opportunity Stage Owner Value Follow-up Splits Actions" [ref=e90]:
+                - columnheader "Opportunity" [ref=e91]
+                - columnheader "Stage" [ref=e92]
+                - columnheader "Owner" [ref=e93]
+                - columnheader "Value" [ref=e94]
+                - columnheader "Follow-up" [ref=e95]
+                - columnheader "Splits" [ref=e96]
+                - columnheader "Actions" [ref=e97]
+            - rowgroup [ref=e98]:
+              - row "Zenith compliance learning refresh Zenith Health Systems CUSTOMER Mumbai Corporate Office Compliance learning refresh and animation Won WON Arjun Srinivasan sales2@example.com INR 8,40,000.00 75% Overdue 24 Jun 2026 Updated 24 Jun 2026 Arjun Srinivasan 100% Customer 360" [ref=e99]:
+                - cell "Zenith compliance learning refresh Zenith Health Systems CUSTOMER Mumbai Corporate Office Compliance learning refresh and animation" [ref=e100]:
+                  - link "Zenith compliance learning refresh" [ref=e101] [cursor=pointer]:
+                    - /url: /opportunities/seed_opportunity_zenith_compliance_refresh
+                  - paragraph [ref=e102]: Zenith Health Systems
+                  - generic [ref=e103]:
+                    - generic [ref=e104]: CUSTOMER
+                    - generic [ref=e105]: Mumbai Corporate Office
+                    - generic [ref=e106]: Compliance learning refresh and animation
+                - cell "Won WON" [ref=e107]:
+                  - paragraph [ref=e108]: Won
+                  - paragraph [ref=e109]: WON
+                - cell "Arjun Srinivasan sales2@example.com" [ref=e110]:
+                  - paragraph [ref=e111]: Arjun Srinivasan
+                  - paragraph [ref=e112]: sales2@example.com
+                - cell "INR 8,40,000.00 75%" [ref=e113]:
+                  - paragraph [ref=e114]: INR 8,40,000.00
+                  - paragraph [ref=e115]: 75%
+                - cell "Overdue 24 Jun 2026 Updated 24 Jun 2026" [ref=e116]:
+                  - generic [ref=e117]:
+                    - generic [ref=e118]: Overdue
+                    - paragraph [ref=e119]: 24 Jun 2026
+                  - paragraph [ref=e120]: Updated 24 Jun 2026
+                - cell "Arjun Srinivasan 100%" [ref=e121]
+                - cell "Customer 360" [ref=e122]:
+                  - link "Customer 360" [ref=e123] [cursor=pointer]:
+                    - /url: /customer-360/seed_lead_zenith_health
+              - row "Northstar LMS modernization Northstar Learning Pvt Ltd LEAD Bengaluru Delivery Office LMS modernization and onboarding content Qualified OPEN Priya Menon sales@example.com INR 12,50,000.00 60% Overdue 20 Jun 2026 Updated 23 Jun 2026 Priya Menon 100% Customer 360" [ref=e124]:
+                - cell "Northstar LMS modernization Northstar Learning Pvt Ltd LEAD Bengaluru Delivery Office LMS modernization and onboarding content" [ref=e125]:
+                  - link "Northstar LMS modernization" [ref=e126] [cursor=pointer]:
+                    - /url: /opportunities/seed_opportunity_acme_lms_rollout
+                  - paragraph [ref=e127]: Northstar Learning Pvt Ltd
+                  - generic [ref=e128]:
+                    - generic [ref=e129]: LEAD
+                    - generic [ref=e130]: Bengaluru Delivery Office
+                    - generic [ref=e131]: LMS modernization and onboarding content
+                - cell "Qualified OPEN" [ref=e132]:
+                  - paragraph [ref=e133]: Qualified
+                  - paragraph [ref=e134]: OPEN
+                - cell "Priya Menon sales@example.com" [ref=e135]:
+                  - paragraph [ref=e136]: Priya Menon
+                  - paragraph [ref=e137]: sales@example.com
+                - cell "INR 12,50,000.00 60%" [ref=e138]:
+                  - paragraph [ref=e139]: INR 12,50,000.00
+                  - paragraph [ref=e140]: 60%
+                - cell "Overdue 20 Jun 2026 Updated 23 Jun 2026" [ref=e141]:
+                  - generic [ref=e142]:
+                    - generic [ref=e143]: Overdue
+                    - paragraph [ref=e144]: 20 Jun 2026
+                  - paragraph [ref=e145]: Updated 23 Jun 2026
+                - cell "Priya Menon 100%" [ref=e146]
+                - cell "Customer 360" [ref=e147]:
+                  - link "Customer 360" [ref=e148] [cursor=pointer]:
+                    - /url: /customer-360/seed_lead_acme_learning
+  - button "Open Next.js Dev Tools" [ref=e154] [cursor=pointer]:
+    - img [ref=e155]
+  - alert [ref=e158]
