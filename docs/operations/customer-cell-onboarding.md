@@ -9,6 +9,14 @@ This runbook creates one dedicated eCRM deployment identity. Customer identity i
 3. Confirm provider adapters declare idempotency, fencing, cancellation, and health-check support. Production configuration must include database, storage, secret, backup, application, and SignalLoop endpoints plus credential references.
 4. Use only synthetic data in rehearsal. Do not copy customer CRM records into the platform database or logs.
 
+## Demo-cell verification for Vercel and Supabase
+
+For ARA Global and AI Consulting demos, use the current Vercel and Supabase path. AWS runtime work is not part of this runbook. Each cell must have its own Supabase database/project and its own Vercel deployment.
+
+Run `npm run verify:demo-cell` in the same shell that will run migrations or tenant seeding. The command checks `APP_MODE=cell`, the approved `CELL_ID`/`CELL_KEY`, `TENANT_SEED`, PostgreSQL `DATABASE_URL`, `AUTH_SECRET`, `APP_BASE_URL`, Vercel Blob storage configuration, and optional SignalLoop delivery destination settings.
+
+Warnings are allowed only when deliberately running a local rehearsal. For a deployed demo cell, resolve warnings for Vercel Blob storage and SignalLoop delivery before calling the cell demo-ready.
+
 ## Provision and verify
 
 Platform administrators can use `/platform/cells` to submit the durable provisioning contract. Enter the platform bearer token at runtime; it is held in browser state and sent only in the `Authorization` header to `/api/platform/cells`. The page does not create tenant passwords or bypass the platform authorization boundary. Keep idempotency and correlation IDs stable when retrying a request.

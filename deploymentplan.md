@@ -64,6 +64,28 @@ Seed the demos with `npm run prisma:seed:tenant`, never with `npm run prisma:see
    CELL_KEY="[ara-global or ai-consulting]"
    ```
 
+### Step 1.1a: Verify the demo-cell contract
+
+Before running migrations or tenant seed commands, verify the active shell is pointed at exactly one approved demo cell:
+
+```powershell
+$env:APP_MODE="cell"
+$env:CELL_ID="cell_ara_global"
+$env:CELL_KEY="ara-global"
+$env:TENANT_SEED="ara-global"
+$env:DATABASE_URL="postgresql://postgres:[ARA_PASSWORD]@[ARA_HOST]:5432/postgres"
+$env:AUTH_SECRET="[GENERATE_32_PLUS_CHAR_SECRET]"
+$env:APP_BASE_URL="https://[ARA_VERCEL_URL]"
+$env:AUTH_MODE="oidc"
+$env:BLOB_READ_WRITE_TOKEN="[VERCEL_BLOB_TOKEN]"
+$env:INTEGRATION_DESTINATION_URL="https://[ARA_SIGNALLOOP_API_URL]"
+$env:INTEGRATION_DESTINATION_INSTALLATION="workspace_ara_global"
+$env:INTEGRATION_DESTINATION_TOKEN="[ARA_SIGNALLOOP_DELIVERY_TOKEN]"
+npm run verify:demo-cell
+```
+
+Repeat with `CELL_ID=cell_ai_consulting`, `CELL_KEY=ai-consulting`, `TENANT_SEED=ai-consulting`, and `INTEGRATION_DESTINATION_INSTALLATION=workspace_ai_consulting` for the AI Consulting cell. Do not continue to migration, seed, or Vercel deployment if this command prints any `ERROR:` lines.
+
 ### Step 1.2: Run Prisma Migrations on Supabase
 
 ```bash
