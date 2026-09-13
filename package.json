@@ -22,6 +22,7 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "prisma db seed",
     "prisma:seed:tenant": "tsx prisma/tenant-seed.ts",
+    "verify:demo-cell": "tsx src/scripts/verify-demo-cell.ts",
     "gate": "npm run typecheck && npm run lint && npm run test && npm run build"
   },
   "dependencies": {
