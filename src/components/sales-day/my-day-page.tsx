@@ -54,6 +54,7 @@ export function MyDayPage({ activeNoteView, activeView, insights, lookups, myDay
     <div className="space-y-6">
       <PageHeader
         eyebrow="Personal sales workspace"
+        icon="calendarCheck"
         title="My Day"
         description="Plan sales work, keep completed items visible, and capture call notes without changing CRM records automatically."
       />

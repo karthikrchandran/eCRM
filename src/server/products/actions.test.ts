@@ -9,6 +9,8 @@ describe("product service actions", () => {
     formData.set("category", " eLearning ");
     formData.set("defaultGstRateBps", "1800");
     formData.set("defaultProductionTemplateKey", "elearning");
+    formData.set("productionStageIds", "stage_script");
+    formData.set("productionStageSortOrder:stage_script", "20");
     formData.set("active", "on");
     formData.set("sortOrder", "10");
 
@@ -20,6 +22,7 @@ describe("product service actions", () => {
         category: "eLearning",
         defaultGstRateBps: 1800,
         defaultProductionTemplateKey: "elearning",
+        productionStages: [{ stageId: "stage_script", sortOrder: 20 }],
         active: true,
         sortOrder: 10
       }

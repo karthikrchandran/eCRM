@@ -71,7 +71,7 @@ export function TeamMembers({ initialMembers, currentMembershipId, canManage = t
 
   return (
     <div className="space-y-6">
-      <PageHeader eyebrow="Admin" title="Team access" description="Invite employees and manage tenant membership access." />
+      <PageHeader eyebrow="Admin" icon="users" title="Team access" description="Invite employees and manage tenant membership access." />
       <section className="surface p-5" aria-labelledby="invite-title">
         <h2 className="text-base font-semibold text-slate-950" id="invite-title">Invite a team member</h2>
         <form className="mt-4 grid gap-3 md:grid-cols-[1fr_1fr_12rem_auto] md:items-end" onSubmit={invite}>

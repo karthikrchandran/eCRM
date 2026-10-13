@@ -1,6 +1,7 @@
 import type { Prisma, ProductionStageStatus, User } from "@prisma/client";
 import { withOrganization } from "@/server/organizations/with-organization";
 import { listOrganizationUserOptions } from "@/server/organizations/member-options";
+import { DEFAULT_PRODUCTION_TEMPLATE_KEY } from "./constants";
 import { assertCanManageProductionConfig, assertCanViewProductionRecords } from "./permissions";
 import type { ProductionFilters, ProductionUser } from "./types";
 
@@ -75,6 +76,7 @@ type ProductionQueryDb = {
   };
   productionTemplate?: {
     findMany: (args: Prisma.ProductionTemplateFindManyArgs) => Promise<ProductionTemplateConfigRecord[]>;
+    upsert?: (args: Prisma.ProductionTemplateUpsertArgs) => Promise<{ id: string }>;
   };
   productService?: {
     findMany: (args: Prisma.ProductServiceFindManyArgs) => Promise<ProductionProductServiceConfigRecord[]>;
@@ -194,18 +196,37 @@ export async function listProductionTemplateConfig(
     throw new Error("Production template configuration query is unavailable.");
   }
 
-  const [templates, productServices] = await Promise.all([
-    database.productionTemplate.findMany({
-      where: { organizationId: user.organizationId },
+  let templates = await database.productionTemplate.findMany({
+    where: { organizationId: user.organizationId, key: DEFAULT_PRODUCTION_TEMPLATE_KEY },
+    orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+    include: productionTemplateConfigInclude
+  });
+
+  if (templates.length === 0 && database.productionTemplate.upsert) {
+    await database.productionTemplate.upsert({
+      where: { organizationId_key: { organizationId: user.organizationId, key: DEFAULT_PRODUCTION_TEMPLATE_KEY } },
+      create: {
+        organizationId: user.organizationId,
+        key: DEFAULT_PRODUCTION_TEMPLATE_KEY,
+        name: "Product stages",
+        description: "Default production stages for products.",
+        active: true,
+        sortOrder: 0
+      },
+      update: { active: true, name: "Product stages" }
+    });
+    templates = await database.productionTemplate.findMany({
+      where: { organizationId: user.organizationId, key: DEFAULT_PRODUCTION_TEMPLATE_KEY },
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
       include: productionTemplateConfigInclude
-    }),
-    database.productService.findMany({
-      where: { organizationId: user.organizationId },
-      orderBy: [{ active: "desc" }, { sortOrder: "asc" }, { name: "asc" }],
-      select: productionProductServiceSelect
-    })
-  ]);
+    });
+  }
+
+  const productServices = await database.productService.findMany({
+    where: { organizationId: user.organizationId },
+    orderBy: [{ active: "desc" }, { sortOrder: "asc" }, { name: "asc" }],
+    select: productionProductServiceSelect
+  });
 
   return { productServices, templates };
 }

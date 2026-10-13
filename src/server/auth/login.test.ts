@@ -10,6 +10,15 @@ const activeUser = {
   active: true
 };
 
+const activeMembership = {
+  id: "membership_1",
+  organizationId: "org_1",
+  role: "ADMIN" as const,
+  status: "ACTIVE" as const,
+  updatedAt: new Date("2026-09-13T12:00:00.000Z"),
+  organization: { status: "ACTIVE" as const }
+};
+
 describe("authenticateLogin", () => {
   it("rejects an invalid email address", async () => {
     const result = await authenticateLogin({
@@ -38,7 +47,7 @@ describe("authenticateLogin", () => {
         email: "Admin@Example.COM",
         password: "Admin@12345"
       },
-      { findUserByEmail, verifyPassword }
+      { findUserByEmail, verifyPassword, findActiveMemberships: vi.fn().mockResolvedValue([activeMembership]) }
     );
 
     expect(findUserByEmail).toHaveBeenCalledWith("admin@example.com");
@@ -86,7 +95,8 @@ describe("authenticateLogin", () => {
       },
       {
         findUserByEmail: vi.fn().mockResolvedValue(activeUser),
-        verifyPassword: vi.fn().mockResolvedValue(true)
+        verifyPassword: vi.fn().mockResolvedValue(true),
+        findActiveMemberships: vi.fn().mockResolvedValue([activeMembership])
       }
     );
 
@@ -95,9 +105,28 @@ describe("authenticateLogin", () => {
         id: "user_1",
         name: "Admin User",
         email: "admin@example.com",
-        role: "ADMIN"
+        organizationId: "org_1",
+        membershipId: "membership_1",
+        role: "ADMIN",
+        sessionVersion: activeMembership.updatedAt.getTime()
       }
     });
+  });
+
+  it("rejects users without an active organization membership", async () => {
+    const result = await authenticateLogin(
+      {
+        email: "admin@example.com",
+        password: "Admin@12345"
+      },
+      {
+        findUserByEmail: vi.fn().mockResolvedValue(activeUser),
+        verifyPassword: vi.fn().mockResolvedValue(true),
+        findActiveMemberships: vi.fn().mockResolvedValue([])
+      }
+    );
+
+    expect(result).toEqual({ error: "Invalid email or password." });
   });
 
   it("denies a new session when the cell lifecycle is not ACTIVE", async () => {

@@ -88,7 +88,7 @@ export function RepComparisonTable({ filters, repOptions = [], rows }: RepCompar
         <Link className="crm-button crm-button-secondary text-sm" href="/opportunities/targets">Manage targets</Link>
       </div>
 
-      <div className="surface overflow-x-auto">
+      <div className="surface">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-[var(--border)] text-left text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">

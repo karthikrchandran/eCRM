@@ -1,22 +1,92 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AppShell } from "./app-shell";
 
 vi.mock("@/server/auth/actions", () => ({
   logoutAction: vi.fn()
 }));
 
+const pathnameMock = vi.hoisted(() => vi.fn<() => string | null>(() => null));
+vi.mock("next/navigation", () => ({
+  usePathname: pathnameMock
+}));
+
 describe("AppShell", () => {
-  it("renders the signed-in identity and role in mobile and desktop header regions", () => {
+  beforeEach(() => {
+    pathnameMock.mockReturnValue(null);
+  });
+
+  it("renders the signed-in identity and role once in the sidebar", () => {
     render(
       <AppShell user={{ name: "Kavya Iyer", email: "admin@example.com", role: "ADMIN" }}>
         <p>Dashboard content</p>
       </AppShell>
     );
 
-    expect(screen.getAllByText("Kavya Iyer")).toHaveLength(2);
-    expect(screen.getAllByText("admin@example.com")).toHaveLength(2);
-    expect(screen.getAllByText("Admin")).toHaveLength(2);
+    expect(screen.getAllByText("Kavya Iyer")).toHaveLength(1);
+    expect(screen.getAllByText("admin@example.com")).toHaveLength(1);
+    expect(screen.getAllByText("Admin")).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "Sign out" })).toBeVisible();
+  });
+
+  it("uses the same sidebar layout for both roles", () => {
+    const { rerender } = render(
+      <AppShell user={{ name: "Kavya Iyer", email: "admin@example.com", role: "ADMIN" }}>
+        <p>Dashboard content</p>
+      </AppShell>
+    );
+
+    expect(screen.getByRole("navigation", { name: "Main navigation" })).toBeVisible();
+
+    rerender(
+      <AppShell user={{ name: "Priya Menon", email: "sales@example.com", role: "SALES" }}>
+        <p>Dashboard content</p>
+      </AppShell>
+    );
+
+    expect(screen.getByRole("navigation", { name: "Main navigation" })).toBeVisible();
+    expect(screen.getByText("Lead-to-cash workspace")).toBeVisible();
+  });
+
+  it("marks the current route and its sub-routes as the active page", () => {
+    pathnameMock.mockReturnValue("/opportunities/abc123");
+    render(
+      <AppShell user={{ name: "Priya Menon", email: "sales@example.com", role: "SALES" }}>
+        <p>Dashboard content</p>
+      </AppShell>
+    );
+
+    expect(screen.getByRole("link", { name: "Pipeline" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "Leads" })).not.toHaveAttribute("aria-current");
+  });
+
+  it("does not treat a sibling route with a shared prefix as active", () => {
+    pathnameMock.mockReturnValue("/admin/performance");
+    render(
+      <AppShell user={{ name: "Kavya Iyer", email: "admin@example.com", role: "ADMIN" }}>
+        <p>Dashboard content</p>
+      </AppShell>
+    );
+
+    expect(screen.getByRole("link", { name: "Team performance" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "Settings" })).not.toHaveAttribute("aria-current");
+  });
+
+  it("toggles the mobile navigation menu", () => {
+    render(
+      <AppShell user={{ name: "Priya Menon", email: "sales@example.com", role: "SALES" }}>
+        <p>Dashboard content</p>
+      </AppShell>
+    );
+
+    const toggle = screen.getByRole("button", { name: "Open navigation" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+
+    fireEvent.click(toggle);
+    expect(screen.getByRole("button", { name: "Close navigation" })).toHaveAttribute("aria-expanded", "true");
+
+    fireEvent.click(screen.getByRole("link", { name: "Leads" }));
+    expect(screen.getByRole("button", { name: "Open navigation" })).toHaveAttribute("aria-expanded", "false");
   });
 
   it("shows setup navigation only for admins", () => {
@@ -49,7 +119,7 @@ describe("AppShell", () => {
       </AppShell>
     );
 
-    expect(screen.getByRole("banner")).toHaveTextContent("Admin Console");
+    expect(screen.getByText("Admin Console")).toBeVisible();
     expect(screen.queryByRole("link", { name: "My Day" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Leads" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Contacts" })).not.toBeInTheDocument();

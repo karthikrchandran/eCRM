@@ -1,7 +1,8 @@
 import type { UserRole } from "@prisma/client";
-import Link from "next/link";
-import { logoutAction } from "@/server/auth/actions";
+import { ShellSidebar, type ShellNavGroup } from "@/components/app-shell-nav";
 import { RoleBadge } from "@/components/ui/sales-primitives";
+import { Icon, type IconName } from "@/components/ui/icons";
+import { logoutAction } from "@/server/auth/actions";
 
 type AppShellProps = {
   user: {
@@ -13,162 +14,82 @@ type AppShellProps = {
   enabledModules?: string[];
 };
 
-const salesNavItems = [
-  { href: "/dashboard", label: "Dashboard", module: "crm" },
-  { href: "/my-day", label: "My Day", module: "crm" },
-  { href: "/leads", label: "Leads", module: "crm" },
-  { href: "/contacts", label: "Contacts", module: "crm" },
-  { href: "/customer-360", label: "Customer 360", module: "crm" },
-  { href: "/opportunities", label: "Pipeline", module: "crm" },
-  { href: "/performance", label: "Performance", module: "reports" },
-  { href: "/finance", label: "Finance", module: "finance" },
-  { href: "/reports", label: "Reports", module: "reports" }
-];
+type NavItem = { href: string; label: string; icon: IconName; module: string | null; roles?: UserRole[] };
 
-const adminNavItems = [
-  { href: "/dashboard", label: "Dashboard", module: "crm" },
-  { href: "/customer-360", label: "Customer 360", module: "crm" },
-  { href: "/opportunities", label: "Pipeline", module: "crm" },
-  { href: "/orders", label: "Orders", module: "orders" },
-  { href: "/finance", label: "Finance", module: "finance" },
-  { href: "/incentives", label: "Incentives", module: "finance" },
-  { href: "/admin/performance", label: "Team performance", module: "reports" },
-  { href: "/reports", label: "Reports", module: "reports" }
-];
-
-const adminSetupNavItems = [
-  { href: "/production", label: "Production", module: "production" },
-  { href: "/admin/products", label: "Products", module: "production" },
-  { href: "/admin/production-config", label: "Production config", module: "production" },
-  { href: "/admin/settings", label: "Settings", module: null }
+const navGroups: { label: string; items: NavItem[] }[] = [
+  {
+    label: "Workspace",
+    items: [
+      { href: "/dashboard", label: "Dashboard", icon: "dashboard", module: "crm" },
+      { href: "/my-day", label: "My Day", icon: "calendarCheck", module: "crm", roles: ["SALES"] }
+    ]
+  },
+  {
+    label: "Customers",
+    items: [
+      { href: "/leads", label: "Leads", icon: "userPlus", module: "crm", roles: ["SALES"] },
+      { href: "/contacts", label: "Contacts", icon: "contact", module: "crm", roles: ["SALES"] },
+      { href: "/customer-360", label: "Customer 360", icon: "building", module: "crm" }
+    ]
+  },
+  {
+    label: "Sales",
+    items: [
+      { href: "/opportunities", label: "Pipeline", icon: "trendingUp", module: "crm" },
+      { href: "/orders", label: "Orders", icon: "clipboardList", module: "orders", roles: ["ADMIN"] },
+      { href: "/performance", label: "Performance", icon: "target", module: "reports", roles: ["SALES"] },
+      { href: "/admin/performance", label: "Team performance", icon: "users", module: "reports", roles: ["ADMIN"] }
+    ]
+  },
+  {
+    label: "Finance and reports",
+    items: [
+      { href: "/finance", label: "Finance", icon: "wallet", module: "finance" },
+      { href: "/incentives", label: "Incentives", icon: "award", module: "finance", roles: ["ADMIN"] },
+      { href: "/reports", label: "Reports", icon: "fileChart", module: "reports" }
+    ]
+  },
+  {
+    label: "Setup",
+    items: [
+      { href: "/production", label: "Production", icon: "factory", module: "production", roles: ["ADMIN"] },
+      { href: "/admin/products", label: "Products", icon: "package", module: "production", roles: ["ADMIN"] },
+      { href: "/admin/production-config", label: "Production config", icon: "sliders", module: "production", roles: ["ADMIN"] },
+      { href: "/admin/settings", label: "Settings", icon: "settings", module: null, roles: ["ADMIN"] }
+    ]
+  }
 ];
 
 export function AppShell({ user, children, enabledModules = ["crm", "proposals", "orders", "production", "finance", "reports"] }: AppShellProps) {
-  const isVisible = (item: { module: string | null }) => item.module === null || enabledModules.includes(item.module);
-  if (user.role === "ADMIN") {
-    return (
-      <div className="min-h-screen bg-[var(--background)] md:grid md:grid-cols-[17rem_1fr]">
-        <aside className="border-r border-[var(--border)] bg-white px-4 py-5">
-          <Link className="text-lg font-semibold text-[var(--brand-navy)]" href="/dashboard">
-            eCRM
-          </Link>
-          <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Admin Console</p>
-          <nav className="mt-6 grid gap-1 text-sm" aria-label="Admin navigation">
-            {adminNavItems.filter(isVisible).map((item) => (
-              <Link
-                className="rounded-md px-3 py-2 font-semibold text-slate-700 hover:bg-[var(--surface-muted)] hover:text-[var(--brand-navy)]"
-                href={item.href}
-                key={item.href}
-              >
-                {item.label}
-              </Link>
-            ))}
-            <div className="mt-4 px-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Setup</p>
-            </div>
-            {adminSetupNavItems.filter(isVisible).map((item) => (
-              <Link
-                className="rounded-md px-3 py-2 font-semibold text-slate-700 hover:bg-[var(--surface-muted)] hover:text-[var(--brand-navy)]"
-                href={item.href}
-                key={item.href}
-              >
-                {item.label}
-              </Link>
-            ))}
-          </nav>
-        </aside>
-        <div className="min-w-0">
-          <header className="border-b border-[var(--border)] bg-slate-950 text-white" role="banner">
-            <div className="flex flex-col gap-3 px-4 py-3 md:flex-row md:items-center md:justify-between">
-              <div>
-                <p className="text-sm font-semibold text-white">Admin Console</p>
-                <p className="text-xs text-slate-300">Company controls, reporting, configuration, and operations.</p>
-              </div>
-              <div className="flex items-center justify-between gap-3 text-sm">
-                <div className="min-w-0 md:hidden">
-                  <div className="flex min-w-0 items-center gap-2">
-                    <p className="truncate font-medium text-white">{user.name}</p>
-                    <RoleBadge role={user.role} />
-                  </div>
-                  <p className="truncate text-xs text-slate-300">{user.email}</p>
-                </div>
-                <div className="hidden text-right md:block">
-                  <div className="flex items-center justify-end gap-2">
-                    <p className="font-medium text-white">{user.name}</p>
-                    <RoleBadge role={user.role} />
-                  </div>
-                  <p className="text-xs text-slate-300">{user.email}</p>
-                </div>
-                <form action={logoutAction}>
-                  <button className="crm-button crm-button-subtle text-sm" type="submit">
-                    Sign out
-                  </button>
-                </form>
-              </div>
-            </div>
-          </header>
-          <main className="mx-auto max-w-7xl px-4 py-8">{children}</main>
-        </div>
-      </div>
-    );
-  }
+  const isVisible = (item: NavItem) =>
+    (item.module === null || enabledModules.includes(item.module)) && (!item.roles || item.roles.includes(user.role));
 
-  const navItems = salesNavItems;
+  const groups: ShellNavGroup[] = navGroups
+    .map((group) => ({ label: group.label, items: group.items.filter(isVisible).map(({ href, label, icon }) => ({ href, label, icon })) }))
+    .filter((group) => group.items.length > 0);
+
+  const footer = (
+    <div className="border-t border-white/15 px-4 py-3 text-sm">
+      <div className="flex min-w-0 items-center gap-2">
+        <p className="truncate font-medium text-white">{user.name}</p>
+        <RoleBadge role={user.role} />
+      </div>
+      <p className="truncate text-xs text-[var(--header-muted)]">{user.email}</p>
+      <form action={logoutAction} className="mt-2.5">
+        <button className="crm-button crm-button-subtle w-full gap-2 !min-h-9 text-[13px]" type="submit">
+          <Icon name="logOut" size={15} />
+          Sign out
+        </button>
+      </form>
+    </div>
+  );
 
   return (
-    <div className="min-h-screen">
-      <header className="border-b border-[rgb(255_255_255_/_0.16)] bg-[var(--brand-navy)] text-white shadow-[0_12px_28px_rgb(0_24_66_/_0.18)]">
-        <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-3 md:flex-row md:items-center md:justify-between">
-          <div className="flex min-w-0 items-start justify-between gap-3 md:block">
-            <div className="min-w-0">
-              <Link className="text-lg font-semibold text-white" href="/dashboard">
-                eCRM
-              </Link>
-              <p className="text-xs text-[var(--header-muted)]">Lead-to-cash workspace</p>
-            </div>
-            <form action={logoutAction} className="shrink-0 md:hidden">
-              <button className="crm-button crm-button-subtle text-sm" type="submit">
-                Sign out
-              </button>
-            </form>
-          </div>
-          <div className="flex items-center justify-between gap-3 text-sm md:hidden">
-            <div className="min-w-0">
-              <div className="flex min-w-0 items-center gap-2">
-                <p className="truncate font-medium text-white">{user.name}</p>
-                <RoleBadge role={user.role} />
-              </div>
-              <p className="truncate text-xs text-[var(--header-muted)]">{user.email}</p>
-            </div>
-          </div>
-          <nav className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1 text-sm md:mx-0 md:items-center md:overflow-visible md:px-0 md:pb-0">
-            {navItems.filter(isVisible).map((item) => (
-              <Link
-                className="shrink-0 rounded-md px-3 py-2 font-medium text-[#dbeafe] hover:bg-white/12 hover:text-white"
-                href={item.href}
-                key={item.href}
-              >
-                {item.label}
-              </Link>
-            ))}
-          </nav>
-          <div className="hidden items-center gap-3 text-sm md:flex">
-            <div className="hidden text-right sm:block">
-              <div className="flex items-center justify-end gap-2">
-                <p className="font-medium text-white">{user.name}</p>
-                <RoleBadge role={user.role} />
-              </div>
-              <p className="text-xs text-[var(--header-muted)]">{user.email}</p>
-            </div>
-            <form action={logoutAction}>
-              <button className="crm-button crm-button-subtle text-sm" type="submit">
-                Sign out
-              </button>
-            </form>
-          </div>
-        </div>
-      </header>
-      <main className="mx-auto max-w-7xl px-4 py-8">{children}</main>
+    <div className="min-h-screen bg-[var(--background)] md:grid md:grid-cols-[14.5rem_1fr]">
+      <ShellSidebar footer={footer} groups={groups} subtitle={user.role === "ADMIN" ? "Admin Console" : "Lead-to-cash workspace"} />
+      <div className="min-w-0">
+        <main className="app-content mx-auto max-w-[88rem] px-4 py-5 md:px-6">{children}</main>
+      </div>
     </div>
   );
 }

@@ -52,6 +52,12 @@ export const productServiceInputSchema = z.object({
   description: optionalTrimmedString,
   defaultGstRateBps: gstBasisPoints,
   defaultProductionTemplateKey: optionalTrimmedString,
+  productionStages: z
+    .array(z.object({
+      stageId: z.string().trim().min(1),
+      sortOrder
+    }))
+    .default([]),
   active: checkboxBoolean.default(false),
   sortOrder
 });

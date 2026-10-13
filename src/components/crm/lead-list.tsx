@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Icon } from "@/components/ui/icons";
 import { EmptyState, MetricStrip, PageHeader, RoleBadge, StatusBadge } from "@/components/ui/sales-primitives";
 
 type LeadListProps = {
@@ -75,21 +76,24 @@ export function LeadList({ filters, owners, records }: LeadListProps) {
         actions={
           <>
             <Link className="crm-button crm-button-secondary text-sm" href="/leads/import">
+              <Icon name="upload" size={15} />
               Import leads from CSV
             </Link>
             <Link className="crm-button crm-button-primary text-sm" href="/leads/new">
+              <Icon name="plus" size={15} />
               Add one lead
             </Link>
           </>
         }
         eyebrow="Lead intake"
+        icon="userPlus"
         title="Leads and customers"
         description="Create one sales record at a time or import a qualified list from CSV."
       />
 
       <MetricStrip metrics={getLeadMetrics(records)} />
 
-      <form action="/leads" className="surface grid gap-4 p-4 md:grid-cols-5" method="get">
+      <form action="/leads" className="surface grid gap-3 p-3 md:grid-cols-5" method="get">
         <label className="flex flex-col gap-1 text-sm font-medium md:col-span-2">
           Search
           <input
@@ -135,6 +139,7 @@ export function LeadList({ filters, owners, records }: LeadListProps) {
 
         <div className="md:col-span-5">
           <button className="crm-button crm-button-secondary text-sm" type="submit">
+            <Icon name="search" size={15} />
             Apply filters
           </button>
         </div>

@@ -64,6 +64,7 @@ test("mobile shell exposes CRM navigation and lead detail stays within the viewp
   await page.setViewportSize({ width: 390, height: 844 });
   await signIn(page, "sales@example.com", "Sales@12345");
 
+  await page.getByRole("button", { name: "Open navigation" }).click();
   await expect(page.getByRole("link", { name: "Leads" })).toBeVisible();
   await page.getByRole("link", { name: "Leads" }).click();
   await expect(page.getByRole("heading", { name: "Leads and customers" })).toBeVisible();

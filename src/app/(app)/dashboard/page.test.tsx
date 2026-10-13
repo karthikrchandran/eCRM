@@ -75,7 +75,13 @@ describe("DashboardPage", () => {
   ];
 
   it.each(dashboardUsers)("gives $role the same operations cockpit and existing drill-through links", async (user) => {
-    vi.mocked(requireUser).mockResolvedValueOnce({ ...user, active: true });
+    vi.mocked(requireUser).mockResolvedValueOnce({
+      ...user,
+      active: true,
+      organizationId: "org_test",
+      membershipId: `membership_${user.id}`,
+      sessionVersion: 1
+    });
     render(await DashboardPage());
 
     const health = screen.getByRole("region", { name: "Operations health" });

@@ -26,7 +26,7 @@ export type ProductionTemplateInput = {
 };
 
 export type ProductionTemplateStageInput = {
-  templateId: string;
+  templateId?: string;
   stageId?: string;
   key: string;
   name: string;

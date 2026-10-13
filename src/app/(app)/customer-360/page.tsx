@@ -28,6 +28,7 @@ export default async function Customer360LauncherPage({
       <PageHeader
         description="Launch a single customer view with activity, notes, opportunities, orders, production, finance, and follow-up history."
         eyebrow="Customer workspace"
+        icon="building"
         title="Customer 360"
       />
 

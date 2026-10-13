@@ -72,7 +72,7 @@ export const productionTemplateInputSchema = z.object({
 });
 
 export const productionTemplateStageInputSchema = z.object({
-  templateId: requiredTrimmedString,
+  templateId: optionalTrimmedString,
   stageId: optionalTrimmedString,
   key: requiredTrimmedString.pipe(z.string().regex(/^[a-z0-9_-]+$/, "Use lowercase letters, numbers, hyphens, or underscores.")),
   name: requiredTrimmedString,

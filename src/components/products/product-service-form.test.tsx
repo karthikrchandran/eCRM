@@ -4,14 +4,31 @@ import { ProductServiceForm } from "./product-service-form";
 
 describe("ProductServiceForm", () => {
   it("renders create fields with active checked and the default GST value", () => {
-    render(<ProductServiceForm action={async () => ({ ok: false })} submitLabel="Create product/service" />);
+    render(
+      <ProductServiceForm
+        action={async () => ({ ok: false })}
+        stageOptions={[
+          {
+            id: "stage_script",
+            key: "script",
+            name: "Script",
+            description: "Write the script",
+            defaultDurationDays: 2,
+            required: true,
+            sortOrder: 10
+          }
+        ]}
+        submitLabel="Create product/service"
+      />
+    );
 
     expect(screen.getByLabelText("Name")).toHaveAttribute("name", "name");
     expect(screen.getByLabelText("Code")).toHaveAttribute("name", "code");
     expect(screen.getByLabelText("Category")).toHaveAttribute("name", "category");
     expect(screen.getByLabelText("Description")).toHaveAttribute("name", "description");
     expect(screen.getByLabelText("GST basis points")).toHaveValue(1800);
-    expect(screen.getByLabelText("Production template key")).toHaveAttribute("name", "defaultProductionTemplateKey");
+    expect(screen.getByText("Production stages")).toBeVisible();
+    expect(screen.getByText("Script")).toBeVisible();
     expect(screen.getByLabelText("Active")).toBeChecked();
     expect(screen.getByLabelText("Sort order")).toHaveValue(0);
     expect(screen.getByRole("button", { name: "Create product/service" })).toBeVisible();
@@ -45,6 +62,18 @@ describe("ProductServiceForm", () => {
           active: false,
           sortOrder: 30
         }}
+        selectedStages={[{ stageId: "stage_script", sortOrder: 20 }]}
+        stageOptions={[
+          {
+            id: "stage_script",
+            key: "script",
+            name: "Script",
+            description: "Write the script",
+            defaultDurationDays: 2,
+            required: true,
+            sortOrder: 10
+          }
+        ]}
         submitLabel="Save product/service"
       />
     );
@@ -53,7 +82,7 @@ describe("ProductServiceForm", () => {
     expect(screen.getByDisplayValue("VR-001")).toBeVisible();
     expect(screen.getByDisplayValue("VR/AR")).toBeVisible();
     expect(screen.getByDisplayValue("Immersive module")).toBeVisible();
-    expect(screen.getByDisplayValue("vr_ar")).toBeVisible();
+    expect(screen.getByDisplayValue("20")).toBeVisible();
     expect(screen.getByLabelText("Active")).not.toBeChecked();
     expect(screen.getByText("Enter a product or service name.")).toBeVisible();
     expect(screen.getByText("Enter GST basis points from 0 to 2800.")).toBeVisible();

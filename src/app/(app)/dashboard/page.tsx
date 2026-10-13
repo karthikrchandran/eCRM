@@ -6,8 +6,17 @@ import {
   ReceivablesAgingBars
 } from "@/components/dashboard/cockpit-charts";
 import { formatCurrencyPaisa, formatDate, type ReportCurrency } from "@/components/reports/report-formatters";
+import { Icon, type IconName } from "@/components/ui/icons";
 import { requireUser } from "@/server/auth/current-user";
 import { getReportsOverview } from "@/server/reports/queries";
+
+const metricIconByLabel: Record<string, IconName> = {
+  "Pipeline value": "trendingUp",
+  "Booked value": "clipboardList",
+  "Pending receivables": "wallet",
+  "Collected payments": "award",
+  "Delivery risk": "factory"
+};
 
 function metricByLabel(
   metrics: Array<{ detail: string; label: string; value: string }>,
@@ -37,9 +46,14 @@ function MetricCard({
 }) {
   const contents = (
     <>
-      <p className="text-sm text-[var(--muted)]">{label}</p>
-      <p className="mt-2 text-2xl font-semibold">{value}</p>
-      <p className="mt-1 text-xs text-[var(--muted)]">{detail}</p>
+      <p className="flex items-center justify-between gap-2 text-[13px] font-medium text-[var(--muted)]">
+        {label}
+        <span className="grid size-7 place-items-center rounded-md bg-[var(--accent-soft)] text-[var(--brand-navy)]">
+          <Icon name={metricIconByLabel[label] ?? "barChart"} size={15} />
+        </span>
+      </p>
+      <p className="mt-1 text-2xl font-semibold tabular-nums">{value}</p>
+      <p className="mt-0.5 text-xs text-[var(--muted)]">{detail}</p>
       {trend}
     </>
   );
@@ -110,8 +124,8 @@ export default async function DashboardPage() {
     <div className="dashboard-shell">
       <section className="dashboard-lead dashboard-lead-simple">
         <p className="dashboard-section-kicker">Operations cockpit</p>
-        <h1 className="mt-1 text-2xl font-semibold">Dashboard</h1>
-        <p className="mt-1 text-sm text-[var(--muted)]">
+        <h1 className="text-2xl font-semibold">Dashboard</h1>
+        <p className="mt-0.5 text-[13px] text-[var(--muted)]">
           Company-wide sales, billing, collection, production, and follow-up metrics from live CRM records.
         </p>
       </section>

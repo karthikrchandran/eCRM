@@ -10,6 +10,7 @@ describe("product service validators", () => {
       description: "  Storyboard, build, and review  ",
       defaultGstRateBps: "",
       defaultProductionTemplateKey: " elearning ",
+      productionStages: [{ stageId: "stage_script", sortOrder: "20" }],
       active: "on",
       sortOrder: "10"
     });
@@ -21,6 +22,7 @@ describe("product service validators", () => {
       description: "Storyboard, build, and review",
       defaultGstRateBps: 1800,
       defaultProductionTemplateKey: "elearning",
+      productionStages: [{ stageId: "stage_script", sortOrder: 20 }],
       active: true,
       sortOrder: 10
     });

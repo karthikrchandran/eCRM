@@ -46,7 +46,6 @@ describe("production actions", () => {
 
   it("parses production template stage config form data", () => {
     const formData = new FormData();
-    formData.set("templateId", "template_1");
     formData.set("key", "review");
     formData.set("name", "Review");
     formData.set("required", "on");
@@ -56,8 +55,20 @@ describe("production actions", () => {
     const parsed = parseProductionTemplateStageFormForTest(formData);
 
     expect(parsed.ok).toBe(true);
-    expect(parsed.ok ? parsed.data.templateId : null).toBe("template_1");
+    expect(parsed.ok ? parsed.data.templateId : "failed").toBeUndefined();
     expect(parsed.ok ? parsed.data.required : null).toBe(true);
     expect(parsed.ok ? parsed.data.defaultDurationDays : null).toBe(3);
+  });
+
+  it("derives the internal production stage key from the name", () => {
+    const formData = new FormData();
+    formData.set("name", "Design Review");
+    formData.set("required", "on");
+    formData.set("sortOrder", "20");
+
+    const parsed = parseProductionTemplateStageFormForTest(formData);
+
+    expect(parsed.ok).toBe(true);
+    expect(parsed.ok ? parsed.data.key : null).toBe("design_review");
   });
 });

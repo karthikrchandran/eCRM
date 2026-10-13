@@ -2,6 +2,7 @@ import type { OrderStatus, Prisma, ProductionStageStatus } from "@prisma/client"
 import { assertTenantMember } from "@/server/organizations/tenant-member-guard";
 import { assertOrganizationUserEligible } from "@/server/organizations/member-options";
 import { withOrganization } from "@/server/organizations/with-organization";
+import { DEFAULT_PRODUCTION_TEMPLATE_KEY } from "./constants";
 import { assertCanManageProductionConfig, assertCanWriteProductionRecords } from "./permissions";
 import type { ProductionStageStatusInput, ProductionTemplateInput, ProductionTemplateStageInput, ProductionUser } from "./types";
 
@@ -250,16 +251,16 @@ export async function instantiateProductionForOrderLineItem(
 
   const productionTemplate = orderLineItem.productionTemplateKeySnapshot
     ? await database.productionTemplate.findFirst({
-        where: { organizationId: user.organizationId, key: orderLineItem.productionTemplateKeySnapshot },
-        select: {
-          id: true,
-          key: true,
-          stages: {
-            orderBy: { sortOrder: "asc" },
-            select: { description: true, id: true, name: true, required: true, sortOrder: true }
-          }
+      where: { organizationId: user.organizationId, key: orderLineItem.productionTemplateKeySnapshot },
+      select: {
+        id: true,
+        key: true,
+        stages: {
+          orderBy: { sortOrder: "asc" },
+          select: { description: true, id: true, name: true, required: true, sortOrder: true }
         }
-      })
+      }
+    })
     : null;
 
   return inProductionTransaction(database, async (transaction) =>
@@ -441,10 +442,23 @@ export async function saveProductionTemplateStage(
   if (!database) return withOrganization(user.organizationId, (tx) => saveProductionTemplateStage(user, input, tx as unknown as ProductionConfigDb));
   assertCanManageProductionConfig(user);
 
-  const template = await database.productionTemplate.findFirst({
-    where: { id: input.templateId, organizationId: user.organizationId },
-    select: { id: true }
-  });
+  const template = input.templateId
+    ? await database.productionTemplate.findFirst({
+      where: { id: input.templateId, organizationId: user.organizationId },
+      select: { id: true }
+    })
+    : await database.productionTemplate.upsert({
+      where: { organizationId_key: { organizationId: user.organizationId, key: DEFAULT_PRODUCTION_TEMPLATE_KEY } },
+      create: {
+        organizationId: user.organizationId,
+        key: DEFAULT_PRODUCTION_TEMPLATE_KEY,
+        name: "Product stages",
+        description: "Default production stages for products.",
+        active: true,
+        sortOrder: 0
+      },
+      update: { active: true, name: "Product stages" }
+    });
   if (!template) throw new Error("Production template was not found.");
 
   const data = {
@@ -455,7 +469,7 @@ export async function saveProductionTemplateStage(
     name: input.name,
     required: input.required,
     sortOrder: input.sortOrder,
-    templateId: input.templateId
+    templateId: template.id
   };
 
   if (input.stageId) {
@@ -468,7 +482,7 @@ export async function saveProductionTemplateStage(
   }
 
   return database.productionTemplateStage.upsert({
-    where: { organizationId_templateId_key: { organizationId: user.organizationId, key: input.key, templateId: input.templateId } },
+    where: { organizationId_templateId_key: { organizationId: user.organizationId, key: input.key, templateId: template.id } },
     create: data,
     update: data
   });

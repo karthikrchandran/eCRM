@@ -32,6 +32,7 @@ export default async function Customer360DetailPage({ params }: { params: Promis
         }
         description={`${lead.state} owned by ${lead.owner.name}. This page is the direct Customer 360 view for sales, delivery, and finance context.`}
         eyebrow="Customer 360"
+        icon="building"
         title={lead.name}
       />
 

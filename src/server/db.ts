@@ -28,3 +28,9 @@ export function getControlPlaneDb(): PrismaClient {
   }
   return controlPlanePrisma!;
 }
+
+export const db = new Proxy({} as PrismaClient, {
+  get(_target, property, receiver) {
+    return Reflect.get(getControlPlaneDb(), property, receiver);
+  }
+});

@@ -303,6 +303,43 @@ describe("reports overview", () => {
     );
   });
 
+  test("scopes dashboard, reports, finance, and filter options to the active organization", async () => {
+    const database = createDatabase();
+
+    await getReportsOverview(admin, database);
+
+    expect(database.opportunity.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ organizationId: "org_test" })
+    }));
+    expect(database.order.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ organizationId: "org_test" })
+    }));
+    expect(database.payment.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { order: expect.objectContaining({ organizationId: "org_test" }) }
+    }));
+    expect(database.productionWorkItem.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { orderLineItem: { order: expect.objectContaining({ organizationId: "org_test" }) } }
+    }));
+    expect(database.activity.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ organizationId: "org_test" })
+    }));
+    expect(database.invoice.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { organizationId: "org_test" }
+    }));
+    expect(database.costComponent.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { organizationId: "org_test" }
+    }));
+    expect(database.incentive.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { organizationId: "org_test" }
+    }));
+    expect(database.productService.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { organizationId: "org_test" }
+    }));
+    expect(database.user.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { active: true, memberships: { some: { organizationId: "org_test", status: "ACTIVE" } } }
+    }));
+  });
+
   test("builds live dashboard and report summaries from landed models", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-08-01T12:00:00Z"));
@@ -494,7 +531,7 @@ describe("reports overview", () => {
     expect(database.payment.findMany).toHaveBeenLastCalledWith({
       orderBy: [{ paymentDate: "desc" }],
       select: { amountPaisa: true, id: true, paymentDate: true, order: { select: { currency: true, status: true } } },
-      where: { order: { currency: "USD" } }
+      where: { order: { currency: "USD", organizationId: "org_test" } }
     });
     expect(overview.cockpit.trend).toEqual({
       hasHistory: true,
@@ -559,7 +596,7 @@ describe("reports overview", () => {
     expect(overview.cockpit.followUpRisk).toEqual({ overdueCount: 1, upcomingCount: 0 });
     expect(overview.cockpit.deliveryRisk).toEqual({ blockedCount: 0, dueSoonCount: 1, overdueCount: 0, totalCount: 1 });
     expect(database.payment.findMany).toHaveBeenLastCalledWith(expect.objectContaining({
-      where: { order: expect.objectContaining({ currency: "USD", leadCustomerId: "client_acme", ownerId: "sales", status: "BOOKED" }) }
+      where: { order: expect.objectContaining({ currency: "USD", leadCustomerId: "client_acme", organizationId: "org_test", ownerId: "sales", status: "BOOKED" }) }
     }));
     expect(database.activity.findMany).toHaveBeenLastCalledWith(expect.objectContaining({
       where: expect.objectContaining({
@@ -570,7 +607,7 @@ describe("reports overview", () => {
       })
     }));
     expect(database.productionWorkItem.findMany).toHaveBeenLastCalledWith(expect.objectContaining({
-      where: { orderLineItem: { order: expect.objectContaining({ currency: "USD", leadCustomerId: "client_acme", ownerId: "sales", status: "BOOKED" }) } }
+      where: { orderLineItem: { order: expect.objectContaining({ currency: "USD", leadCustomerId: "client_acme", organizationId: "org_test", ownerId: "sales", status: "BOOKED" }) } }
     }));
   });
 
@@ -606,6 +643,7 @@ describe("reports overview", () => {
           bookedAt: { gte: new Date("2026-08-01T00:00:00.000Z"), lte: new Date("2026-08-31T23:59:59.999Z") },
           currency: "USD",
           leadCustomerId: "client_acme",
+          organizationId: "org_test",
           ownerId: "sales",
           status: "BOOKED"
         })
@@ -615,6 +653,7 @@ describe("reports overview", () => {
       expect.objectContaining({
         where: expect.objectContaining({
           leadCustomerId: "client_acme",
+          organizationId: "org_test",
           ownerId: "sales",
           stageId: "stage_open"
         })

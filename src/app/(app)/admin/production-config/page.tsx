@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { ProductionConfig } from "@/components/production/production-config";
 import { requireUser } from "@/server/auth/current-user";
 import { canManageAdminSettings } from "@/server/auth/permissions";
-import { saveProductionTemplateAction, saveProductionTemplateStageAction } from "@/server/production/actions";
+import { saveProductionTemplateStageAction } from "@/server/production/actions";
 import { listProductionTemplateConfig } from "@/server/production/queries";
 
 export default async function AdminProductionConfigPage() {
@@ -18,7 +18,6 @@ export default async function AdminProductionConfigPage() {
     <ProductionConfig
       productServices={config.productServices}
       saveStageAction={saveProductionTemplateStageAction}
-      saveTemplateAction={saveProductionTemplateAction}
       templates={config.templates}
     />
   );

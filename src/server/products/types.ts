@@ -19,6 +19,7 @@ export type ProductServiceInput = {
   description?: string;
   defaultGstRateBps: number;
   defaultProductionTemplateKey?: string;
+  productionStages: Array<{ stageId: string; sortOrder: number }>;
   active: boolean;
   sortOrder: number;
 };

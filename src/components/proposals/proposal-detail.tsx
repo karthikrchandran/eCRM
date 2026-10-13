@@ -182,7 +182,7 @@ export function ProposalDetail({ proposal, pdfMetadataAction, statusAction }: Pr
         <TextBlock label="Internal notes" value={proposal.internalNotes} />
       </section>
 
-      <section className="surface overflow-x-auto p-4">
+      <section className="surface p-4">
         <h2 className="text-lg font-semibold">Line item snapshots</h2>
         <table className="mt-3 min-w-full text-left text-sm">
           <thead className="text-xs uppercase text-[var(--muted)]">

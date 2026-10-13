@@ -1,6 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState } from "react";
+import type { ProductStageOption, ProductStageSelection } from "@/server/products/queries";
 import type { ActionState } from "@/server/products/types";
 
 type ProductServiceInitialValues = {
@@ -19,6 +21,8 @@ type ProductServiceFormProps = {
   action: (state: ActionState, formData: FormData) => Promise<ActionState>;
   initialState?: ActionState;
   initialValues?: ProductServiceInitialValues;
+  selectedStages?: ProductStageSelection[];
+  stageOptions?: ProductStageOption[];
   submitLabel: string;
 };
 
@@ -36,8 +40,16 @@ function FieldError({ errors }: { errors?: string[] }) {
   );
 }
 
-export function ProductServiceForm({ action, initialState = defaultState, initialValues, submitLabel }: ProductServiceFormProps) {
+export function ProductServiceForm({
+  action,
+  initialState = defaultState,
+  initialValues,
+  selectedStages = [],
+  stageOptions = [],
+  submitLabel
+}: ProductServiceFormProps) {
   const [state, formAction, pending] = useActionState(action, initialState);
+  const selectedSortOrderByStageId = new Map(selectedStages.map((stage) => [stage.stageId, stage.sortOrder]));
 
   return (
     <form action={formAction} className="surface grid w-full max-w-3xl gap-4 p-4 sm:p-6">
@@ -79,17 +91,71 @@ export function ProductServiceForm({ action, initialState = defaultState, initia
           />
         </label>
 
-        <label className="min-w-0 flex flex-col gap-1 text-sm font-medium">
-          Production template key
-          <input
-            className="crm-control"
-            defaultValue={initialValues?.defaultProductionTemplateKey ?? ""}
-            name="defaultProductionTemplateKey"
-            type="text"
-          />
-        </label>
+        <div />
       </div>
       <FieldError errors={state.fieldErrors?.defaultGstRateBps} />
+
+      <section className="rounded-md border border-[var(--border)] p-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h2 className="text-base font-semibold">Production stages</h2>
+            <p className="mt-1 text-sm text-[var(--muted)]">Choose the stages this product needs and set their order.</p>
+          </div>
+          <Link className="crm-button crm-button-secondary text-sm" href="/admin/production-config">
+            Stage library
+          </Link>
+        </div>
+
+        {stageOptions.length === 0 ? (
+          <p className="mt-4 text-sm text-[var(--muted)]">No stages are defined yet. Add stages in the stage library first.</p>
+        ) : (
+          <div className="mt-4">
+            <table className="w-full border-collapse text-left text-sm">
+              <thead className="bg-slate-50 text-xs uppercase tracking-wide text-[var(--muted)]">
+                <tr>
+                  <th className="px-3 py-2 font-semibold">Use</th>
+                  <th className="px-3 py-2 font-semibold">Stage</th>
+                  <th className="px-3 py-2 font-semibold">Order</th>
+                  <th className="px-3 py-2 font-semibold">Default duration</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stageOptions.map((stage, index) => {
+                  const selectedSortOrder = selectedSortOrderByStageId.get(stage.id);
+                  return (
+                    <tr className="border-t border-[var(--border)]" key={stage.id}>
+                      <td className="px-3 py-3 align-top">
+                        <input
+                          defaultChecked={selectedSortOrder !== undefined}
+                          name="productionStageIds"
+                          type="checkbox"
+                          value={stage.id}
+                        />
+                      </td>
+                      <td className="px-3 py-3 align-top">
+                        <p className="font-medium">{stage.name}</p>
+                        {stage.description ? <p className="mt-1 text-xs text-[var(--muted)]">{stage.description}</p> : null}
+                      </td>
+                      <td className="px-3 py-3 align-top">
+                        <input
+                          className="crm-control w-24"
+                          defaultValue={selectedSortOrder ?? (index + 1) * 10}
+                          min={0}
+                          name={`productionStageSortOrder:${stage.id}`}
+                          type="number"
+                        />
+                      </td>
+                      <td className="px-3 py-3 align-top text-[var(--muted)]">
+                        {stage.defaultDurationDays ? `${stage.defaultDurationDays} days` : "None"}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="flex items-center gap-2 text-sm font-medium">

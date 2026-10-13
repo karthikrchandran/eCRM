@@ -45,6 +45,7 @@ export function ProposalForm({
       <input name="opportunityId" type="hidden" value={opportunityId} />
       <PageHeader
         eyebrow="Commercial proposal"
+        icon="fileChart"
         title="Create proposal"
         description={`Capture commercial terms, line items, and delivery assumptions before sending a proposal document link. Currency: ${currency}.`}
       />

@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import { Icon } from "@/components/ui/icons";
 import { loginAction, type LoginState } from "@/server/auth/actions";
 
 const initialState: LoginState = {};
@@ -11,7 +12,7 @@ export function LoginForm({ oidcEnabled = false }: { oidcEnabled?: boolean }) {
   return (
     <form action={formAction} className="surface mx-auto flex w-full max-w-sm flex-col gap-4 p-6">
       <div>
-        <h2 className="text-2xl font-semibold">Welcome back</h2>
+        <h2 className="text-xl font-semibold">Welcome back</h2>
         <p className="mt-1 text-sm text-[var(--muted)]">Sign in to continue.</p>
       </div>
 
@@ -19,7 +20,7 @@ export function LoginForm({ oidcEnabled = false }: { oidcEnabled?: boolean }) {
         Email
         <input
           autoComplete="email"
-          className="rounded-md border border-[var(--border)] px-3 py-2"
+          className="crm-control"
           name="email"
           required
           type="email"
@@ -30,7 +31,7 @@ export function LoginForm({ oidcEnabled = false }: { oidcEnabled?: boolean }) {
         Password
         <input
           autoComplete="current-password"
-          className="rounded-md border border-[var(--border)] px-3 py-2"
+          className="crm-control"
           name="password"
           required
           type="password"
@@ -54,6 +55,7 @@ export function LoginForm({ oidcEnabled = false }: { oidcEnabled?: boolean }) {
 
       {oidcEnabled ? (
         <a className="crm-button crm-button-secondary text-center" href="/api/auth/oidc/start">
+          <Icon name="shield" size={15} />
           Continue with company identity
         </a>
       ) : null}

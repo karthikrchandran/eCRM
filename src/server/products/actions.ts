@@ -19,6 +19,16 @@ function fieldErrorState(error: FieldErrorSource): ActionState {
   return { ok: false, fieldErrors };
 }
 
+function parseProductionStages(formData: FormData) {
+  return formData
+    .getAll("productionStageIds")
+    .filter((value): value is string => typeof value === "string")
+    .map((stageId, index) => ({
+      stageId,
+      sortOrder: Number(formData.get(`productionStageSortOrder:${stageId}`) ?? (index + 1) * 10)
+    }));
+}
+
 export function parseProductServiceFormForTest(formData: FormData): ParseResult<ProductServiceInput> {
   const result = productServiceInputSchema.safeParse({
     name: formData.get("name"),
@@ -27,6 +37,7 @@ export function parseProductServiceFormForTest(formData: FormData): ParseResult<
     description: formData.get("description"),
     defaultGstRateBps: formData.get("defaultGstRateBps"),
     defaultProductionTemplateKey: formData.get("defaultProductionTemplateKey"),
+    productionStages: parseProductionStages(formData),
     active: formData.get("active"),
     sortOrder: formData.get("sortOrder")
   });

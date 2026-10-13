@@ -87,6 +87,7 @@ export function ContactList({ filters, owners, records }: ContactListProps) {
           </>
         }
         eyebrow="Contact registry"
+        icon="contact"
         title="Contacts"
         description="Browse contacts across all leads and customers without mixing them into the lead list."
       />

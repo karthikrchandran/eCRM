@@ -167,6 +167,7 @@ export function OpportunityList({ children, filters, owners, records, stages }: 
         }
         description="Simple pipeline list with filters, owner drilldown, and quick access to stages and targets."
         eyebrow="Sales pipeline"
+        icon="trendingUp"
         title="Pipeline"
       />
 

@@ -128,8 +128,9 @@ function dateRangeWhere(filters: ReportsFilters) {
   };
 }
 
-function buildOrderWhere(filters: ReportsFilters) {
+function buildOrderWhere(filters: ReportsFilters, organizationId: string) {
   return {
+    organizationId,
     ...(dateRangeWhere(filters) ? { bookedAt: dateRangeWhere(filters) } : {}),
     ...(filters.currency ? { currency: filters.currency } : {}),
     ...(filters.customerId ? { leadCustomerId: filters.customerId } : {}),
@@ -139,8 +140,9 @@ function buildOrderWhere(filters: ReportsFilters) {
   };
 }
 
-function buildOpportunityWhere(filters: ReportsFilters) {
+function buildOpportunityWhere(filters: ReportsFilters, organizationId: string) {
   return {
+    organizationId,
     ...(filters.customerId ? { leadCustomerId: filters.customerId } : {}),
     ...(filters.ownerId ? { ownerId: filters.ownerId } : {}),
     ...(filters.stageId ? { stageId: filters.stageId } : {})
@@ -528,9 +530,13 @@ function optionsFromCustomers(orders: OrderRecord[], opportunities: OpportunityR
   return Array.from(customers.values()).sort((left, right) => left.name.localeCompare(right.name));
 }
 
-async function loadFilterOptions(database: ReportsQueryDb, orders: OrderRecord[], opportunities: OpportunityRecord[], products: ProductServiceRecord[]): Promise<ReportsFilterOptions> {
+async function loadFilterOptions(database: ReportsQueryDb, organizationId: string, orders: OrderRecord[], opportunities: OpportunityRecord[], products: ProductServiceRecord[]): Promise<ReportsFilterOptions> {
   const owners = database.user
-    ? await database.user.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, email: true } })
+    ? await database.user.findMany({
+      where: { active: true, memberships: { some: { organizationId, status: "ACTIVE" } } },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, email: true }
+    })
     : [];
   const stageMap = new Map<string, ReportOption>();
   for (const opportunity of opportunities) stageMap.set(opportunity.stage.id, { id: opportunity.stage.id, name: opportunity.stage.name });
@@ -560,9 +566,10 @@ export async function getReportsOverview(
     ? await database.businessSettings.findUnique({ where: { id: "default" }, select: { defaultCurrency: true } })
     : null);
   const currency = filters.currency ?? settings?.defaultCurrency ?? "INR";
-  const orderWhere = buildOrderWhere({ ...filters, currency });
-  const opportunityWhere = buildOpportunityWhere(filters);
+  const orderWhere = buildOrderWhere({ ...filters, currency }, user.organizationId);
+  const opportunityWhere = buildOpportunityWhere(filters, user.organizationId);
   const activityWhere = {
+    organizationId: user.organizationId,
     status: "OPEN",
     ...(dateRangeWhere(filters) ? { dueAt: dateRangeWhere(filters) } : {}),
     ...(filters.customerId ? { leadCustomerId: filters.customerId } : {}),
@@ -625,6 +632,7 @@ export async function getReportsOverview(
       include: { leadCustomer: { select: { id: true, name: true } }, owner: { select: { id: true, name: true } } }
     }),
     database.invoice?.findMany({
+      where: { organizationId: user.organizationId },
       orderBy: [{ invoiceDate: "desc" }],
       include: {
         order: {
@@ -639,18 +647,24 @@ export async function getReportsOverview(
       }
     }) ?? Promise.resolve([]),
     database.costComponent?.findMany({
+      where: { organizationId: user.organizationId },
       orderBy: [{ id: "asc" }],
       include: {
         order: { select: { id: true, currency: true, leadCustomer: { select: { id: true, name: true } }, orderNumber: true } }
       }
     }) ?? Promise.resolve([]),
     database.incentive?.findMany({
+      where: { organizationId: user.organizationId },
       orderBy: [{ id: "asc" }],
       include: {
         order: { select: { id: true, currency: true, leadCustomer: { select: { id: true, name: true } }, orderNumber: true } }
       }
     }) ?? Promise.resolve([]),
-    database.productService?.findMany({ orderBy: [{ name: "asc" }], select: { id: true, name: true } }) ?? Promise.resolve([])
+    database.productService?.findMany({
+      where: { organizationId: user.organizationId },
+      orderBy: [{ name: "asc" }],
+      select: { id: true, name: true }
+    }) ?? Promise.resolve([])
   ]);
 
   const currentOrders = orders.filter(isCurrentOrder);
@@ -664,7 +678,7 @@ export async function getReportsOverview(
     .sort((left, right) => right.bookedAt.getTime() - left.bookedAt.getTime() || left.orderNumber.localeCompare(right.orderNumber) || left.id.localeCompare(right.id))
     .map(toBillingSummary)
     .slice(0, 5);
-  const filterOptions = await loadFilterOptions(database, currentOrders, opportunities, products);
+  const filterOptions = await loadFilterOptions(database, user.organizationId, currentOrders, opportunities, products);
   const cockpit = buildCockpitReports({ activities, currency, orders, payments, workItems: productionWorkItems, now });
 
   return {

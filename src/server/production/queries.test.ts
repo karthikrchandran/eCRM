@@ -53,10 +53,66 @@ describe("production queries", () => {
     );
 
     expect(findTemplates).toHaveBeenCalledWith({
-      where: { organizationId: "org_test" },
+      where: { organizationId: "org_test", key: "default" },
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
       include: { stages: { orderBy: [{ sortOrder: "asc" }, { name: "asc" }] } }
     });
     expect(findProducts).toHaveBeenCalled();
+  });
+
+  it("creates a default product stages container when configuration is empty", async () => {
+    const findTemplates = vi
+      .fn()
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ id: "template_default", key: "default", name: "Product stages", stages: [] }]);
+    const upsert = vi.fn().mockResolvedValue({ id: "template_default" });
+    const findProducts = vi.fn().mockResolvedValue([{ id: "product_1", name: "VR Labs" }]);
+
+    const result = await listProductionTemplateConfig(
+      { id: "user_admin", organizationId: "org_test", role: "ADMIN" },
+      {
+        productionWorkItem: { findMany: vi.fn(), findFirst: vi.fn() },
+        productionTemplate: { findMany: findTemplates, upsert },
+        productService: { findMany: findProducts }
+      }
+    );
+
+    expect(upsert).toHaveBeenCalledWith({
+      where: { organizationId_key: { organizationId: "org_test", key: "default" } },
+      create: {
+        organizationId: "org_test",
+        key: "default",
+        name: "Product stages",
+        description: "Default production stages for products.",
+        active: true,
+        sortOrder: 0
+      },
+      update: { active: true, name: "Product stages" }
+    });
+    expect(findTemplates).toHaveBeenCalledTimes(2);
+    expect(result.templates).toEqual([{ id: "template_default", key: "default", name: "Product stages", stages: [] }]);
+  });
+
+  it("loads the default stage library instead of product-specific production flows", async () => {
+    const findTemplates = vi.fn().mockResolvedValue([
+      { id: "template_default", key: "default", name: "Product stages", stages: [{ id: "stage_script", name: "Script" }] }
+    ]);
+    const findProducts = vi.fn().mockResolvedValue([{ id: "product_1", name: "Training Video" }]);
+
+    const result = await listProductionTemplateConfig(
+      { id: "user_admin", organizationId: "org_test", role: "ADMIN" },
+      {
+        productionWorkItem: { findMany: vi.fn(), findFirst: vi.fn() },
+        productionTemplate: { findMany: findTemplates },
+        productService: { findMany: findProducts }
+      }
+    );
+
+    expect(findTemplates).toHaveBeenCalledWith({
+      where: { organizationId: "org_test", key: "default" },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+      include: { stages: { orderBy: [{ sortOrder: "asc" }, { name: "asc" }] } }
+    });
+    expect(result.templates[0]?.key).toBe("default");
   });
 });

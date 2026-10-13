@@ -1,9 +1,10 @@
-import type { UserRole } from "@prisma/client";
+import type { MembershipStatus, OrganizationRole, OrganizationStatus, UserRole } from "@prisma/client";
 import { z } from "zod";
 import { db } from "@/server/db";
 import { isConfiguredCellRuntimeActive } from "@/server/runtime/cell-config";
 import { verifyPassword as verifyPasswordHash } from "./password";
-import type { SessionUser } from "./session";
+import { membershipSessionVersion, type SessionUser } from "./session";
+import { findActiveLoginMemberships } from "./control-plane-identity";
 
 const SAFE_LOGIN_ERROR = "Invalid email or password.";
 
@@ -30,8 +31,18 @@ type LoginUserRecord = {
   active: boolean;
 };
 
+type LoginMembershipRecord = {
+  id: string;
+  organizationId: string;
+  role: OrganizationRole;
+  status: MembershipStatus;
+  updatedAt: Date;
+  organization: { status: OrganizationStatus };
+};
+
 type LoginDependencies = {
   findUserByEmail?: (email: string) => Promise<LoginUserRecord | null>;
+  findActiveMemberships?: (userId: string) => Promise<LoginMembershipRecord[]>;
   verifyPassword?: (password: string, passwordHash: string) => Promise<boolean>;
   isCellActive?: () => boolean | Promise<boolean>;
 };
@@ -54,10 +65,11 @@ export async function authenticateLogin(
   if (!await cellIsActive()) return { error: "Customer cell is not active." };
 
   const lookupUser = dependencies.findUserByEmail ?? findUserByEmail;
+  const lookupMemberships = dependencies.findActiveMemberships ?? findActiveLoginMemberships;
   const verifyPassword = dependencies.verifyPassword ?? verifyPasswordHash;
   const user = await lookupUser(parsed.data.email.toLowerCase());
 
-  if (!user?.active) {
+  if (!user?.active || !user.passwordHash) {
     return { error: SAFE_LOGIN_ERROR };
   }
 
@@ -67,12 +79,21 @@ export async function authenticateLogin(
     return { error: SAFE_LOGIN_ERROR };
   }
 
+  const [membership] = await lookupMemberships(user.id);
+
+  if (!membership || membership.status !== "ACTIVE" || membership.organization.status !== "ACTIVE") {
+    return { error: SAFE_LOGIN_ERROR };
+  }
+
   return {
     user: {
       id: user.id,
       name: user.name,
       email: user.email,
-      role: user.role
+      organizationId: membership.organizationId,
+      membershipId: membership.id,
+      role: membership.role,
+      sessionVersion: membershipSessionVersion(membership.updatedAt)
     }
   };
 }

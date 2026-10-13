@@ -17,6 +17,8 @@
   --status-positive-border: #7acdee;
   --status-positive-text: #00205f;
   --header-muted: #c9dcff;
+  --radius: 8px;
+  --shadow-card: 0 1px 2px rgb(15 23 42 / 0.05), 0 4px 12px rgb(15 23 42 / 0.04);
 }
 
 * {
@@ -31,10 +33,22 @@ body {
 body {
   margin: 0;
   background:
-    linear-gradient(180deg, var(--surface-tint) 0, var(--background) 15rem),
+    linear-gradient(180deg, var(--surface-tint) 0, var(--background) 10rem),
     var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  font-size: 0.875rem;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "tnum" 1, "cv11" 1;
+}
+
+h1,
+h2,
+h3 {
+  letter-spacing: -0.01em;
 }
 
 a {
@@ -56,26 +70,26 @@ textarea {
 .surface {
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: 0 10px 30px rgb(0 32 95 / 0.06), 0 1px 2px rgb(15 23 42 / 0.04);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
 }
 
 .dashboard-shell {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1rem;
 }
 
 .dashboard-lead {
-  padding: 1.5rem;
-  border-radius: 18px;
-  border: 1px solid rgb(15 23 42 / 0.08);
+  padding: 1.25rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
   background: var(--panel);
-  box-shadow: 0 14px 32px rgb(15 23 42 / 0.06);
+  box-shadow: var(--shadow-card);
 }
 
 .dashboard-lead-simple {
-  padding: 1.25rem 1.5rem;
+  padding: 1rem 1.25rem;
 }
 
 .dashboard-eyebrow {
@@ -95,7 +109,7 @@ textarea {
 
 .dashboard-grid {
   display: grid;
-  gap: 1.5rem;
+  gap: 1rem;
 }
 
 .dashboard-grid-stacked {
@@ -105,19 +119,19 @@ textarea {
 .dashboard-section {
   position: relative;
   overflow: hidden;
-  border-radius: 18px;
-  border: 1px solid rgb(15 23 42 / 0.08);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
   background: var(--panel);
-  box-shadow: 0 14px 34px rgb(15 23 42 / 0.06);
-  padding: 1.25rem;
+  box-shadow: var(--shadow-card);
+  padding: 1rem;
 }
 
 .dashboard-section::before {
   content: "";
   position: absolute;
   inset: 0 0 auto;
-  height: 3px;
-  background: linear-gradient(90deg, rgb(0 32 95 / 0.7), rgb(0 32 95 / 0.18));
+  height: 2px;
+  background: linear-gradient(90deg, rgb(0 32 95 / 0.7), rgb(0 32 95 / 0.12));
 }
 
 .dashboard-section-header {
@@ -137,25 +151,24 @@ textarea {
 }
 
 .dashboard-section-panel {
-  margin-top: 1rem;
-  border-radius: 14px;
-  border: 1px solid rgb(15 23 42 / 0.06);
+  margin-top: 0.75rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
   background: #fbfdff;
-  padding: 1rem;
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.8);
+  padding: 0.875rem;
 }
 
 .dashboard-metric-grid {
   display: grid;
-  gap: 0.9rem;
+  gap: 0.75rem;
 }
 
 .dashboard-metric-card {
-  border-radius: 14px;
-  border: 1px solid rgb(15 23 42 / 0.08);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
   background: #ffffff;
-  padding: 1rem 1rem 1.1rem;
-  box-shadow: 0 8px 18px rgb(15 23 42 / 0.05);
+  padding: 0.875rem 1rem;
+  box-shadow: var(--shadow-card);
 }
 
 .dashboard-link {
@@ -176,7 +189,7 @@ textarea {
 }
 
 .dashboard-table {
-  border-radius: 14px;
+  border-radius: var(--radius);
 }
 
 .dashboard-table thead {
@@ -188,19 +201,19 @@ textarea {
 }
 
 .dashboard-cockpit-section {
-  border-radius: 18px;
-  border: 1px solid rgb(15 23 42 / 0.08);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
   background: var(--panel);
-  box-shadow: 0 14px 34px rgb(15 23 42 / 0.06);
-  padding: 1.25rem;
+  box-shadow: var(--shadow-card);
+  padding: 1rem;
 }
 
 .dashboard-cockpit-health-grid,
 .dashboard-cockpit-chart-grid,
 .dashboard-cockpit-detail-grid {
   display: grid;
-  gap: 1rem;
-  margin-top: 1rem;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
 }
 
 .dashboard-cockpit-health-grid {
@@ -325,8 +338,8 @@ textarea {
   .dashboard-lead,
   .dashboard-section,
   .dashboard-cockpit-section {
-    padding: 1rem;
-    border-radius: 18px;
+    padding: 0.875rem;
+    border-radius: var(--radius);
   }
 
   .dashboard-section-header,
@@ -353,14 +366,14 @@ textarea {
 }
 
 .crm-control {
-  min-height: 2.5rem;
+  min-height: 2.25rem;
   width: 100%;
   min-width: 0;
   border: 1px solid var(--border);
   border-radius: 6px;
   background: #ffffff;
   color: inherit;
-  padding: 0.5rem 0.75rem;
+  padding: 0.375rem 0.75rem;
 }
 
 .crm-control:focus-visible,
@@ -371,21 +384,27 @@ textarea {
 
 .crm-button {
   display: inline-flex;
-  min-height: 2.5rem;
+  min-height: 2.25rem;
   align-items: center;
   justify-content: center;
+  gap: 0.4rem;
   border-radius: 6px;
-  padding: 0.5rem 0.875rem;
+  padding: 0.375rem 0.875rem;
   text-align: center;
   font-weight: 600;
   line-height: 1.25rem;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.crm-button > svg {
+  flex-shrink: 0;
 }
 
 .crm-button-primary {
   background: var(--accent);
   color: #ffffff;
   border: 1px solid var(--accent);
-  box-shadow: 0 8px 18px rgb(0 103 255 / 0.18);
+  box-shadow: 0 1px 2px rgb(0 32 95 / 0.2);
 }
 
 .crm-button-primary:hover {
@@ -417,6 +436,66 @@ textarea {
 
 .crm-button:disabled {
   opacity: 0.6;
+}
+
+/* Shared density layer so every page matches without per-page edits (unlayered, so it wins over utilities). */
+.app-content .space-y-6 > :not(:last-child) {
+  margin-block-end: 1rem;
+}
+
+.app-content h1.text-2xl {
+  font-size: 1.25rem;
+  line-height: 1.6rem;
+  font-weight: 600;
+  color: #0b1220;
+}
+
+.app-content h2.text-lg {
+  font-size: 1rem;
+  line-height: 1.4rem;
+}
+
+.app-content p.text-2xl {
+  font-size: 1.375rem;
+  line-height: 1.75rem;
+}
+
+.app-content td.py-4 {
+  padding-block: 0.625rem;
+}
+
+.app-content th.py-3 {
+  padding-block: 0.5rem;
+}
+
+.app-content td.py-3 {
+  padding-block: 0.5rem;
+}
+
+.app-content thead th {
+  font-size: 0.6875rem;
+  letter-spacing: 0.06em;
+}
+
+.app-content table {
+  table-layout: auto;
+}
+
+.app-content td {
+  overflow-wrap: break-word;
+}
+
+.app-content tbody tr:hover {
+  background: #f6f9fd;
+}
+
+.app-content label.text-sm.font-medium,
+.app-content label.font-medium {
+  color: #1e293b;
+}
+
+.app-content .surface.p-6 {
+  padding: 1.25rem;
 }
 
 @media (max-width: 639px) {

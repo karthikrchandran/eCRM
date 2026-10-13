@@ -34,6 +34,20 @@ function fieldErrorState(error: FieldErrorSource): ActionState {
   return { ok: false, fieldErrors };
 }
 
+function stageKeyFromName(name: FormDataEntryValue | null): string | null {
+  if (typeof name !== "string") {
+    return null;
+  }
+
+  const key = name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+
+  return key.length > 0 ? key : null;
+}
+
 export function parseProductionStageStatusFormForTest(formData: FormData): ParseResult<ProductionStageStatusInput> {
   const result = productionStageStatusInputSchema.safeParse({
     assignedToId: formData.get("assignedToId"),
@@ -78,11 +92,13 @@ export function parseProductionTemplateFormForTest(formData: FormData): ParseRes
 }
 
 export function parseProductionTemplateStageFormForTest(formData: FormData): ParseResult<ProductionTemplateStageInput> {
+  const name = formData.get("name");
+  const key = formData.get("key") ?? stageKeyFromName(name);
   const result = productionTemplateStageInputSchema.safeParse({
     templateId: formData.get("templateId"),
     stageId: formData.get("stageId"),
-    key: formData.get("key"),
-    name: formData.get("name"),
+    key,
+    name,
     description: formData.get("description"),
     required: formData.get("required"),
     defaultDurationDays: formData.get("defaultDurationDays"),

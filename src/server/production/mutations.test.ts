@@ -335,7 +335,7 @@ describe("production mutations", () => {
   it("rejects a template-stage parent from another organization", async () => {
     const create = vi.fn();
     const database = {
-      productionTemplate: { findFirst: vi.fn().mockResolvedValue(null) },
+      productionTemplate: { findFirst: vi.fn().mockResolvedValue(null), upsert: vi.fn() },
       productionTemplateStage: { create, findFirst: vi.fn(), update: vi.fn(), upsert: vi.fn() }
     };
 
@@ -344,5 +344,58 @@ describe("production mutations", () => {
       sortOrder: 10, templateId: "template_B"
     }, database as never)).rejects.toThrow("Production template was not found.");
     expect(create).not.toHaveBeenCalled();
+  });
+
+  it("saves a product stage into the default stages container when no template is submitted", async () => {
+    const upsertTemplate = vi.fn().mockResolvedValue({ id: "template_default" });
+    const upsertStage = vi.fn().mockResolvedValue({ id: "stage_review" });
+    const database = {
+      productionTemplate: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn(), upsert: upsertTemplate },
+      productionTemplateStage: { create: vi.fn(), findFirst: vi.fn(), update: vi.fn(), upsert: upsertStage }
+    };
+
+    await saveProductionTemplateStage(adminActor, {
+      defaultDurationDays: 1,
+      key: "review",
+      name: "Review",
+      required: true,
+      sortOrder: 10
+    }, database as never);
+
+    expect(upsertTemplate).toHaveBeenCalledWith({
+      where: { organizationId_key: { organizationId: "org_test", key: "default" } },
+      create: {
+        organizationId: "org_test",
+        key: "default",
+        name: "Product stages",
+        description: "Default production stages for products.",
+        active: true,
+        sortOrder: 0
+      },
+      update: { active: true, name: "Product stages" }
+    });
+    expect(upsertStage).toHaveBeenCalledWith({
+      where: { organizationId_templateId_key: { organizationId: "org_test", key: "review", templateId: "template_default" } },
+      create: {
+        organizationId: "org_test",
+        defaultDurationDays: 1,
+        description: null,
+        key: "review",
+        name: "Review",
+        required: true,
+        sortOrder: 10,
+        templateId: "template_default"
+      },
+      update: {
+        organizationId: "org_test",
+        defaultDurationDays: 1,
+        description: null,
+        key: "review",
+        name: "Review",
+        required: true,
+        sortOrder: 10,
+        templateId: "template_default"
+      }
+    });
   });
 });
